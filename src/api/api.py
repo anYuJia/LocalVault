@@ -20,6 +20,7 @@ import hmac
 import hashlib
 import logging
 import uuid
+from http.cookies import SimpleCookie
 from src.api import sign as douyin_sign
 from src.api import douyin_im_proto
 
@@ -93,6 +94,7 @@ class DouyinAPI:
         self._webid_time = 0
         self._cached_csrf_token = None
         self._csrf_time = 0
+        self._last_cookie_update = None
 
         # 检查是否启用调试模式
         self.debug_mode = os.environ.get('DEBUG_MODE', '').lower() in ('true', '1', 'yes')
@@ -299,6 +301,54 @@ class DouyinAPI:
                 print(f"\033[91m[API] 解析cookie失败: {e}\033[0m")
         
         return cookie_dict
+
+    def _merge_response_cookies(self, response) -> bool:
+        """Merge Set-Cookie values from Douyin back into the active Cookie string."""
+        if not response:
+            return False
+
+        updates = {}
+        try:
+            for cookie in response.cookies:
+                if cookie.name and cookie.value:
+                    updates[cookie.name] = cookie.value
+        except Exception:
+            pass
+
+        try:
+            raw_headers = getattr(response, 'raw', None)
+            raw_headers = getattr(raw_headers, 'headers', None)
+            set_cookie_headers = raw_headers.getlist('Set-Cookie') if raw_headers else []
+        except Exception:
+            set_cookie_headers = []
+
+        for header in set_cookie_headers:
+            try:
+                parsed = SimpleCookie()
+                parsed.load(header)
+                for name, morsel in parsed.items():
+                    if morsel.value:
+                        updates[name] = morsel.value
+            except Exception:
+                continue
+
+        if not updates:
+            return False
+
+        cookie_dict = self._cookies_to_dict(self.cookie)
+        changed = False
+        for name, value in updates.items():
+            if cookie_dict.get(name) != value:
+                cookie_dict[name] = value
+                changed = True
+
+        if not changed:
+            return False
+
+        self.cookie = '; '.join(f'{key}={value}' for key, value in cookie_dict.items())
+        self._last_cookie_update = self.cookie
+        logger.info("comment_publish merged %s response cookie(s)", len(updates))
+        return True
 
     def _ticket_guard_headers_from_cookie(self) -> dict:
         cookie_dict = self._cookies_to_dict(self.cookie)
@@ -2503,6 +2553,7 @@ class DouyinAPI:
             }, False
 
         ticket_guard_result = response.headers.get('bd-ticket-guard-result') or response.headers.get('Bd-Ticket-Guard-Result') or ''
+        self._merge_response_cookies(response)
         logger.info(
             "comment_publish first response: status=%s len=%s ticket_guard_result=%s logid=%s",
             response.status_code,
@@ -2539,6 +2590,7 @@ class DouyinAPI:
                         cookies=cookie_dict,
                         timeout=(10, 30),
                     )
+                    self._merge_response_cookies(response)
                     retry_ticket_guard_result = response.headers.get('bd-ticket-guard-result') or response.headers.get('Bd-Ticket-Guard-Result') or ''
                     logger.info(
                         "comment_publish retry response: status=%s len=%s ticket_guard_result=%s logid=%s",
@@ -2632,6 +2684,7 @@ class DouyinAPI:
                         cookies=rust_cookie_dict,
                         timeout=(10, 30),
                     )
+                    self._merge_response_cookies(response)
                     rust_ticket_guard_result = response.headers.get('bd-ticket-guard-result') or response.headers.get('Bd-Ticket-Guard-Result') or ''
                     logger.info(
                         "comment_publish relation-v2 fallback response: status=%s len=%s ticket_guard_result=%s logid=%s",

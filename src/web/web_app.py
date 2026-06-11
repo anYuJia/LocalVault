@@ -5436,6 +5436,25 @@ def comment_publish():
             return jsonify({'success': False, 'message': '服务未初始化'}), 400
 
         resp, success = run_async(api.publish_comment(aweme_id, text, reply_id, reply_to_reply_id))
+        updated_cookie = getattr(api, '_last_cookie_update', None)
+        if updated_cookie:
+            api._last_cookie_update = None
+            Config.save_config(
+                updated_cookie,
+                Config.BASE_DIR,
+                Config.HISTORY_DIRS,
+                download_quality=Config.DOWNLOAD_QUALITY,
+                max_concurrent=Config.MAX_CONCURRENT,
+                filename_template=Config.FILENAME_TEMPLATE,
+                folder_name_template=Config.FOLDER_NAME_TEMPLATE,
+                auto_create_folder=Config.AUTO_CREATE_FOLDER,
+                relation_signer=Config.RELATION_SIGNER,
+                current_user_profile=Config.CURRENT_USER_PROFILE,
+                im_friend_sec_user_ids=Config.IM_FRIEND_SEC_USER_IDS,
+                im_friend_include_all_users=Config.IM_FRIEND_INCLUDE_ALL_USERS,
+                im_friend_refresh_interval_seconds=Config.IM_FRIEND_REFRESH_INTERVAL_SECONDS,
+            )
+            logger.info('评论发布响应 Cookie 已保存到配置')
 
         if isinstance(resp, dict) and resp.get('_need_verify'):
             return jsonify(_verify_error_response(
