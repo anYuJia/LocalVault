@@ -26,20 +26,6 @@ from src.api import douyin_im_proto
 
 logger = logging.getLogger('api')
 
-_PUBLISH_COOKIE_MERGE_DENYLIST = {
-    'sessionid',
-    'sessionid_ss',
-    'sid_guard',
-    'uid_tt',
-    'uid_tt_ss',
-    'sid_tt',
-    'passport_auth_status',
-    'passport_auth_status_ss',
-    'passport_csrf_token',
-    'passport_csrf_token_default',
-    'odin_tt',
-}
-
 # Configure a session with retry/SSL resilience
 _retry = urllib3.util.retry.Retry(total=3, backoff_factor=0.5, status_forcelist=[502, 503, 504])
 _thread_local = threading.local()
@@ -109,7 +95,6 @@ class DouyinAPI:
         self._cached_csrf_token = None
         self._csrf_time = 0
         self._last_cookie_update = None
-        self._last_cookie_previous = None
 
         # 检查是否启用调试模式
         self.debug_mode = os.environ.get('DEBUG_MODE', '').lower() in ('true', '1', 'yes')
@@ -353,8 +338,6 @@ class DouyinAPI:
         cookie_dict = self._cookies_to_dict(self.cookie)
         changed = False
         for name, value in updates.items():
-            if name in _PUBLISH_COOKIE_MERGE_DENYLIST:
-                continue
             if cookie_dict.get(name) != value:
                 cookie_dict[name] = value
                 changed = True
@@ -362,9 +345,7 @@ class DouyinAPI:
         if not changed:
             return False
 
-        previous_cookie = self.cookie
         self.cookie = '; '.join(f'{key}={value}' for key, value in cookie_dict.items())
-        self._last_cookie_previous = previous_cookie
         self._last_cookie_update = self.cookie
         logger.info("comment_publish merged %s response cookie(s)", len(updates))
         return True

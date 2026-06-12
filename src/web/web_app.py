@@ -5438,30 +5438,23 @@ def comment_publish():
         resp, success = run_async(api.publish_comment(aweme_id, text, reply_id, reply_to_reply_id))
         updated_cookie = getattr(api, '_last_cookie_update', None)
         if updated_cookie:
-            previous_cookie = getattr(api, '_last_cookie_previous', None) or api.cookie
             api._last_cookie_update = None
-            api._last_cookie_previous = None
-            check_payload, check_ok = run_async(DouyinAPI(updated_cookie).get_current_user(strict_profile=True))
-            if check_ok:
-                Config.save_config(
-                    updated_cookie,
-                    Config.BASE_DIR,
-                    Config.HISTORY_DIRS,
-                    download_quality=Config.DOWNLOAD_QUALITY,
-                    max_concurrent=Config.MAX_CONCURRENT,
-                    filename_template=Config.FILENAME_TEMPLATE,
-                    folder_name_template=Config.FOLDER_NAME_TEMPLATE,
-                    auto_create_folder=Config.AUTO_CREATE_FOLDER,
-                    relation_signer=Config.RELATION_SIGNER,
-                    current_user_profile=Config.CURRENT_USER_PROFILE,
-                    im_friend_sec_user_ids=Config.IM_FRIEND_SEC_USER_IDS,
-                    im_friend_include_all_users=Config.IM_FRIEND_INCLUDE_ALL_USERS,
-                    im_friend_refresh_interval_seconds=Config.IM_FRIEND_REFRESH_INTERVAL_SECONDS,
-                )
-                logger.info('评论发布响应 Cookie 已校验并保存到配置')
-            else:
-                api.cookie = previous_cookie
-                logger.warning('评论发布响应 Cookie 校验未通过，已丢弃候选 Cookie: %s', check_payload)
+            Config.save_config(
+                updated_cookie,
+                Config.BASE_DIR,
+                Config.HISTORY_DIRS,
+                download_quality=Config.DOWNLOAD_QUALITY,
+                max_concurrent=Config.MAX_CONCURRENT,
+                filename_template=Config.FILENAME_TEMPLATE,
+                folder_name_template=Config.FOLDER_NAME_TEMPLATE,
+                auto_create_folder=Config.AUTO_CREATE_FOLDER,
+                relation_signer=Config.RELATION_SIGNER,
+                current_user_profile=Config.CURRENT_USER_PROFILE,
+                im_friend_sec_user_ids=Config.IM_FRIEND_SEC_USER_IDS,
+                im_friend_include_all_users=Config.IM_FRIEND_INCLUDE_ALL_USERS,
+                im_friend_refresh_interval_seconds=Config.IM_FRIEND_REFRESH_INTERVAL_SECONDS,
+            )
+            logger.info('评论发布响应 Cookie 已保存到配置')
 
         if isinstance(resp, dict) and resp.get('_need_verify'):
             return jsonify(_verify_error_response(
