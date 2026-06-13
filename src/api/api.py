@@ -2461,7 +2461,7 @@ class DouyinAPI:
         if reply_id:
             body_params['reply_id'] = reply_id
         body_params['text'] = text
-        body_params['text_extra'] = []
+        body_params['text_extra'] = '[]'
 
         query = _splice_params(query_params)
         body_query = _splice_params(body_params)

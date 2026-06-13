@@ -5752,7 +5752,6 @@ def _start_native_cookie_login(timeout: int) -> tuple[bool, str]:
                     time.sleep(poll_interval)
                     continue
 
-                verified_cookie_string = cookie_string
                 user_id = str(verify_result.get('user_id') or '').strip()
                 if user_id:
                     if not relation_signer_ready_for_uid(relation_signer, user_id):
@@ -5807,17 +5806,6 @@ def _start_native_cookie_login(timeout: int) -> tuple[bool, str]:
                         relation_signer = previous_signer
                     elif not relation_signer_has_ticket_guard(relation_signer, user_id):
                         relation_signer = None
-
-                if cookie_string != verified_cookie_string:
-                    final_verify_result = _verify_native_cookie_login(cookie_string)
-                    if final_verify_result.get('success'):
-                        verify_result = final_verify_result
-                    else:
-                        logger.info(
-                            '原生登录窗口最终 Cookie 校验未通过，回退到已验证 Cookie: %s',
-                            final_verify_result.get('message', 'unknown'),
-                        )
-                        cookie_string = verified_cookie_string
 
                 if isinstance(current_user_profile, dict):
                     current_user_profile = {
