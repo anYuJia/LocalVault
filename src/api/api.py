@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import requests
 import requests.adapters
@@ -28,6 +26,7 @@ logger = logging.getLogger('api')
 # Configure a session with retry/SSL resilience
 _retry = urllib3.util.retry.Retry(total=3, backoff_factor=0.5, status_forcelist=[502, 503, 504])
 _thread_local = threading.local()
+_spider_ab_context = None
 
 
 def _splice_params(params: dict) -> str:
@@ -40,8 +39,21 @@ def _splice_params(params: dict) -> str:
 
 
 def _sign_spider_a_bogus(query: str, data: str) -> str:
-    """Use the Spider request shape for endpoints whose body participates in a_bogus."""
-    return douyin_sign.sign_spider_publish(query, data)
+    """Use Douyin_Spider's JS signer for endpoints whose body participates in a_bogus."""
+    return _spider_js_call('get_ab', query, data)
+
+
+def _spider_js_call(name: str, *args):
+    global _spider_ab_context
+    if _spider_ab_context is None:
+        import execjs
+
+        api_root = os.path.abspath(os.path.dirname(__file__))
+        dy_ab_path = os.path.join(api_root, 'static', 'dy_ab.js')
+        node_modules = os.path.join(api_root, 'node_modules')
+        with open(dy_ab_path, 'r', encoding='utf-8') as fh:
+            _spider_ab_context = execjs.compile(fh.read(), cwd=node_modules)
+    return _spider_ab_context.call(name, *args)
 
 
 def _create_api_session():
@@ -408,14 +420,14 @@ class DouyinAPI:
         client_data = base64.urlsafe_b64encode(json.dumps({
             'ts_sign': ts_sign,
             'req_content': 'ticket,path,timestamp',
-            'req_sign': douyin_sign.get_req_sign(sign_data, private_key),
+            'req_sign': _spider_js_call('get_req_sign', sign_data, private_key),
             'timestamp': timestamp,
         }, separators=(',', ':'), ensure_ascii=False).encode('utf-8')).decode('utf-8')
 
         return {
             'bd-ticket-guard-client-data': client_data,
             'bd-ticket-guard-iteration-version': '1',
-            'bd-ticket-guard-ree-public-key': douyin_sign.get_ree_key(private_key),
+            'bd-ticket-guard-ree-public-key': _spider_js_call('get_ree_key', private_key),
             'bd-ticket-guard-version': '2',
             'bd-ticket-guard-web-version': '1',
         }
@@ -2461,7 +2473,7 @@ class DouyinAPI:
         if reply_id:
             body_params['reply_id'] = reply_id
         body_params['text'] = text
-        body_params['text_extra'] = '[]'
+        body_params['text_extra'] = []
 
         query = _splice_params(query_params)
         body_query = _splice_params(body_params)

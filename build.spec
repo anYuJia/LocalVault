@@ -46,6 +46,7 @@ hiddenimports = [
     'json',
     're',
     'urllib.parse',
+    'execjs',
     'src',
     'src.api',
     'src.config',

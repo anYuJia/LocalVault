@@ -5,8 +5,6 @@ Ported from the Rust implementation in better-douyin-R/src-tauri/src/sign/mod.rs
 
 from __future__ import annotations
 
-import base64
-import random
 import time
 
 _U32_MASK = 0xFFFFFFFF
@@ -24,11 +22,6 @@ _TJ = tuple([0x79CC4519] * 16 + [0x7A879D8A] * 48)
 _S4 = b"Dkdpgh2ZmsQB80/MfvV36XI1R45-WUAlEixNLwoqYTOPuzKFjJnry79HbGcaStCe="
 _S3 = b"ckdp1h4ZKsUB80/Mfvw36XIgR25+WQAlEi7NLboqYTOPuzmFjJnryx9HVGDaStCe"
 _WINDOW_ENV_STR = "1536|747|1536|834|0|30|0|0|1536|834|1536|864|1525|747|24|24|Win32"
-_SPIDER_WINDOW_ENV_STR = "1707|809|1707|912|0|0|0|0|1707|912|1707|960|1697|809|24|24|Win32"
-_SPIDER_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) "
-    "Gecko/20100101 Firefox/117.0"
-)
 
 
 def _u32(value: int) -> int:
@@ -192,21 +185,6 @@ def _generate_random_bytes() -> bytes:
     )
 
 
-def _generate_spider_random_bytes() -> bytes:
-    result = bytearray()
-    for options in ((3, 45), (1, 0), (1, 5)):
-        value = int(random.random() * 10000)
-        result.extend(
-            (
-                ((value & 0xFF & 0xAA) | (options[0] & 0x55)) & 0xFF,
-                ((value & 0xFF & 0x55) | (options[0] & 0xAA)) & 0xFF,
-                (((value >> 8) & 0xFF & 0xAA) | (options[1] & 0x55)) & 0xFF,
-                (((value >> 8) & 0xFF & 0x55) | (options[1] & 0xAA)) & 0xFF,
-            )
-        )
-    return bytes(result)
-
-
 def _generate_rc4_bb(params: str, user_agent: str, args: tuple[int, int, int]) -> bytes:
     start_time = int(time.time() * 1000)
     params_hash2 = sm3_hash(sm3_hash(params.encode()))
@@ -306,161 +284,6 @@ def _generate_rc4_bb(params: str, user_agent: str, args: tuple[int, int, int]) -
     return rc4_encrypt(bytes(bb), b"y")
 
 
-def _double_sm3(data: str) -> bytes:
-    return sm3_hash(sm3_hash(data.encode()))
-
-
-def _generate_spider_rc4_bb(
-    params: str,
-    data: str,
-    user_agent: str = _SPIDER_USER_AGENT,
-    args: tuple[int, int, int] = (0, 1, 8),
-) -> bytes:
-    start_time = int(time.time() * 1000)
-    params_hash = _double_sm3(f"{params}cus")
-    data_hash = _double_sm3(f"{data}cus")
-
-    ua_key = bytes([0, 1, args[2] & 0xFF])
-    ua_encrypted = rc4_encrypt(user_agent.encode(), ua_key)
-    ua_encoded = _custom_base64_encode(ua_encrypted, _S3, pad=False)
-    ua_hash = sm3_hash(ua_encoded.encode())
-    end_time = int(time.time() * 1000)
-
-    start_high = start_time >> 32
-    end_high = end_time >> 32
-    b = bytearray(73)
-    b[18] = 44
-    b[20:24] = (start_time & _U32_MASK).to_bytes(4, "big")
-    b[24] = start_high & 0xFF
-    b[25] = (start_high >> 8) & 0xFF
-    b[26:30] = (args[0] & _U32_MASK).to_bytes(4, "big")
-    b[30] = (args[1] >> 8) & 0xFF
-    b[31] = args[1] & 0xFF
-    b[32] = (args[1] >> 24) & 0xFF
-    b[33] = (args[1] >> 16) & 0xFF
-    b[34:38] = (args[2] & _U32_MASK).to_bytes(4, "big")
-    b[38] = params_hash[21]
-    b[39] = params_hash[22]
-    b[40] = data_hash[21]
-    b[41] = data_hash[22]
-    # The current Spider VM receives a hard-coded Firefox UA, but its compiled
-    # path emits these two UA hash bytes rather than the legacy douyin.js slots.
-    b[42] = 145
-    b[43] = 238
-    b[44:48] = (end_time & _U32_MASK).to_bytes(4, "big")
-    b[48] = 12
-    b[49] = end_high & 0xFF
-    b[50] = (end_high >> 8) & 0xFF
-    b[51] = 6241 & 0xFF
-
-    window_env_bytes = _SPIDER_WINDOW_ENV_STR.encode()
-    b[64] = len(window_env_bytes)
-    b[65] = len(window_env_bytes) & 0xFF
-    b[66] = (len(window_env_bytes) >> 8) & 0xFF
-
-    checksum_indexes = (
-        18,
-        20,
-        26,
-        30,
-        38,
-        40,
-        42,
-        21,
-        27,
-        31,
-        35,
-        39,
-        41,
-        43,
-        22,
-        28,
-        32,
-        36,
-        23,
-        29,
-        33,
-        37,
-        44,
-        45,
-        46,
-        47,
-        48,
-        49,
-        50,
-        24,
-        25,
-        52,
-        53,
-        54,
-        55,
-        57,
-        58,
-        59,
-        60,
-        65,
-        66,
-        70,
-        71,
-    )
-    checksum = 0
-    for index in checksum_indexes:
-        checksum ^= b[index]
-    b[72] = checksum
-
-    bb = bytearray(
-        (
-            b[18],
-            b[20],
-            b[52],
-            b[26],
-            b[30],
-            b[34],
-            b[58],
-            b[38],
-            b[40],
-            b[53],
-            b[42],
-            b[21],
-            b[27],
-            b[54],
-            b[55],
-            b[31],
-            b[35],
-            b[57],
-            b[39],
-            b[41],
-            b[43],
-            b[22],
-            b[28],
-            b[32],
-            b[60],
-            b[36],
-            b[23],
-            b[29],
-            b[33],
-            b[37],
-            b[44],
-            b[45],
-            b[59],
-            b[46],
-            b[47],
-            b[48],
-            b[49],
-            b[50],
-            b[24],
-            b[25],
-            b[65],
-            b[66],
-            b[70],
-            b[71],
-        )
-    )
-    bb.extend(window_env_bytes)
-    bb.append(b[72])
-    return rc4_encrypt(bytes(bb), b"y")
-
-
 def sign(params: str, user_agent: str, args: tuple[int, int, int]) -> str:
     combined = _generate_random_bytes() + _generate_rc4_bb(params, user_agent, args)
     return _custom_base64_encode(combined) + "="
@@ -472,41 +295,3 @@ def sign_detail(params: str, user_agent: str) -> str:
 
 def sign_reply(params: str, user_agent: str) -> str:
     return sign(params, user_agent, (0, 1, 8))
-
-
-def sign_spider_publish(params: str, data: str) -> str:
-    combined = _generate_spider_random_bytes() + _generate_spider_rc4_bb(params, data)
-    return _custom_base64_encode(combined)
-
-
-def get_req_sign(sign_data: str, private_key: str) -> str:
-    try:
-        from cryptography.hazmat.primitives import hashes, serialization
-        from cryptography.hazmat.primitives.asymmetric import ec
-    except ImportError as exc:
-        raise RuntimeError("缺少 cryptography 依赖，请先安装 requirements.txt") from exc
-
-    key = serialization.load_pem_private_key(private_key.encode(), password=None)
-    signature = key.sign(sign_data.encode(), ec.ECDSA(hashes.SHA256()))
-    return base64.b64encode(signature).decode()
-
-
-def get_ree_key(private_key: str) -> str:
-    try:
-        from cryptography.hazmat.primitives import serialization
-        from cryptography.hazmat.primitives.asymmetric import ec
-    except ImportError as exc:
-        raise RuntimeError("缺少 cryptography 依赖，请先安装 requirements.txt") from exc
-
-    key = serialization.load_pem_private_key(private_key.encode(), password=None)
-    public_key = key.public_key()
-    if not isinstance(public_key.curve, ec.EllipticCurve):
-        raise ValueError("TicketGuard 私钥必须是 EC 私钥")
-    public_numbers = public_key.public_numbers()
-    key_size = (public_key.curve.key_size + 7) // 8
-    raw = (
-        b"\x04"
-        + public_numbers.x.to_bytes(key_size, "big")
-        + public_numbers.y.to_bytes(key_size, "big")
-    )
-    return base64.b64encode(raw).decode()
