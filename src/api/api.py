@@ -78,6 +78,14 @@ def _api_post(*args, **kwargs):
     return _get_api_session().post(*args, **kwargs)
 
 
+def _api_post_stateless(*args, **kwargs):
+    session = _create_api_session()
+    try:
+        return session.post(*args, **kwargs)
+    finally:
+        session.close()
+
+
 def _redact_headers(headers: dict) -> dict:
     redacted = dict(headers or {})
     for key in list(redacted.keys()):
@@ -2402,6 +2410,13 @@ class DouyinAPI:
         if not logged_in:
             return self._build_login_required_error(current_user if isinstance(current_user, dict) else None), False
 
+        session = getattr(_thread_local, 'api_session', None)
+        if session is not None:
+            try:
+                session.cookies.clear()
+            except Exception:
+                pass
+
         uri = '/aweme/v1/web/comment/publish'
         url = f'https://www.douyin.com{uri}'
         referer = f'https://www.douyin.com/discover?modal_id={aweme_id}'
@@ -2499,7 +2514,7 @@ class DouyinAPI:
 
         try:
             response = await asyncio.to_thread(
-                _api_post,
+                _api_post_stateless,
                 url,
                 params=query_params,
                 data=body_params,
@@ -2543,7 +2558,7 @@ class DouyinAPI:
                 )
                 try:
                     response = await asyncio.to_thread(
-                        _api_post,
+                        _api_post_stateless,
                         url,
                         params=query_params,
                         data=body_params,
@@ -2634,30 +2649,53 @@ class DouyinAPI:
                     bool(rust_headers.get('bd-ticket-guard-client-data')),
                     bool(rust_headers.get('x-tt-session-dtrait')),
                 )
-                try:
-                    response = await asyncio.to_thread(
-                        _api_post,
-                        url,
-                        params=rust_query_params,
-                        data=rust_body_params,
-                        headers=rust_headers,
-                        cookies=rust_cookie_dict,
-                        timeout=(10, 30),
-                    )
-                    rust_ticket_guard_result = response.headers.get('bd-ticket-guard-result') or response.headers.get('Bd-Ticket-Guard-Result') or ''
-                    logger.info(
-                        "comment_publish relation-v2 fallback response: status=%s len=%s ticket_guard_result=%s logid=%s",
-                        response.status_code,
-                        len(response.content or b''),
-                        rust_ticket_guard_result or '',
-                        response.headers.get('x-tt-logid') or response.headers.get('X-Tt-Logid') or '',
-                    )
-                except requests.RequestException as e:
-                    return {
-                        'status_code': -1,
-                        'status_msg': '网络请求失败',
-                        'message': f'网络请求失败: {e}',
-                    }, False
+                for relation_attempt in range(3):
+                    if relation_attempt > 0:
+                        await asyncio.sleep(0.6 * relation_attempt)
+                        x_ms_token = response.headers.get('x-ms-token') or response.headers.get('X-Ms-Token') or ''
+                        if x_ms_token:
+                            rust_cookie_dict['msToken'] = x_ms_token
+                            rust_query_params['msToken'] = x_ms_token
+                            rust_headers['Cookie'] = '; '.join([f'{key}={value}' for key, value in rust_cookie_dict.items()])
+                        rust_query_params.pop('a_bogus', None)
+                        rust_body_params['comment_send_celltime'] = str(random.randint(1000, 20000))
+                        rust_body_params['comment_video_celltime'] = str(random.randint(1000, 20000))
+                        rust_params_str = urllib.parse.urlencode(rust_query_params)
+                        try:
+                            rust_query_params['a_bogus'] = douyin_sign.sign_detail(
+                                rust_params_str,
+                                rust_headers.get('User-Agent') or rust_headers.get('user-agent') or '',
+                            )
+                        except Exception as e:
+                            logger.warning("comment_publish relation-v2 fallback retry sign failed: %s", e)
+                            break
+                    try:
+                        response = await asyncio.to_thread(
+                            _api_post_stateless,
+                            url,
+                            params=rust_query_params,
+                            data=rust_body_params,
+                            headers=rust_headers,
+                            cookies=rust_cookie_dict,
+                            timeout=(10, 30),
+                        )
+                        rust_ticket_guard_result = response.headers.get('bd-ticket-guard-result') or response.headers.get('Bd-Ticket-Guard-Result') or ''
+                        logger.info(
+                            "comment_publish relation-v2 fallback response: attempt=%s status=%s len=%s ticket_guard_result=%s logid=%s",
+                            relation_attempt + 1,
+                            response.status_code,
+                            len(response.content or b''),
+                            rust_ticket_guard_result or '',
+                            response.headers.get('x-tt-logid') or response.headers.get('X-Tt-Logid') or '',
+                        )
+                        if response.status_code != 200 or len(response.content or b'') > 0:
+                            break
+                    except requests.RequestException as e:
+                        return {
+                            'status_code': -1,
+                            'status_msg': '网络请求失败',
+                            'message': f'网络请求失败: {e}',
+                        }, False
 
         if response.status_code != 200 or len(response.content or b'') == 0:
             body_preview = ''
