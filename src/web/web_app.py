@@ -5852,7 +5852,8 @@ def cookie_browser_login():
     global _native_cookie_login_session
 
     if _native_cookie_login_session and _native_cookie_login_session.is_active():
-        return jsonify({'success': False, 'message': '登录窗口已在进行中'}), 409
+        _native_cookie_login_session.close()
+        _native_cookie_login_session = None
     
     data = _request_json()
     timeout = _coerce_int(data.get('timeout'), 300, 30, 900)
