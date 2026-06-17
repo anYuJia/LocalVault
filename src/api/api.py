@@ -2489,12 +2489,11 @@ class DouyinAPI:
         query_params['verifyFp'] = verify_fp
         query_params['fp'] = verify_fp
         logger.info(
-            "comment_publish request shape: query_keys=%s body_keys=%s csrf=%s ticket_guard=%s webid=%s verify_fp=%s",
-            list(query_params.keys()),
-            list(body_params.keys()),
+            "comment_publish spider request: csrf=%s ticket_guard=%s webid=%s msToken=%s verify_fp=%s",
             bool(headers.get('x-secsdk-csrf-token')),
             bool(headers.get('bd-ticket-guard-client-data')),
             bool(query_params.get('webid')),
+            bool(query_params.get('msToken')),
             bool(verify_fp),
         )
 
@@ -2538,9 +2537,9 @@ class DouyinAPI:
                 if retry_csrf_token:
                     retry_headers['x-secsdk-csrf-token'] = retry_csrf_token
                 logger.info(
-                    "comment_publish retry with cookie TicketGuard: query_keys=%s ticket_guard=%s",
-                    list(query_params.keys()),
+                    "comment_publish ticket retry: ticket_guard=%s csrf=%s",
                     bool(retry_headers.get('bd-ticket-guard-client-data')),
+                    bool(retry_headers.get('x-secsdk-csrf-token')),
                 )
                 try:
                     response = await asyncio.to_thread(
@@ -2629,11 +2628,10 @@ class DouyinAPI:
                     rust_body_params['reply_to_reply_id'] = reply_to_reply_id or '0'
 
                 logger.info(
-                    "comment_publish relation-v2 fallback: query_keys=%s body_keys=%s ticket_guard=%s dtrait=%s",
-                    list(rust_query_params.keys()),
-                    list(rust_body_params.keys()),
+                    "comment_publish relation fallback: ticket_guard=%s dtrait=%s msToken=%s",
                     bool(rust_headers.get('bd-ticket-guard-client-data')),
                     bool(rust_headers.get('x-tt-session-dtrait')),
+                    bool(rust_query_params.get('msToken')),
                 )
                 for relation_attempt in range(3):
                     if relation_attempt > 0:
@@ -2700,8 +2698,10 @@ class DouyinAPI:
                         'content-length',
                         'bd-ticket-guard-result',
                         'bd-ticket-guard-server-data',
+                        'bd_passport_security_gateway',
                         'passport-security-gateway',
                         'x-tt-logid',
+                        'x-tt-verify-passport-decision',
                         'x-ms-token',
                         'x-ware-csrf-token',
                     )

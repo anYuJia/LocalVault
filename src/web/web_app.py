@@ -18,6 +18,7 @@ import json
 import base64
 import uuid
 import logging
+import warnings
 import subprocess
 import shutil
 import re
@@ -29,6 +30,8 @@ import mimetypes
 import hashlib
 import shlex
 import requests as http_requests
+import urllib3
+from urllib3.exceptions import InsecureRequestWarning
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
@@ -37,6 +40,10 @@ from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 logging.basicConfig(level=logging.DEBUG if os.environ.get('DEBUG_MODE', '').lower() in ('true', '1') else logging.INFO,
                     format='[%(levelname)s] %(message)s')
 logger = logging.getLogger('web_app')
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
+logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
+urllib3.disable_warnings(InsecureRequestWarning)
+warnings.filterwarnings('ignore', category=InsecureRequestWarning)
 socketio_debug = os.environ.get('DEBUG_MODE', '').lower() in ('true', '1', 'yes')
 
 ALLOWED_MEDIA_HOST_SUFFIXES = (
@@ -2936,7 +2943,7 @@ def media_proxy():
         if cache_key and upstream_url != url:
             _remember_media_redirect(cache_key, upstream_url)
 
-        logger.info(
+        logger.debug(
             '[media_proxy] 上游响应耗时 %.2fs, status=%s, seeded_range=%s, range="%s", url=%s',
             time.time() - start_time,
             resp.status_code,
@@ -3017,7 +3024,7 @@ def media_proxy():
                     resp.close()
                 except Exception:
                     pass
-                logger.info(
+                logger.debug(
                     '[media_proxy] 传输完成, 共 %.2fMB, 耗时 %.2fs, url=%s',
                     total / 1048576,
                     time.time() - stream_start,
@@ -5426,11 +5433,10 @@ def comment_publish():
         reply_id = str(data.get('reply_id') or '').strip()
         reply_to_reply_id = str(data.get('reply_to_reply_id') or '').strip()
         logger.info(
-            "comment_publish route received: aweme_id=%s text_len=%s reply=%s api_ready=%s",
+            "comment_publish route: aweme_id=%s text_len=%s reply=%s",
             aweme_id,
             len(text),
             bool(reply_id),
-            bool(api),
         )
 
         if not aweme_id:
@@ -5459,6 +5465,12 @@ def comment_publish():
             })
 
         raw_comment = resp.get('comment') if isinstance(resp, dict) else None
+        logger.info(
+            "comment_publish success: aweme_id=%s cid=%s status=%s",
+            aweme_id,
+            raw_comment.get('cid') if isinstance(raw_comment, dict) else '',
+            resp.get('status_code') if isinstance(resp, dict) else '',
+        )
         return jsonify({
             'success': True,
             'aweme_id': aweme_id,
