@@ -81,11 +81,30 @@ def _truncate_filename_text(
     return text or default
 
 
-def _template_fields(desc: str, aweme_id: str, author: str = '', media_type: str = '') -> dict:
+def _coerce_timestamp_seconds(value) -> Optional[float]:
+    try:
+        timestamp = float(value or 0)
+    except (TypeError, ValueError):
+        return None
+    if timestamp <= 0:
+        return None
+    if timestamp > 1_000_000_000_000:
+        timestamp = timestamp / 1000
+    return timestamp
+
+
+def _template_fields(
+    desc: str,
+    aweme_id: str,
+    author: str = '',
+    media_type: str = '',
+    create_time=None,
+) -> dict:
     normalized_title = ' '.join(str(desc or '').split()).strip()
     normalized_aweme_id = str(aweme_id or '').strip()
     normalized_author = ' '.join(str(author or '').split()).strip()
-    now = time.localtime()
+    timestamp = _coerce_timestamp_seconds(create_time)
+    now = time.localtime(timestamp) if timestamp is not None else time.localtime()
     return {
         'title': normalized_title,
         'aweme_id': normalized_aweme_id,
@@ -124,8 +143,15 @@ def build_download_title(
     default_prefix: str = '无标题',
     max_length: Optional[int] = None,
     max_bytes: Optional[int] = None,
+    create_time=None,
 ) -> str:
-    fields = _template_fields(desc, aweme_id, author=author, media_type=media_type)
+    fields = _template_fields(
+        desc,
+        aweme_id,
+        author=author,
+        media_type=media_type,
+        create_time=create_time,
+    )
     normalized_desc = fields['title']
     normalized_aweme_id = fields['aweme_id']
     fallback = default_prefix
@@ -158,8 +184,15 @@ def build_download_name(
     aweme_id: str,
     media_type: str = '',
     default_title_prefix: str = '无标题',
+    create_time=None,
 ) -> str:
-    fields = _template_fields(desc, aweme_id, author=author, media_type=media_type)
+    fields = _template_fields(
+        desc,
+        aweme_id,
+        author=author,
+        media_type=media_type,
+        create_time=create_time,
+    )
     folder = _render_template(
         getattr(Config, 'FOLDER_NAME_TEMPLATE', '{author}'),
         fields,
@@ -171,6 +204,7 @@ def build_download_name(
         aweme_id,
         author=author,
         media_type=media_type,
+        create_time=create_time,
         default_prefix=default_title_prefix,
     )
     if not getattr(Config, 'AUTO_CREATE_FOLDER', True):

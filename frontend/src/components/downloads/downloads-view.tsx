@@ -402,7 +402,7 @@ export function DownloadsView() {
   }, [handleRevealHistory]);
 
   const handleDeleteItems = useCallback((items: HistoryItem[]) => {
-    const targets = getPlayableDownloadItems(items).filter((item) => item.path);
+    const targets = getLocalDownloadItems(items).filter((item) => item.path);
     if (targets.length === 0) {
       addLog("没有可删除的本地文件", "warning");
       return;
@@ -1274,8 +1274,17 @@ function dedupeDownloadItems(items: HistoryItem[]): HistoryItem[] {
   return result;
 }
 
-function getPlayableDownloadItems(items: HistoryItem[]): HistoryItem[] {
+function getLocalDownloadItems(items: HistoryItem[]): HistoryItem[] {
   return dedupeDownloadItems(items).filter((item) => Boolean(item.path));
+}
+
+function isDownloadPlayerMedia(item: HistoryItem): boolean {
+  const kind = getHistoryMediaKind(item);
+  return kind === "video" || kind === "image";
+}
+
+function getPlayableDownloadItems(items: HistoryItem[]): HistoryItem[] {
+  return getLocalDownloadItems(items).filter(isDownloadPlayerMedia);
 }
 
 function buildDownloadPlayerVideo(items: HistoryItem[]): VideoInfo | null {
@@ -1286,10 +1295,15 @@ function buildDownloadPlayerVideo(items: HistoryItem[]): VideoInfo | null {
   const authorName = playableItems.find((item) => item.author)?.author || "本地下载";
   const coverItem = chooseDownloadWorkCover(playableItems);
   const coverUrl = getDownloadCoverUrl(coverItem);
-  const mediaUrls = playableItems.map((item) => ({
-    type: getHistoryMediaKind(item) === "image" ? "image" : "video",
-    url: localFileAssetUrl(item.path),
-  }));
+  const mediaUrls = playableItems.flatMap((item) => {
+    const kind = getHistoryMediaKind(item);
+    const url = localFileAssetUrl(item.path);
+    if (kind === "image") return [{ type: "image", url }];
+    if (kind === "video") return [{ type: "video", url }];
+    return [];
+  });
+  if (mediaUrls.length === 0) return null;
+
   const imageUrls = mediaUrls
     .filter((item) => item.type === "image")
     .map((item) => item.url);

@@ -1,4 +1,5 @@
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -32,7 +33,31 @@ def check_long_download_title_keeps_more_safe_text():
     assert len(title.encode("utf-8")) <= Config.MAX_FILENAME_BYTES
 
 
+def check_download_title_uses_work_create_time_for_date_tokens():
+    aweme_id = "7380011223344556677"
+    create_time = 1704067205
+    expected_prefix = time.strftime("%Y%m%d_%H%M%S", time.localtime(create_time))
+
+    title = build_download_title(
+        "跨年作品",
+        aweme_id,
+        template="{date}_{time}_{title}_{aweme_id}",
+        create_time=create_time,
+    )
+
+    assert title == f"{expected_prefix}_跨年作品_{aweme_id}"
+
+
+def check_download_title_keeps_legacy_positional_template_argument():
+    aweme_id = "7380011223344556677"
+    title = build_download_title("旧调用", aweme_id, "", "", "{title}_{aweme_id}")
+
+    assert title == f"旧调用_{aweme_id}"
+
+
 if __name__ == "__main__":
     check_download_title_can_omit_aweme_id_suffix()
     check_long_download_title_preserves_aweme_id_suffix_when_requested()
     check_long_download_title_keeps_more_safe_text()
+    check_download_title_uses_work_create_time_for_date_tokens()
+    check_download_title_keeps_legacy_positional_template_argument()

@@ -4250,6 +4250,7 @@ def download_single_video():
         data = _request_json()
         aweme_id = data.get('aweme_id', '').strip()
         video_desc = data.get('desc', '未知作品')
+        video_create_time = data.get('create_time', 0)
         media_urls = data.get('media_urls', [])
         raw_media_type = data.get('raw_media_type', 'video')
         author_name = data.get('author_name', '未知作者')
@@ -4280,6 +4281,7 @@ def download_single_video():
                 return jsonify(_login_error_response(detail))
 
             if detail:
+                video_create_time = detail.get('create_time') or video_create_time
                 detail_media_type = detail.get('raw_media_type') or detail.get('media_type') or raw_media_type
                 detail_media_urls = normalize_download_media_urls(detail.get('media_urls', []), detail_media_type)
                 if detail_media_urls:
@@ -4308,6 +4310,7 @@ def download_single_video():
                     aweme_id,
                     author=author_name,
                     media_type=raw_media_type,
+                    create_time=video_create_time,
                 )
 
                 # 发送下载开始事件
@@ -4348,7 +4351,13 @@ def download_single_video():
                     raise ValueError("没有有效的媒体URL")
                 
                 # 使用配置的目录模板和文件模板生成下载路径
-                file_path = build_download_name(author_name, video_desc, aweme_id, media_type=raw_media_type)
+                file_path = build_download_name(
+                    author_name,
+                    video_desc,
+                    aweme_id,
+                    media_type=raw_media_type,
+                    create_time=video_create_time,
+                )
                 logger.debug(f" 文件路径: {file_path}")
                 
                 # 统一下载处理，不再区分媒体类型
@@ -4656,7 +4665,13 @@ def download_user_video():
 
                         aweme_id = post['aweme_id']
                         media_type, urls = user_manager.get_media_info(post)
-                        name = build_download_name(_nickname, post.get('desc', ''), aweme_id, media_type=media_type)
+                        name = build_download_name(
+                            _nickname,
+                            post.get('desc', ''),
+                            aweme_id,
+                            media_type=media_type,
+                            create_time=post.get('create_time'),
+                        )
 
                         def current_total_count():
                             return max(total_videos, total_discovered[0] + total_skipped[0], total_processed[0] + download_queue.qsize())
@@ -6329,7 +6344,14 @@ def download_video_by_aweme_id():
 
         # 生成文件名
         author_name = detail.get('author', {}).get('nickname', '未知作者')
-        name = build_download_name(author_name, detail.get('desc', ''), aweme_id, media_type=media_type, default_title_prefix='未知作品')
+        name = build_download_name(
+            author_name,
+            detail.get('desc', ''),
+            aweme_id,
+            media_type=media_type,
+            create_time=detail.get('create_time'),
+            default_title_prefix='未知作品',
+        )
 
         # 添加到下载队列
         task_id = str(uuid.uuid4())

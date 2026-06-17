@@ -1000,7 +1000,13 @@ class DouyinUserManager:
                 print(f"\033[36m{progress_msg}\033[0m")
             
             aweme_id = post['aweme_id']
-            name = build_download_name(nickname, post.get('desc', ''), aweme_id, media_type=media_type)
+            name = build_download_name(
+                nickname,
+                post.get('desc', ''),
+                aweme_id,
+                media_type=media_type,
+                create_time=post.get('create_time'),
+            )
             
             if not urls:
                 error_msg = f"无法获取媒体URL: {post['desc']}"
@@ -1496,7 +1502,13 @@ class DouyinUserManager:
                     return 0
 
                 author_name = (video.get('author') or {}).get('nickname') or 'liked'
-                name = build_download_name(author_name, video.get('desc', ''), aweme_id, media_type=media_type)
+                name = build_download_name(
+                    author_name,
+                    video.get('desc', ''),
+                    aweme_id,
+                    media_type=media_type,
+                    create_time=video.get('create_time'),
+                )
 
                 async with semaphore:
                     if media_type == 'video' and len(media_urls) == 1:

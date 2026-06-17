@@ -84,8 +84,8 @@ const TEMPLATE_VARIABLES = [
   { token: "{title}", label: "标题" },
   { token: "{aweme_id}", label: "作品ID" },
   { token: "{author}", label: "作者" },
-  { token: "{date}", label: "日期" },
-  { token: "{time}", label: "时间" },
+  { token: "{date}", label: "作品日期" },
+  { token: "{time}", label: "作品时间" },
   { token: "{media_type}", label: "类型" },
 ];
 
@@ -93,7 +93,7 @@ const FILENAME_PRESETS = [
   { value: "{title}", label: "只写标题" },
   { value: "{title}_{aweme_id}", label: "标题 + 作品ID" },
   { value: "{author}_{title}_{aweme_id}", label: "作者 + 标题 + 作品ID" },
-  { value: "{date}_{title}_{aweme_id}", label: "日期 + 标题 + 作品ID" },
+  { value: "{date}_{title}_{aweme_id}", label: "作品日期 + 标题 + 作品ID" },
 ];
 
 export function SettingsView() {
