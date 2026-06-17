@@ -33,7 +33,8 @@ const CHAT_UNREAD_KEY = "douyin.friendStatus.unreadCounts";
 const CHAT_SUMMARIES_KEY = "douyin.friendStatus.chatSummaries";
 const CURRENT_USER_AVATAR_KEY = "douyin.friendStatus.currentUserAvatar";
 const ONLINE_WINDOW_SECONDS = 60;
-const DEFAULT_REFRESH_INTERVAL_SECONDS = 5;
+const DEFAULT_REFRESH_INTERVAL_SECONDS = 30;
+const MIN_BACKGROUND_REFRESH_INTERVAL_MS = 12_000;
 const COOKIE_REQUIRED_PATTERN = /请先设置\s*Cookie/i;
 const MAX_SEND_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_PERSISTED_CHAT_MESSAGES_PER_FRIEND = 40;
@@ -899,6 +900,9 @@ export function FriendsStatusView() {
   const savedIdsRef = useRef<string[]>([]);
   const idsRef = useRef<string[]>([]);
   const queryInFlightRef = useRef(false);
+  const pendingBackgroundQueryRef = useRef(false);
+  const lastQueryStartedAtRef = useRef(0);
+  const pendingBackgroundTimerRef = useRef<number | null>(null);
   const cookieRetryTimerRef = useRef<number | null>(null);
   const avatarRetryTimerRef = useRef<number | null>(null);
   const initialInputRef = useRef(input);
@@ -1453,12 +1457,19 @@ export function FriendsStatusView() {
   }, [clearUnread, selectedFriend]);
 
   const query = useCallback(async (overrideIds?: string[], options?: { background?: boolean; retryCookie?: boolean }) => {
-    if (queryInFlightRef.current) return;
     const background = Boolean(options?.background);
+    if (background && Date.now() - lastQueryStartedAtRef.current < MIN_BACKGROUND_REFRESH_INTERVAL_MS) {
+      return;
+    }
+    if (queryInFlightRef.current) {
+      if (background) pendingBackgroundQueryRef.current = true;
+      return;
+    }
     const retryCookie = options?.retryCookie !== false;
     const baseIds = overrideIds ?? savedIdsRef.current;
     const queryIds = Array.from(new Set([...baseIds, ...idsRef.current]));
     queryInFlightRef.current = true;
+    lastQueryStartedAtRef.current = Date.now();
     if (!background) {
       setError("");
       setLoading(true);
@@ -1532,6 +1543,16 @@ export function FriendsStatusView() {
       } else {
         setLoading(false);
       }
+      if (pendingBackgroundQueryRef.current) {
+        pendingBackgroundQueryRef.current = false;
+        if (pendingBackgroundTimerRef.current !== null) {
+          window.clearTimeout(pendingBackgroundTimerRef.current);
+        }
+        pendingBackgroundTimerRef.current = window.setTimeout(() => {
+          pendingBackgroundTimerRef.current = null;
+          void query(undefined, { background: true });
+        }, MIN_BACKGROUND_REFRESH_INTERVAL_MS);
+      }
     }
   }, []);
 
@@ -1541,6 +1562,9 @@ export function FriendsStatusView() {
     }
     if (avatarRetryTimerRef.current !== null) {
       window.clearTimeout(avatarRetryTimerRef.current);
+    }
+    if (pendingBackgroundTimerRef.current !== null) {
+      window.clearTimeout(pendingBackgroundTimerRef.current);
     }
   }, []);
 

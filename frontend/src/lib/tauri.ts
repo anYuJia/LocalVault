@@ -39,6 +39,8 @@ import type {
   VideoRelationResponse,
 } from "./contracts";
 
+let verifyCookieInFlight: Promise<CookieStatus> | null = null;
+
 export type * from "./contracts";
 
 import {
@@ -661,7 +663,7 @@ export async function getConfig(): Promise<AppConfig> {
         ? result.im_friend_sec_user_ids.filter((item): item is string => typeof item === "string")
         : [],
       im_friend_include_all_users: Boolean(result.im_friend_include_all_users ?? false),
-      im_friend_refresh_interval_seconds: Number(result.im_friend_refresh_interval_seconds || 5) || 5,
+      im_friend_refresh_interval_seconds: Number(result.im_friend_refresh_interval_seconds || 30) || 30,
       theme: String(result.theme || "dark"),
       language: String(result.language || "zh-CN"),
       cookie_set: Boolean(result.cookie_set ?? false),
@@ -684,7 +686,7 @@ export async function saveConfig(config: Partial<AppConfig>): Promise<{ success:
       im_friend_include_all_users:
         config.im_friend_include_all_users ?? current.im_friend_include_all_users ?? false,
       im_friend_refresh_interval_seconds:
-        config.im_friend_refresh_interval_seconds ?? current.im_friend_refresh_interval_seconds ?? 5,
+        config.im_friend_refresh_interval_seconds ?? current.im_friend_refresh_interval_seconds ?? 30,
       proxy: config.proxy ?? current.proxy ?? null,
     };
     if (typeof config.cookie === "string") {
@@ -711,7 +713,7 @@ export async function saveConfig(config: Partial<AppConfig>): Promise<{ success:
     im_friend_include_all_users:
       config.im_friend_include_all_users ?? current.im_friend_include_all_users ?? false,
     im_friend_refresh_interval_seconds:
-      config.im_friend_refresh_interval_seconds ?? current.im_friend_refresh_interval_seconds ?? 5,
+      config.im_friend_refresh_interval_seconds ?? current.im_friend_refresh_interval_seconds ?? 30,
     theme: config.theme ?? current.theme ?? "dark",
     language: config.language ?? current.language ?? "zh-CN",
   };
@@ -1341,12 +1343,17 @@ export async function saveFriendChatState(payload: {
 }
 
 export async function verifyCookie(): Promise<CookieStatus> {
-  if (shouldUseBrowserBridge()) {
-    return requestJson<CookieStatus>("/api/verify_cookie", {
-      suppressCookieInvalidEvent: true,
-    });
+  if (!verifyCookieInFlight) {
+    verifyCookieInFlight = (shouldUseBrowserBridge()
+      ? requestJson<CookieStatus>("/api/verify_cookie", {
+        suppressCookieInvalidEvent: true,
+      })
+      : invoke<CookieStatus>("verify_cookie"))
+      .finally(() => {
+        verifyCookieInFlight = null;
+      });
   }
-  return invoke("verify_cookie");
+  return verifyCookieInFlight;
 }
 
 export async function cookieBrowserLogin(timeout?: number, browser?: string): Promise<{ success: boolean; message: string }> {

@@ -128,7 +128,7 @@ export function SettingsView() {
   const [folderNameTemplate, setFolderNameTemplate] = useState("{author}");
   const [autoCreateFolder, setAutoCreateFolder] = useState(true);
   const [imFriendIncludeAllUsers, setImFriendIncludeAllUsers] = useState(false);
-  const [imFriendRefreshIntervalSeconds, setImFriendRefreshIntervalSeconds] = useState("5");
+  const [imFriendRefreshIntervalSeconds, setImFriendRefreshIntervalSeconds] = useState("30");
   const [choosingDirectory, setChoosingDirectory] = useState(false);
   const [savingFields, setSavingFields] = useState<SavingFields>({});
   const [savedFields, setSavedFields] = useState<SavingFields>({});
@@ -142,7 +142,7 @@ export function SettingsView() {
     folderNameTemplate: "{author}",
     autoCreateFolder: true,
     imFriendIncludeAllUsers: false,
-    imFriendRefreshIntervalSeconds: "5",
+    imFriendRefreshIntervalSeconds: "30",
     theme,
   });
 
@@ -187,7 +187,7 @@ export function SettingsView() {
         const nextFolderNameTemplate = config.folder_name_template || "{author}";
         const nextAutoCreateFolder = config.auto_create_folder ?? true;
         const nextImFriendIncludeAllUsers = config.im_friend_include_all_users ?? false;
-        const nextImFriendRefreshIntervalSeconds = String(config.im_friend_refresh_interval_seconds || 5);
+        const nextImFriendRefreshIntervalSeconds = String(config.im_friend_refresh_interval_seconds || 30);
         setDownloadPath(nextDownloadPath);
         setDownloadQuality(nextDownloadQuality);
         setMaxConcurrent(nextMaxConcurrent);
@@ -682,7 +682,7 @@ export function SettingsView() {
   const saveImFriendRefreshInterval = async (value: string) => {
     const previousValue = savedSettingsRef.current.imFriendRefreshIntervalSeconds;
     const parsed = Math.floor(Number(value));
-    const nextSeconds = Number.isFinite(parsed) ? Math.max(1, Math.min(3600, parsed)) : 5;
+    const nextSeconds = Number.isFinite(parsed) ? Math.max(1, Math.min(3600, parsed)) : 30;
     const nextValue = String(nextSeconds);
     setImFriendRefreshIntervalSeconds(nextValue);
     if (nextValue === previousValue || savingFields.im_friend_refresh_interval_seconds) return;
@@ -1175,7 +1175,7 @@ export function SettingsView() {
               />
             </div>
             <p className="text-xs text-text-muted leading-relaxed">
-              好友页后台刷新，默认 5 秒。
+              好友页后台刷新，默认 30 秒。
             </p>
           </div>
         </SettingGroup>

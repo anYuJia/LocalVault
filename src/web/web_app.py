@@ -1027,6 +1027,17 @@ def should_forward_douyin_cookie(url: str) -> bool:
     return any(hostname == suffix or hostname.endswith(f'.{suffix}') for suffix in COOKIE_MEDIA_HOST_SUFFIXES)
 
 
+def _media_url_label(raw_url: str) -> str:
+    """日志里只保留媒体域名和路径，避免刷出签名参数。"""
+    try:
+        parsed = urlparse((raw_url or '').strip())
+        if parsed.netloc:
+            return f'{parsed.netloc}{parsed.path}'[:160]
+    except Exception:
+        pass
+    return str(raw_url or '')[:80]
+
+
 def _allowed_media_request_origin() -> tuple[bool, str | None]:
     origin = (request.headers.get('Origin') or '').strip()
     if not origin or origin == 'null':
@@ -2071,7 +2082,7 @@ def get_config():
         'auto_create_folder': getattr(Config, 'AUTO_CREATE_FOLDER', True),
         'im_friend_sec_user_ids': getattr(Config, 'IM_FRIEND_SEC_USER_IDS', []),
         'im_friend_include_all_users': getattr(Config, 'IM_FRIEND_INCLUDE_ALL_USERS', False),
-        'im_friend_refresh_interval_seconds': getattr(Config, 'IM_FRIEND_REFRESH_INTERVAL_SECONDS', 5),
+        'im_friend_refresh_interval_seconds': getattr(Config, 'IM_FRIEND_REFRESH_INTERVAL_SECONDS', 30),
         'app_version': _get_current_app_version(),
     })
 
@@ -2223,7 +2234,7 @@ def set_config():
         if 'im_friend_refresh_interval_seconds' in data:
             Config.IM_FRIEND_REFRESH_INTERVAL_SECONDS = _coerce_int(
                 data.get('im_friend_refresh_interval_seconds'),
-                5,
+                30,
                 1,
                 3600,
             )
@@ -2854,6 +2865,7 @@ def media_proxy():
     upstream_range_value = _cap_media_range_header(request_range, requested_media_type)
     cache_key = url if '/aweme/v1/play/' in url else None
     upstream_url = MEDIA_PROXY_REDIRECT_CACHE.get(cache_key, url) if cache_key else url
+    upstream_label = _media_url_label(upstream_url)
 
     retry_count = 0
     redirect_hops = 0
@@ -2866,6 +2878,7 @@ def media_proxy():
                 if cache_key:
                     MEDIA_PROXY_REDIRECT_CACHE.pop(cache_key, None)
                 return 'Invalid URL', 400
+            upstream_label = _media_url_label(upstream_url)
 
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36',
@@ -2891,9 +2904,10 @@ def media_proxy():
                 if retry_count < MEDIA_PROXY_MAX_RETRIES:
                     retry_count += 1
                     logger.warning(
-                        '[media_proxy] 网络错误，准备重试 %s/%s: %s',
+                        '[media_proxy] 网络错误，准备重试 %s/%s: url=%s error=%s',
                         retry_count,
                         MEDIA_PROXY_MAX_RETRIES,
+                        upstream_label,
                         e,
                     )
                     time.sleep(0.5 * retry_count)
@@ -2906,7 +2920,7 @@ def media_proxy():
                     int((time.time() - start_time) * 1000),
                     should_seed_video_range,
                     request_range_str,
-                    upstream_url[:120],
+                    upstream_label,
                     e,
                 )
                 return 'Proxy error', 502
@@ -2932,7 +2946,7 @@ def media_proxy():
                     retry_count,
                     MEDIA_PROXY_MAX_RETRIES,
                     resp.status_code,
-                    upstream_url[:120],
+                    upstream_label,
                 )
                 resp.close()
                 time.sleep(0.5 * retry_count)
@@ -2949,7 +2963,7 @@ def media_proxy():
             resp.status_code,
             should_seed_video_range,
             request_range_str,
-            upstream_url[:120],
+            upstream_label,
         )
 
         resp_headers = {}
@@ -3007,7 +3021,7 @@ def media_proxy():
             except Exception as decrypt_error:
                 logger.warning(
                     '[media_proxy] 图片解密失败，将返回原始响应: url=%s error=%s',
-                    upstream_url[:120],
+                    upstream_label,
                     decrypt_error,
                 )
 
@@ -3028,7 +3042,7 @@ def media_proxy():
                     '[media_proxy] 传输完成, 共 %.2fMB, 耗时 %.2fs, url=%s',
                     total / 1048576,
                     time.time() - stream_start,
-                    upstream_url[:120],
+                    upstream_label,
                 )
 
         return Response(generate(), status=resp.status_code, headers=resp_headers)

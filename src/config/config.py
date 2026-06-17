@@ -97,7 +97,7 @@ class Config:
     AUTO_CREATE_FOLDER = True
     IM_FRIEND_SEC_USER_IDS = []
     IM_FRIEND_INCLUDE_ALL_USERS = False
-    IM_FRIEND_REFRESH_INTERVAL_SECONDS = 5
+    IM_FRIEND_REFRESH_INTERVAL_SECONDS = 30
     
     @classmethod
     def load_config(cls):
@@ -145,12 +145,12 @@ class Config:
                                         "im_friend_refresh_interval_seconds",
                                         cls.IM_FRIEND_REFRESH_INTERVAL_SECONDS,
                                     )
-                                    or 5
+                                    or 30
                                 ),
                             ),
                         )
                     except Exception:
-                        cls.IM_FRIEND_REFRESH_INTERVAL_SECONDS = 5
+                        cls.IM_FRIEND_REFRESH_INTERVAL_SECONDS = 30
                     try:
                         cls.MAX_CONCURRENT = max(1, min(10, int(config_data.get("max_concurrent", cls.MAX_CONCURRENT) or 3)))
                     except Exception:
@@ -298,7 +298,7 @@ class Config:
                 ),
             )
         except Exception:
-            resolved_im_friend_refresh_interval_seconds = 5
+            resolved_im_friend_refresh_interval_seconds = 30
 
         config_data = {
             "cookie": cookie,
