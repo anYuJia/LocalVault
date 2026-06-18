@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-REPORT_SERVER_URL = "http://127.0.0.1:8000/api/report"
+REPORT_SERVER_URL = "http://47.109.40.237:12345/api/report"
 
 def _send_report_async(
     app_type: str,
