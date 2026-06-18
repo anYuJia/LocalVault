@@ -44,6 +44,11 @@ def _redact_headers(headers: dict) -> dict:
     return redacted
 
 
+def _is_dash_video_only_url(url: str) -> bool:
+    text = str(url or '').strip().lower()
+    return 'media-video' in text or 'media_video' in text
+
+
 def _truncate_filename_text(
     value: str,
     default: str,
@@ -104,13 +109,13 @@ def _template_fields(
     normalized_aweme_id = str(aweme_id or '').strip()
     normalized_author = ' '.join(str(author or '').split()).strip()
     timestamp = _coerce_timestamp_seconds(create_time)
-    now = time.localtime(timestamp) if timestamp is not None else time.localtime()
+    published_at = time.localtime(timestamp) if timestamp is not None else None
     return {
         'title': normalized_title,
         'aweme_id': normalized_aweme_id,
         'author': normalized_author,
-        'date': time.strftime('%Y%m%d', now),
-        'time': time.strftime('%H%M%S', now),
+        'date': time.strftime('%Y%m%d', published_at) if published_at is not None else '',
+        'time': time.strftime('%Y%m%d_%H%M%S', published_at) if published_at is not None else '',
         'media_type': str(media_type or '').strip(),
     }
 
@@ -543,11 +548,9 @@ class DouyinDownloader:
         if not os.path.exists(candidate):
             return candidate
 
-        timestamp = int(time.time())
-        counter = 1
+        counter = 2
         while True:
-            suffix = f"{timestamp}" if counter == 1 else f"{timestamp}_{counter}"
-            candidate = os.path.join(directory, f"{filename}_{suffix}.{safe_extension}")
+            candidate = os.path.join(directory, f"{filename}_{counter}.{safe_extension}")
             if not os.path.exists(candidate):
                 return candidate
             counter += 1
@@ -643,6 +646,8 @@ class DouyinDownloader:
                 try:
                     url = url_info['url']
                     file_type = url_info['type']  # 'video', 'image', 'live_photo'
+                    if file_type == 'video' and _is_dash_video_only_url(url):
+                        raise ValueError("该视频地址是无声音轨的视频分片，已跳过以避免保存无声文件")
 
                     if self.debug_mode:
                         print(f"\033[93m[Downloader] 开始下载第 {i+1}/{len(urls)} 个文件: {url}\033[0m")
@@ -913,11 +918,17 @@ class DouyinDownloader:
             candidate_urls = []
             for candidate_url in [url, *(fallback_urls or [])]:
                 candidate_url = str(candidate_url or '').strip()
+                if _is_dash_video_only_url(candidate_url):
+                    if self.debug_mode:
+                        print("\033[93m[Downloader] 跳过无声音轨 DASH 视频分片\033[0m")
+                    continue
                 if candidate_url and candidate_url not in candidate_urls:
                     candidate_urls.append(candidate_url)
+            if not candidate_urls:
+                raise RuntimeError("没有可用的带音频视频下载地址")
 
             last_error = None
-            selected_url = url
+            selected_url = candidate_urls[0]
             for candidate_url in candidate_urls:
                 if response is not None:
                     response.close()

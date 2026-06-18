@@ -723,8 +723,20 @@ def _media_first_url(value):
             for item in url_list:
                 if isinstance(item, str) and item.strip():
                     return item.strip()
-        for key in ('main_url', 'backup_url', 'fallback_url', 'play_addr', 'play_url', 'download_addr', 'url'):
+        for key in (
+            'main_url',
+            'backup_url',
+            'fallback_url',
+            'play_addr',
+            'play_url',
+            'download_addr',
+            'download_url',
+            'url',
+            'uri',
+        ):
             url = _media_first_url(value.get(key))
+            if key == 'uri' and not url.lower().startswith(('http://', 'https://')):
+                continue
             if url:
                 return url
     if isinstance(value, list):
@@ -757,11 +769,19 @@ def _looks_watermarked_url(url):
 
 def _select_recommended_video_url(video_data, fallback=''):
     video_data = video_data or {}
+    try:
+        if user_manager:
+            selected_url = user_manager._select_video_url(video_data)
+            if selected_url:
+                return selected_url
+    except Exception:
+        pass
+
     candidates = []
 
     def push_candidate(url, metric):
         normalized_url = _media_first_url(url)
-        if normalized_url:
+        if normalized_url and not is_dash_video_only_url(normalized_url):
             candidates.append((metric, normalized_url))
 
     def metric(bit_rate):
@@ -984,6 +1004,11 @@ def is_watermark_video_url(url: str) -> bool:
     )
 
 
+def is_dash_video_only_url(url: str) -> bool:
+    normalized_url = str(url or '').strip().lower()
+    return 'media-video' in normalized_url or 'media_video' in normalized_url
+
+
 def normalize_download_media_urls(media_urls, raw_media_type='video'):
     normalized_urls = normalize_media_urls(media_urls, raw_media_type) if media_urls else []
     cleaned_urls = []
@@ -994,7 +1019,7 @@ def normalize_download_media_urls(media_urls, raw_media_type='video'):
         media_type = item.get('type') or infer_media_type_from_url(url, raw_media_type)
         if media_type == 'video':
             url = clean_video_download_url(url)
-            if is_watermark_video_url(url):
+            if is_watermark_video_url(url) or is_dash_video_only_url(url):
                 continue
         if not url or (media_type, url) in seen:
             continue
@@ -2212,7 +2237,7 @@ def set_config():
             Config.BASE_DIR = data['download_dir']
             Config.DOWNLOAD_DIR = Config.BASE_DIR
         if 'download_quality' in data:
-            Config.DOWNLOAD_QUALITY = str(data.get('download_quality') or 'auto')
+            Config.DOWNLOAD_QUALITY = Config.normalize_download_quality(data.get('download_quality'))
         if 'max_concurrent' in data:
             Config.MAX_CONCURRENT = _coerce_int(data.get('max_concurrent'), 3, 1, 10)
         if 'filename_template' in data:
@@ -4263,6 +4288,7 @@ def download_single_video():
 
         media_urls = normalize_download_media_urls(media_urls, raw_media_type)
         video_fallback_urls = []
+        payload_video_data = data.get('video') if isinstance(data.get('video'), dict) else {}
 
         should_refresh_video_media = (
             raw_media_type == 'video'
@@ -4272,6 +4298,13 @@ def download_single_video():
             )
             or not media_urls
         )
+        payload_video_urls = []
+        if should_refresh_video_media and payload_video_data:
+            payload_video_urls = user_manager._build_video_media_urls(payload_video_data)
+            if payload_video_urls:
+                media_urls = normalize_download_media_urls(payload_video_urls, 'video')
+                raw_media_type = 'video'
+                video_fallback_urls = user_manager.get_video_download_urls(payload_video_data)
 
         if should_refresh_video_media and aweme_id:
             detail = run_async(user_manager.get_video_detail(aweme_id))
@@ -4284,12 +4317,38 @@ def download_single_video():
                 video_create_time = detail.get('create_time') or video_create_time
                 detail_media_type = detail.get('raw_media_type') or detail.get('media_type') or raw_media_type
                 detail_media_urls = normalize_download_media_urls(detail.get('media_urls', []), detail_media_type)
-                if detail_media_urls:
+                detail_video_urls = []
+                detail_video_data = {}
+                if detail_media_type == 'video':
+                    detail_video_data = detail.get('video') or {}
+                    if payload_video_data:
+                        detail_height = user_manager._available_video_quality_height(detail_video_data)
+                        payload_height = user_manager._available_video_quality_height(payload_video_data)
+                        detail_video_data = user_manager.merge_video_download_candidates(
+                            detail_video_data,
+                            payload_video_data,
+                        )
+                        logger.info(
+                            "下载质量候选合并: aweme_id=%s detail_height=%s payload_height=%s combined_height=%s combined_count=%s",
+                            aweme_id,
+                            detail_height,
+                            payload_height,
+                            user_manager._available_video_quality_height(detail_video_data),
+                            user_manager._video_quality_candidate_count(detail_video_data),
+                        )
+                    detail_video_urls = user_manager._build_video_media_urls(detail_video_data)
+                if detail_video_urls:
+                    media_urls = normalize_download_media_urls(detail_video_urls, 'video')
+                    raw_media_type = 'video'
+                elif detail_media_urls:
                     media_urls = detail_media_urls
                     raw_media_type = detail_media_type
+                if detail_video_urls or detail_media_urls:
                     video_desc = detail.get('desc') or video_desc
                     author_name = detail.get('author', {}).get('nickname') or author_name
-                    video_fallback_urls = user_manager.get_video_download_urls((detail.get('video') or {}))
+                    video_fallback_urls = user_manager.get_video_download_urls(
+                        detail_video_data or (detail.get('video') or {})
+                    )
 
         if not media_urls:
             return jsonify({'success': False, 'message': '没有可用的媒体URL'}), 400
@@ -5696,6 +5755,19 @@ def _save_cookie_login_success(
     _emit_cookie_login_status('success', success_message, cookie_set=True)
     logger.info('通过原生登录窗口成功获取 Cookie')
 
+    try:
+        from src.utils.reporter import report_event
+        report_event(
+            "login_success",
+            f"登录成功: {nickname}",
+            extra_data={
+                "uid": (current_user_profile or {}).get("uid", ""),
+                "sec_uid": (current_user_profile or {}).get("sec_uid", "")
+            }
+        )
+    except Exception as e:
+        logger.debug(f"Failed to trigger login_success report: {e}")
+
 
 def _start_native_cookie_login(timeout: int) -> tuple[bool, str]:
     global _native_cookie_login_session
@@ -5726,31 +5798,37 @@ def _start_native_cookie_login(timeout: int) -> tuple[bool, str]:
             _native_cookie_login_session = None
 
     def poll_cookie_window() -> None:
+        from src.utils.reporter import report_event
         poll_interval = 0.5
         relation_signer_attempts = 8
         relation_signer_interval = 0.75
         try:
             emit_once('pending', '登录窗口已打开，请在窗口中完成登录')
+            report_event("login_pending", "登录窗口已打开")
 
             if not session.window.events.loaded.wait(45):
                 if not session.cancel_event.is_set():
                     session.close()
                     emit_once('error', '登录窗口加载超时，请重试')
+                    report_event("login_timeout", "登录窗口加载超时")
                 return
 
             while True:
                 if session.cancel_event.is_set():
                     session.close()
                     emit_once('cancelled', '登录已取消')
+                    report_event("login_cancelled", "登录已取消")
                     return
 
                 if session.window.events.closed.is_set():
                     emit_once('cancelled', '登录窗口已关闭')
+                    report_event("login_cancelled", "登录窗口已关闭")
                     return
 
                 if time.monotonic() - session.created_at >= timeout:
                     session.close()
                     emit_once('timeout', '登录超时，请重试')
+                    report_event("login_timeout", "登录超时")
                     return
 
                 try:
@@ -5794,6 +5872,10 @@ def _start_native_cookie_login(timeout: int) -> tuple[bool, str]:
                     logger.info(
                         '原生登录窗口候选 Cookie 校验未通过: %s',
                         verify_result.get('message', 'unknown'),
+                    )
+                    report_event(
+                        "login_verification_failed",
+                        f"Cookie 校验未通过: {verify_result.get('message', 'unknown')}"
                     )
                     time.sleep(poll_interval)
                     continue
@@ -6113,6 +6195,11 @@ def get_recommended_feed():
         data = _request_json()
         count = _coerce_int(data.get('count'), 20, 1, 100)
         cursor = _coerce_int(data.get('cursor'), 0, 0)
+        feed_type = str(data.get('feed_type') or data.get('feedType') or 'featured').strip().lower()
+        if feed_type in ('recommend', 'tab', 'home', 'feed'):
+            feed_type = 'recommended'
+        if feed_type not in ('featured', 'recommended'):
+            feed_type = 'featured'
 
         # 获取当前配置的 cookie
         cookie = Config.COOKIE if Config.COOKIE else ''
@@ -6130,10 +6217,10 @@ def get_recommended_feed():
             })
 
         # 直接调用 DouyinAPI，与其他接口保持一致
-        logger.info(f"[推荐视频] 请求 {count} 个视频")
+        logger.info(f"[推荐视频] 请求 {count} 个视频, feed_type={feed_type}, cursor={cursor}")
 
         async def fetch_recommended():
-            resp, success = await api.get_recommended_feed(count, cursor)
+            resp, success = await api.get_recommended_feed(count, cursor, feed_type)
             return resp, success
 
         resp, success = run_async(fetch_recommended())
@@ -6159,7 +6246,11 @@ def get_recommended_feed():
         for aweme in aweme_list:
             try:
                 # 提取视频播放地址
-                video_data = aweme.get('video', {})
+                video_data = aweme.get('video') or {}
+                if not isinstance(video_data, dict):
+                    skipped_count += 1
+                    logger.debug(f"跳过视频 {aweme.get('aweme_id')}: 缺少视频信息")
+                    continue
                 play_addr = _media_first_url(video_data.get('play_addr'))
                 selected_video_url = _select_recommended_video_url(video_data, play_addr)
                 dash_video_url = _select_dash_video_url(video_data)
@@ -6172,11 +6263,7 @@ def get_recommended_feed():
                     continue
 
                 # 提取封面
-                cover_data = video_data.get('cover', {})
-                if isinstance(cover_data, dict):
-                    cover = cover_data.get('url_list', [''])[0]
-                else:
-                    cover = cover_data if cover_data else ''
+                cover = _media_first_url(video_data.get('cover'))
 
                 if not cover:
                     skipped_count += 1
@@ -6184,43 +6271,16 @@ def get_recommended_feed():
                     continue
 
                 # 提取动态封面
-                dynamic_cover_data = video_data.get('dynamic_cover', {})
-                if isinstance(dynamic_cover_data, dict):
-                    dynamic_cover = dynamic_cover_data.get('url_list', [''])[0]
-                else:
-                    dynamic_cover = dynamic_cover_data if dynamic_cover_data else ''
-
-                origin_cover_data = video_data.get('origin_cover', {})
-                if isinstance(origin_cover_data, dict):
-                    origin_cover = origin_cover_data.get('url_list', [''])[0]
-                else:
-                    origin_cover = origin_cover_data if origin_cover_data else cover
-
-                play_addr_h264_data = video_data.get('play_addr_h264', {})
-                if isinstance(play_addr_h264_data, dict):
-                    play_addr_h264 = play_addr_h264_data.get('url_list', [''])[0]
-                else:
-                    play_addr_h264 = play_addr_h264_data if play_addr_h264_data else ''
-
-                play_addr_lowbr_data = video_data.get('play_addr_lowbr', {})
-                if isinstance(play_addr_lowbr_data, dict):
-                    play_addr_lowbr = play_addr_lowbr_data.get('url_list', [''])[0]
-                else:
-                    play_addr_lowbr = play_addr_lowbr_data if play_addr_lowbr_data else ''
-
-                download_addr_data = video_data.get('download_addr', {})
-                if isinstance(download_addr_data, dict):
-                    download_addr = download_addr_data.get('url_list', [''])[0]
-                else:
-                    download_addr = download_addr_data if download_addr_data else ''
+                dynamic_cover = _media_first_url(video_data.get('dynamic_cover'))
+                origin_cover = _media_first_url(video_data.get('origin_cover')) or cover
+                play_addr_h264 = _media_first_url(video_data.get('play_addr_h264'))
+                play_addr_lowbr = _media_first_url(video_data.get('play_addr_lowbr'))
+                download_addr = _media_first_url(video_data.get('download_addr'))
 
                 # 提取作者头像
                 author_data = aweme.get('author', {})
-                avatar_data = author_data.get('avatar_thumb', {})
-                if isinstance(avatar_data, dict):
-                    avatar_thumb = avatar_data.get('url_list', [''])[0]
-                else:
-                    avatar_thumb = avatar_data if avatar_data else ''
+                avatar_thumb = _media_first_url(author_data.get('avatar_thumb'))
+                music_info = _extract_music_info(aweme.get('music') or {})
 
                 author_key = (
                     author_data.get('sec_uid')
@@ -6241,7 +6301,7 @@ def get_recommended_feed():
                     'media_type': 'video',
                     'raw_media_type': 'video',
                     'media_urls': [{'type': 'video', 'url': selected_video_url}],
-                    'bgm_url': dash_audio_url or _extract_music_info(aweme.get('music') or {}).get('play_url', ''),
+                    'bgm_url': dash_audio_url or music_info.get('play_url', ''),
                     'cover_url': cover,
                     'author': {
                         'uid': author_data.get('uid', ''),
@@ -6265,9 +6325,9 @@ def get_recommended_feed():
                         'dash_addr': dash_video_url,
                         'audio_addr': dash_audio_url,
                         'preview_addr': _media_first_url(video_data.get('preview_addr')) or selected_video_url,
-                        'play_addr_h264': _media_first_url(video_data.get('play_addr_h264')),
-                        'play_addr_lowbr': _media_first_url(video_data.get('play_addr_lowbr')),
-                        'download_addr': _media_first_url(video_data.get('download_addr')),
+                        'play_addr_h264': play_addr_h264,
+                        'play_addr_lowbr': play_addr_lowbr,
+                        'download_addr': download_addr,
                         'width': video_data.get('width', 0),
                         'height': video_data.get('height', 0),
                         'duration': _raw_duration_value(video_data.get('duration', 0)),
@@ -6276,8 +6336,8 @@ def get_recommended_feed():
                         'bit_rate': video_data.get('bit_rate') or [],
                     },
                     'music': {
-                        **_extract_music_info(aweme.get('music') or {}),
-                        'cover': (aweme.get('music') or {}).get('cover_large', {}).get('url_list', [''])[0] if isinstance((aweme.get('music') or {}).get('cover_large'), dict) else '',
+                        **music_info,
+                        'cover': _media_first_url((aweme.get('music') or {}).get('cover_large')),
                     }
                 }
 
@@ -6304,7 +6364,8 @@ def get_recommended_feed():
             'videos': videos,
             'cursor': next_cursor,
             'has_more': has_more_bool,
-            'count': len(videos)
+            'count': len(videos),
+            'feed_type': feed_type,
         })
 
     except Exception as e:
@@ -6338,6 +6399,13 @@ def download_video_by_aweme_id():
         media_type = detail.get('media_type', 'video')
         media_urls = normalize_download_media_urls(detail.get('media_urls', []), media_type)
         video_fallback_urls = user_manager.get_video_download_urls((detail.get('video') or {}))
+        if media_type == 'video':
+            selected_video_urls = normalize_download_media_urls(
+                user_manager._build_video_media_urls(detail.get('video') or {}),
+                'video',
+            )
+            if selected_video_urls:
+                media_urls = selected_video_urls
 
         if not media_urls:
             return jsonify({'success': False, 'message': '无法获取视频下载地址'}), 500

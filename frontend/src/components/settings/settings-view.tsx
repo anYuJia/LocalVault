@@ -78,14 +78,41 @@ type SettingsField =
   | "im_friend_refresh_interval_seconds";
 type SavingFields = Partial<Record<SettingsField, boolean>>;
 type SettingsPatch = Parameters<typeof saveConfig>[0];
+
+const DOWNLOAD_QUALITY_OPTIONS = [
+  { value: "auto", label: "自动" },
+  { value: "highest", label: "最高质量" },
+  { value: "4k", label: "4K" },
+  { value: "2k", label: "2K" },
+  { value: "1080p", label: "1080p" },
+  { value: "720p", label: "720p" },
+  { value: "480p", label: "480p" },
+  { value: "h264", label: "兼容优先 (H.264)" },
+  { value: "smallest", label: "最小体积" },
+] as const;
+const DOWNLOAD_QUALITY_VALUES = new Set<string>(DOWNLOAD_QUALITY_OPTIONS.map((option) => option.value));
 type SettingStatus = "saving" | "saved" | "error";
+
+function normalizeDownloadQuality(value: unknown) {
+  const normalized = String(value || "auto").trim().toLowerCase();
+  const canonical = ({
+    p480: "480p",
+    p720: "720p",
+    p1080: "1080p",
+    p1440: "2k",
+    "1440p": "2k",
+    p2160: "4k",
+    "2160p": "4k",
+  } as Record<string, string>)[normalized] ?? normalized;
+  return DOWNLOAD_QUALITY_VALUES.has(canonical) ? canonical : "auto";
+}
 
 const TEMPLATE_VARIABLES = [
   { token: "{title}", label: "标题" },
   { token: "{aweme_id}", label: "作品ID" },
   { token: "{author}", label: "作者" },
-  { token: "{date}", label: "作品日期" },
-  { token: "{time}", label: "作品时间" },
+  { token: "{date}", label: "发布日期" },
+  { token: "{time}", label: "发布时间" },
   { token: "{media_type}", label: "类型" },
 ];
 
@@ -93,7 +120,7 @@ const FILENAME_PRESETS = [
   { value: "{title}", label: "只写标题" },
   { value: "{title}_{aweme_id}", label: "标题 + 作品ID" },
   { value: "{author}_{title}_{aweme_id}", label: "作者 + 标题 + 作品ID" },
-  { value: "{date}_{title}_{aweme_id}", label: "作品日期 + 标题 + 作品ID" },
+  { value: "{date}_{title}_{aweme_id}", label: "发布日期 + 标题 + 作品ID" },
 ];
 
 export function SettingsView() {
@@ -181,7 +208,7 @@ export function SettingsView() {
       .then((config) => {
         if (disposed) return;
         const nextDownloadPath = config.download_path || config.download_dir || "";
-        const nextDownloadQuality = config.download_quality || "auto";
+        const nextDownloadQuality = normalizeDownloadQuality(config.download_quality);
         const nextMaxConcurrent = String(config.max_concurrent || 3);
         const nextFilenameTemplate = config.filename_template || "{title}";
         const nextFolderNameTemplate = config.folder_name_template || "{author}";
@@ -562,17 +589,18 @@ export function SettingsView() {
   };
 
   const handleQualityChange = async (value: string) => {
+    const nextQuality = normalizeDownloadQuality(value);
     const previousQuality = savedSettingsRef.current.downloadQuality;
-    setDownloadQuality(value);
-    if (value === previousQuality || savingFields.download_quality) return;
+    setDownloadQuality(nextQuality);
+    if (nextQuality === previousQuality || savingFields.download_quality) return;
 
     const saved = await saveSetting(
       "download_quality",
-      { download_quality: value },
+      { download_quality: nextQuality },
       "下载质量已保存"
     );
     if (saved) {
-      savedSettingsRef.current.downloadQuality = value;
+      savedSettingsRef.current.downloadQuality = nextQuality;
     } else {
       setDownloadQuality(previousQuality);
     }
@@ -1345,14 +1373,15 @@ export function SettingsView() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="auto">自动</SelectItem>
-              <SelectItem value="highest">最高质量</SelectItem>
-              <SelectItem value="h264">兼容优先 (H.264)</SelectItem>
-              <SelectItem value="smallest">最小体积</SelectItem>
+              {DOWNLOAD_QUALITY_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <p className="text-xs text-text-muted mt-1.5 leading-relaxed">
-            只影响视频；图片、图集和 Live Photo 按原始媒体下载。
+            目标清晰度会优先选择不超过目标且最接近的版本；图片、图集和 Live Photo 按原始媒体下载。
           </p>
         </SettingGroup>
 

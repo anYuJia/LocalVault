@@ -9,19 +9,32 @@ import {
 } from "@/components/search/video-card";
 import { Sparkles, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRecommended } from "@/hooks/use-recommended";
 import { useDownloads } from "@/hooks/use-downloads";
 import { VideoDetailModal } from "@/components/modals/video-detail";
 import { FullscreenPlayer } from "@/components/player/fullscreen-player";
 import { useSearchStore } from "@/stores/search-store";
 import { useRecommendedStore } from "@/stores/recommended-store";
-import type { VideoInfo } from "@/lib/tauri";
+import type { RecommendedFeedType, VideoInfo } from "@/lib/tauri";
 import { videoAuthorToUserInfo } from "@/lib/video-author";
 
 const ORIGINAL_VIDEO_GRID_CLASS = VIDEO_CARD_GRID_CLASS;
+const FEED_PRELOAD_ROOT_MARGIN = "1800px 0px";
 
 export function RecommendedFeed() {
-  const { videos, loading, loadingMore, hasMore, loadFeed, loadMore, refresh } = useRecommended();
+  const {
+    feedType,
+    videos,
+    loading,
+    loadingMore,
+    hasMore,
+    initialized,
+    setFeedType,
+    loadFeed,
+    loadMore,
+    refresh,
+  } = useRecommended();
   const { downloadVideo } = useDownloads();
   const openUser = useSearchStore((s) => s.openUser);
   const updateRecommendedVideo = useRecommendedStore((s) => s.updateVideo);
@@ -33,6 +46,14 @@ export function RecommendedFeed() {
   const openPlayer = (video: VideoInfo) => {
     const index = videos.findIndex((item) => item.aweme_id === video.aweme_id);
     setPlayerIndex(index >= 0 ? index : 0);
+  };
+
+  const handleFeedTypeChange = (value: string) => {
+    const nextFeedType = value as RecommendedFeedType;
+    if (nextFeedType === feedType) return;
+    setPlayerIndex(null);
+    setDetailVideo(null);
+    setFeedType(nextFeedType);
   };
 
   const openAuthor = async (video: VideoInfo) => {
@@ -47,10 +68,10 @@ export function RecommendedFeed() {
   };
 
   useEffect(() => {
-    if (videos.length === 0 && !loading) {
+    if (!initialized && videos.length === 0 && !loading) {
       void loadFeed();
     }
-  }, [loadFeed, videos.length, loading]);
+  }, [feedType, initialized, loadFeed, videos.length, loading]);
 
   useEffect(() => {
     if (!hasMore || loading || loadingMore || videos.length === 0) return;
@@ -66,7 +87,7 @@ export function RecommendedFeed() {
       },
       {
         root: null,
-        rootMargin: "520px 0px",
+        rootMargin: FEED_PRELOAD_ROOT_MARGIN,
         threshold: 0.01,
       }
     );
@@ -78,7 +99,7 @@ export function RecommendedFeed() {
   return (
     <>
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-accent" />
           <h3 className="text-[0.9rem] font-semibold text-text">推荐视频</h3>
@@ -86,13 +107,25 @@ export function RecommendedFeed() {
             <span className="text-[0.72rem] text-text-muted">{videos.length} 个</span>
           )}
         </div>
-        <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
-          <RefreshCw
-            className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
-            style={{ willChange: loading ? "transform" : undefined }}
-          />
-          刷新
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <Tabs value={feedType} onValueChange={handleFeedTypeChange}>
+            <TabsList className="h-9">
+              <TabsTrigger value="featured" className="h-8 px-3">
+                精选
+              </TabsTrigger>
+              <TabsTrigger value="recommended" className="h-8 px-3">
+                推荐
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
+              style={{ willChange: loading ? "transform" : undefined }}
+            />
+            刷新
+          </Button>
+        </div>
       </div>
 
       {loading && videos.length === 0 ? (
@@ -147,7 +180,7 @@ export function RecommendedFeed() {
                 ) : (
                   <RefreshCw className="w-4 h-4" />
                 )}
-                {loadingMore ? "正在加载更多..." : "继续下滑自动加载"}
+                {loadingMore ? "正在预加载..." : "继续下滑自动预加载"}
               </Button>
             </div>
           ) : (

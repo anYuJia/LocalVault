@@ -187,10 +187,13 @@ export interface VideoRelationResponse extends ApiResponse {
   is_collected?: boolean;
 }
 
+export type RecommendedFeedType = "featured" | "recommended";
+
 export interface RecommendedResponse extends ApiResponse {
   videos?: VideoInfo[];
   cursor?: number;
   has_more?: boolean;
+  feed_type?: RecommendedFeedType | string;
 }
 
 export interface LikedVideosResponse extends ApiResponse {

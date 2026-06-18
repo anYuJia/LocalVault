@@ -123,7 +123,25 @@ function extractUrl(value: unknown): string {
   }
   if (typeof value === "object") {
     const record = value as Record<string, unknown>;
-    return extractUrl(record.url || record.play_url || record.play_addr || record.download_addr || record.url_list);
+    for (const key of [
+      "url_list",
+      "url",
+      "main_url",
+      "backup_url",
+      "fallback_url",
+      "play_addr",
+      "play_url",
+      "download_addr",
+      "download_url",
+      "display_url",
+      "uri",
+    ]) {
+      const nested = record[key];
+      if (nested === undefined || nested === value) continue;
+      const url = extractUrl(nested);
+      if (key === "uri" && !/^https?:\/\//i.test(url)) continue;
+      if (url) return url;
+    }
   }
   return "";
 }

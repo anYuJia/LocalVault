@@ -36,7 +36,7 @@ def check_long_download_title_keeps_more_safe_text():
 def check_download_title_uses_work_create_time_for_date_tokens():
     aweme_id = "7380011223344556677"
     create_time = 1704067205
-    expected_prefix = time.strftime("%Y%m%d_%H%M%S", time.localtime(create_time))
+    expected_prefix = time.strftime("%Y%m%d_%Y%m%d_%H%M%S", time.localtime(create_time))
 
     title = build_download_title(
         "跨年作品",
@@ -46,6 +46,17 @@ def check_download_title_uses_work_create_time_for_date_tokens():
     )
 
     assert title == f"{expected_prefix}_跨年作品_{aweme_id}"
+
+
+def check_download_title_leaves_date_tokens_empty_without_create_time():
+    title = build_download_title(
+        "无发布时间作品",
+        "7380011223344556677",
+        template="{date}_{time}_{title}_{aweme_id}",
+        create_time=0,
+    )
+
+    assert title == "无发布时间作品_7380011223344556677"
 
 
 def check_download_title_keeps_legacy_positional_template_argument():
@@ -60,4 +71,5 @@ if __name__ == "__main__":
     check_long_download_title_preserves_aweme_id_suffix_when_requested()
     check_long_download_title_keeps_more_safe_text()
     check_download_title_uses_work_create_time_for_date_tokens()
+    check_download_title_leaves_date_tokens_empty_without_create_time()
     check_download_title_keeps_legacy_positional_template_argument()

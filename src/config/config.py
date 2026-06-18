@@ -36,6 +36,16 @@ class Config:
     DOWNLOAD_DIR = BASE_DIR
     HISTORY_DIRS = []
     DOWNLOAD_QUALITY = "auto"
+    DOWNLOAD_QUALITY_VALUES = {"auto", "highest", "h264", "smallest", "480p", "720p", "1080p", "2k", "4k"}
+    DOWNLOAD_QUALITY_ALIASES = {
+        "p480": "480p",
+        "p720": "720p",
+        "p1080": "1080p",
+        "p1440": "2k",
+        "1440p": "2k",
+        "p2160": "4k",
+        "2160p": "4k",
+    }
     MAX_CONCURRENT = 3
     
     # 请求参数
@@ -119,7 +129,9 @@ class Config:
                     cls.BASE_DIR = config_data.get("base_dir", cls.BASE_DIR)
                     cls.DOWNLOAD_DIR = cls.BASE_DIR
                     cls.HISTORY_DIRS = cls.normalize_history_dirs(config_data.get("history_dirs", []))
-                    cls.DOWNLOAD_QUALITY = str(config_data.get("download_quality", cls.DOWNLOAD_QUALITY) or "auto")
+                    cls.DOWNLOAD_QUALITY = cls.normalize_download_quality(
+                        config_data.get("download_quality", cls.DOWNLOAD_QUALITY)
+                    )
                     cls.FILENAME_TEMPLATE = cls.normalize_filename_template(
                         config_data.get("filename_template", cls.FILENAME_TEMPLATE),
                         cls.FILENAME_TEMPLATE,
@@ -181,7 +193,7 @@ class Config:
             cls.BASE_DIR = env_base_dir
             cls.DOWNLOAD_DIR = cls.BASE_DIR
         if env_quality:
-            cls.DOWNLOAD_QUALITY = str(env_quality or "auto")
+            cls.DOWNLOAD_QUALITY = cls.normalize_download_quality(env_quality)
         if env_max_concurrent:
             try:
                 cls.MAX_CONCURRENT = max(1, min(10, int(env_max_concurrent)))
@@ -229,6 +241,15 @@ class Config:
         return value[:160]
 
     @classmethod
+    def normalize_download_quality(cls, quality):
+        """归一化视频下载质量配置。"""
+        normalized = str(quality or "auto").strip().lower()
+        canonical = cls.DOWNLOAD_QUALITY_ALIASES.get(normalized, normalized)
+        if canonical in cls.DOWNLOAD_QUALITY_VALUES:
+            return canonical
+        return "auto"
+
+    @classmethod
     def normalize_sec_user_ids(cls, values):
         """归一化 IM 好友 sec_user_id 缓存。"""
         if not isinstance(values, list):
@@ -263,7 +284,7 @@ class Config:
         im_friend_refresh_interval_seconds=None,
     ):
         """保存配置到配置文件"""
-        resolved_quality = str(download_quality or cls.DOWNLOAD_QUALITY or "auto")
+        resolved_quality = cls.normalize_download_quality(download_quality or cls.DOWNLOAD_QUALITY)
         try:
             resolved_max_concurrent = max(1, min(10, int(max_concurrent if max_concurrent is not None else cls.MAX_CONCURRENT)))
         except Exception:

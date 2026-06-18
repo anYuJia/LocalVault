@@ -48,6 +48,7 @@ import { cn, formatBytes } from "@/lib/utils";
 const FILE_PAGE_SIZE_OPTIONS = [12, 24, 48, 96] as const;
 type LocalMediaKind = "video" | "image" | "audio" | "media";
 type DownloadDisplayMode = "file" | "work";
+type VideoResolution = { width: number; height: number } | null;
 type DownloadPlayerState = {
   videos: VideoInfo[];
   initialIndex: number;
@@ -63,6 +64,64 @@ interface DownloadWorkGroup {
   items: HistoryItem[];
   coverItem: HistoryItem;
   mediaCounts: Record<LocalMediaKind, number>;
+}
+
+function readVideoResolution(video: HTMLVideoElement): VideoResolution {
+  const width = Math.round(Number(video.videoWidth || 0));
+  const height = Math.round(Number(video.videoHeight || 0));
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
+function standardQualityHeightFromDimension(value: number): number {
+  if (value <= 0) return 0;
+  const standardHeights = [4320, 2160, 1440, 1080, 720, 540, 480, 360, 240];
+  const nearest = standardHeights.reduce((best, height) =>
+    Math.abs(height - value) < Math.abs(best - value) ? height : best
+  );
+  const tolerance = Math.max(16, nearest * 0.04);
+  return Math.abs(nearest - value) <= tolerance ? nearest : 0;
+}
+
+function longSideQualityHeight(value: number): number {
+  if (value <= 0) return 0;
+  const mappings = [
+    [3840, 2160],
+    [2560, 1440],
+    [1920, 1080],
+    [1280, 720],
+    [960, 540],
+    [854, 480],
+    [852, 480],
+  ] as const;
+  for (const [longSide, qualityHeight] of mappings) {
+    const tolerance = Math.max(24, longSide * 0.04);
+    if (Math.abs(value - longSide) <= tolerance) return qualityHeight;
+  }
+  return 0;
+}
+
+function inferResolutionQualityHeight(resolution: VideoResolution): number {
+  if (!resolution) return 0;
+  return Math.max(
+    standardQualityHeightFromDimension(resolution.width),
+    standardQualityHeightFromDimension(resolution.height),
+    longSideQualityHeight(resolution.width),
+    longSideQualityHeight(resolution.height)
+  );
+}
+
+function formatVideoResolutionLabel(resolution: VideoResolution): string {
+  if (!resolution) return "";
+  const qualityHeight = inferResolutionQualityHeight(resolution);
+  if (qualityHeight >= 2160) return "4K";
+  if (qualityHeight >= 1440) return "2K";
+  if (qualityHeight > 0) return `${qualityHeight}p`;
+  return `${resolution.width}x${resolution.height}`;
+}
+
+function formatVideoResolutionTitle(resolution: VideoResolution): string {
+  if (!resolution) return "";
+  return `${resolution.width} x ${resolution.height}`;
 }
 
 export function DownloadsView() {
@@ -1091,17 +1150,22 @@ function HistoryFileThumbnail({
   const [coverFailed, setCoverFailed] = useState(false);
   const [localFailed, setLocalFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [videoResolution, setVideoResolution] = useState<VideoResolution>(null);
 
   useEffect(() => {
     setCoverFailed(false);
     setLocalFailed(false);
     setLoaded(false);
+    setVideoResolution(null);
   }, [coverUrl, localUrl]);
 
   const showLocalImage = Boolean(mediaKind === "image" && localUrl && !localFailed);
   const showLocalVideo = Boolean(allowVideoPreview && mediaKind === "video" && videoUrl && !localFailed);
+  const loadVideoMetadataOnly = Boolean(mediaKind === "video" && videoUrl && !showLocalVideo && !localFailed);
   const showCover = Boolean(!showLocalImage && !showLocalVideo && coverUrl && !coverFailed);
   const hasPreview = showCover || showLocalImage || showLocalVideo;
+  const resolutionLabel = mediaKind === "video" ? formatVideoResolutionLabel(videoResolution) : "";
+  const resolutionTitle = formatVideoResolutionTitle(videoResolution);
 
   return (
     <div className={cn(
@@ -1159,7 +1223,10 @@ function HistoryFileThumbnail({
             "h-full w-full object-cover transition-opacity duration-[var(--duration-base)]",
             loaded ? "opacity-100" : "opacity-0"
           )}
-          onLoadedMetadata={() => setLoaded(true)}
+          onLoadedMetadata={(event) => {
+            setLoaded(true);
+            setVideoResolution(readVideoResolution(event.currentTarget));
+          }}
           onLoadedData={() => setLoaded(true)}
           onError={() => {
             setLocalFailed(true);
@@ -1168,11 +1235,33 @@ function HistoryFileThumbnail({
         />
       )}
 
+      {loadVideoMetadataOnly && (
+        <video
+          src={videoUrl}
+          muted
+          playsInline
+          preload="metadata"
+          aria-hidden="true"
+          className="pointer-events-none absolute h-px w-px opacity-0"
+          onLoadedMetadata={(event) => setVideoResolution(readVideoResolution(event.currentTarget))}
+          onError={() => setLocalFailed(true)}
+        />
+      )}
+
       {!hasPreview && (
         <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_50%_25%,rgba(124,92,252,0.18),transparent_38%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]">
           <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-black/20 text-white/65 backdrop-blur-sm">
             <MediaKindIcon kind={mediaKind} className="h-5 w-5" />
           </div>
+        </div>
+      )}
+
+      {resolutionLabel && (
+        <div
+          className="absolute right-1.5 top-1.5 max-w-[calc(100%-12px)] rounded-[6px] bg-black/68 px-1.5 py-0.5 text-[0.58rem] font-bold leading-none text-white shadow-[0_4px_12px_rgba(0,0,0,0.28)] backdrop-blur-sm"
+          title={resolutionTitle}
+        >
+          {resolutionLabel}
         </div>
       )}
 

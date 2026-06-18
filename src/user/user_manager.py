@@ -161,9 +161,25 @@ class DouyinUserManager:
                 for item in url_list:
                     if isinstance(item, str) and item.strip():
                         return item.strip()
-            nested = value.get('play_addr') or value.get('play_url') or value.get('download_addr')
-            if nested is not None and nested is not value:
-                return self._first_url(nested)
+            for key in (
+                'url',
+                'main_url',
+                'backup_url',
+                'fallback_url',
+                'play_addr',
+                'play_url',
+                'download_addr',
+                'download_url',
+                'display_url',
+                'uri',
+            ):
+                nested = value.get(key)
+                if nested is not None and nested is not value:
+                    url = self._first_url(nested)
+                    if key == 'uri' and not url.lower().startswith(('http://', 'https://')):
+                        continue
+                    if url:
+                        return url
 
         if isinstance(value, list):
             for item in value:
@@ -194,10 +210,112 @@ class DouyinUserManager:
         )
 
     def _video_download_quality(self) -> str:
-        quality = str(getattr(Config, 'DOWNLOAD_QUALITY', 'auto') or 'auto').strip().lower()
-        if quality not in ('auto', 'highest', 'h264', 'smallest'):
-            return 'auto'
-        return quality
+        return Config.normalize_download_quality(getattr(Config, 'DOWNLOAD_QUALITY', 'auto'))
+
+    def _download_quality_target_height(self, quality: str) -> int:
+        return {
+            '480p': 480,
+            '720p': 720,
+            '1080p': 1080,
+            '2k': 1440,
+            '1440p': 1440,
+            '4k': 2160,
+            '2160p': 2160,
+        }.get(str(quality or '').strip().lower(), 0)
+
+    def _quality_height_from_text(self, value) -> int:
+        text = str(value or '').strip().lower()
+        if not text:
+            return 0
+        if '4k' in text or 'uhd' in text or '2160' in text:
+            return 2160
+        if '2k' in text or 'qhd' in text or '1440' in text:
+            return 1440
+
+        for token in ''.join(ch if ch.isalnum() else ' ' for ch in text).split():
+            raw = token[:-1] if token.endswith('p') else token
+            try:
+                height = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if 240 <= height <= 4320:
+                return height
+        return 0
+
+    def _positive_int(self, value) -> int:
+        try:
+            number = int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+        return number if number > 0 else 0
+
+    def _nearest_standard_quality_height(self, value: int) -> int:
+        value = self._positive_int(value)
+        if value <= 0:
+            return 0
+
+        standard_heights = (4320, 2160, 1440, 1080, 720, 540, 480, 360, 240)
+        nearest = min(standard_heights, key=lambda height: abs(height - value))
+        tolerance = max(24, int(nearest * 0.12))
+        if abs(nearest - value) <= tolerance:
+            return nearest
+
+        return value if 240 <= value <= 4320 else 0
+
+    def _standard_quality_height_from_dimension(self, value: int) -> int:
+        value = self._positive_int(value)
+        if value <= 0:
+            return 0
+
+        standard_heights = (4320, 2160, 1440, 1080, 720, 540, 480, 360, 240)
+        nearest = min(standard_heights, key=lambda height: abs(height - value))
+        tolerance = max(16, int(nearest * 0.04))
+        return nearest if abs(nearest - value) <= tolerance else 0
+
+    def _long_side_quality_height(self, value: int) -> int:
+        value = self._positive_int(value)
+        if value <= 0:
+            return 0
+
+        long_side_to_quality = (
+            (3840, 2160),
+            (2560, 1440),
+            (1920, 1080),
+            (1280, 720),
+            (960, 540),
+            (854, 480),
+            (852, 480),
+        )
+        for long_side, quality_height in long_side_to_quality:
+            if abs(value - long_side) <= max(24, int(long_side * 0.04)):
+                return quality_height
+        return 0
+
+    def _dimension_quality_height(self, width, height) -> int:
+        width = self._positive_int(width)
+        height = self._positive_int(height)
+
+        if width > 0 and height > 0:
+            candidates = [
+                self._standard_quality_height_from_dimension(width),
+                self._standard_quality_height_from_dimension(height),
+                self._long_side_quality_height(width),
+                self._long_side_quality_height(height),
+            ]
+            measured = [candidate for candidate in candidates if candidate > 0]
+            if measured:
+                return max(measured)
+            return self._nearest_standard_quality_height(max(width, height))
+
+        value = width or height
+        if value <= 0:
+            return 0
+
+        return (
+            self._standard_quality_height_from_dimension(value)
+            or self._long_side_quality_height(value)
+            or self._nearest_standard_quality_height(value)
+        )
 
     def _bit_rate_metric(self, bit_rate: dict) -> int:
         for key in ('data_size', 'bit_rate', 'quality_type'):
@@ -215,11 +333,47 @@ class DouyinUserManager:
             return 0
         return width * height if width > 0 and height > 0 else 0
 
+    def _bit_rate_height(self, bit_rate: dict) -> int:
+        heights = []
+        gear_height = self._quality_height_from_text(bit_rate.get('gear_name'))
+        if gear_height > 0:
+            heights.append(gear_height)
+
+        try:
+            quality_type = int(bit_rate.get('quality_type') or 0)
+        except (TypeError, ValueError):
+            quality_type = 0
+        if quality_type in (72, 73):
+            heights.append(2160)
+
+        dimension_height = self._dimension_quality_height(
+            bit_rate.get('width'),
+            bit_rate.get('height'),
+        )
+        if dimension_height > 0:
+            heights.append(dimension_height)
+
+        return max(heights, default=0)
+
     def _collect_video_candidates(self, video_data: dict) -> list[dict]:
         candidates = []
         seen = set()
 
-        def push_candidate(url: str, metric: int, is_h264: bool = False, is_download_addr: bool = False, is_lowbr: bool = False) -> None:
+        top_level_height = max(
+            self._dimension_quality_height(video_data.get('width'), video_data.get('height')),
+            self._quality_height_from_text(video_data.get('ratio')),
+        )
+        lowbr_height = min(top_level_height, 480) if top_level_height > 0 else 480
+
+        def push_candidate(
+            url: str,
+            metric: int,
+            height: int = 0,
+            is_h264: bool = False,
+            is_quality_candidate: bool = False,
+            is_download_addr: bool = False,
+            is_lowbr: bool = False,
+        ) -> None:
             normalized_url = self._clean_video_download_url(url)
             if (
                 not normalized_url
@@ -231,32 +385,37 @@ class DouyinUserManager:
             candidates.append({
                 'url': normalized_url,
                 'metric': int(metric or 0),
+                'height': int(height or 0),
                 'is_h264': bool(is_h264),
+                'is_quality_candidate': bool(is_quality_candidate),
                 'is_download_addr': bool(is_download_addr),
                 'is_lowbr': bool(is_lowbr),
                 'is_watermark': self._is_watermark_url(normalized_url),
             })
 
-        push_candidate(self._first_url(video_data.get('download_addr')), 0, False, True, False)
-        push_candidate(self._first_url(video_data.get('play_addr_h264')), 0, True, False, False)
-        push_candidate(self._first_url(video_data.get('play_addr_lowbr')), 1, True, False, True)
+        push_candidate(self._first_url(video_data.get('download_addr')), 0, top_level_height, False, False, True, False)
+        push_candidate(self._first_url(video_data.get('play_addr_h264')), 0, top_level_height, True, False, False, False)
+        push_candidate(self._first_url(video_data.get('play_addr_lowbr')), 1, lowbr_height, True, False, False, True)
 
         for bit_rate in video_data.get('bit_rate') or []:
             if not isinstance(bit_rate, dict):
                 continue
             metric = self._bit_rate_metric(bit_rate)
+            height = self._bit_rate_height(bit_rate)
             h264_metric = metric + 1 if metric > 0 else 0
-            push_candidate(self._first_url(bit_rate.get('play_addr_h264')), h264_metric, True, False, False)
+            push_candidate(self._first_url(bit_rate.get('play_addr_h264')), h264_metric, height, True, True, False, False)
             push_candidate(
                 self._first_url(bit_rate.get('play_addr')),
                 metric,
+                height,
                 not bool(bit_rate.get('is_h265')),
+                True,
                 False,
                 False,
             )
 
-        push_candidate(self._first_url(video_data.get('preview_addr')), 0, False, False, False)
-        push_candidate(self._first_url(video_data.get('play_addr')), 0, False, False, False)
+        push_candidate(self._first_url(video_data.get('preview_addr')), 0, top_level_height, False, False, False, False)
+        push_candidate(self._first_url(video_data.get('play_addr')), 0, top_level_height, False, False, False, False)
         return candidates
 
     def _is_dash_video_only_url(self, url: str) -> bool:
@@ -327,8 +486,66 @@ class DouyinUserManager:
         smallest_metric = min(metric_candidates, key=lambda item: item['metric'], default=None)
         first = clean_candidates[0] if clean_candidates else None
 
+        def best_target_candidate(target_height: int):
+            explicit_measured = [
+                candidate for candidate in clean_candidates
+                if candidate.get('is_quality_candidate')
+                and int(candidate.get('height') or 0) > 0
+                and not candidate['is_download_addr']
+            ]
+            measured = explicit_measured or [
+                candidate for candidate in clean_candidates
+                if int(candidate.get('height') or 0) > 0 and not candidate['is_download_addr']
+            ]
+            lower_or_equal = [
+                candidate for candidate in measured
+                if int(candidate.get('height') or 0) <= target_height
+            ]
+            if lower_or_equal:
+                return max(
+                    lower_or_equal,
+                    key=lambda item: (
+                        int(item.get('height') or 0),
+                        1 if item.get('is_h264') else 0,
+                        int(item.get('metric') or 0),
+                    ),
+                )
+
+            higher = [
+                candidate for candidate in measured
+                if int(candidate.get('height') or 0) > target_height
+            ]
+            if higher:
+                return min(
+                    higher,
+                    key=lambda item: (
+                        int(item.get('height') or 0),
+                        0 if item.get('is_h264') else 1,
+                        -int(item.get('metric') or 0),
+                    ),
+                )
+            return None
+
         quality = self._video_download_quality()
-        if quality == 'highest':
+        target_height = self._download_quality_target_height(quality)
+        if target_height > 0:
+            target_best = best_target_candidate(target_height)
+            target_h264 = None
+            if target_best:
+                selected_height = int(target_best.get('height') or 0)
+                target_h264 = next(
+                    (
+                        candidate for candidate in clean_candidates
+                        if candidate['is_h264']
+                        and int(candidate.get('height') or 0) == selected_height
+                        and not candidate['is_lowbr']
+                        and not candidate['is_download_addr']
+                    ),
+                    None,
+                )
+            for candidate in (target_best, target_h264, highest_metric, h264_best, download_addr, first):
+                push(candidate)
+        elif quality == 'highest':
             for candidate in (highest_metric, h264_best, download_addr, first):
                 push(candidate)
         elif quality == 'h264':
@@ -341,7 +558,20 @@ class DouyinUserManager:
             for candidate in (h264_best, highest_metric, download_addr, first):
                 push(candidate)
 
-        for candidate in sorted(clean_candidates, key=lambda item: item['metric'], reverse=True):
+        if target_height > 0:
+            rest = sorted(
+                clean_candidates,
+                key=lambda item: (
+                    abs(int(item.get('height') or 0) - target_height)
+                    if int(item.get('height') or 0) > 0
+                    else 99999,
+                    -int(item.get('height') or 0),
+                    -int(item.get('metric') or 0),
+                ),
+            )
+        else:
+            rest = sorted(clean_candidates, key=lambda item: item['metric'], reverse=True)
+        for candidate in rest:
             push(candidate)
 
         return ordered
@@ -350,6 +580,97 @@ class DouyinUserManager:
         video_data = video_data or {}
         selected_url = self._select_video_url(video_data)
         return [{'type': 'video', 'url': selected_url}] if selected_url else []
+
+    def _available_video_quality_height(self, video_data: dict) -> int:
+        return max(
+            (
+                int(candidate.get('height') or 0)
+                for candidate in self._collect_video_candidates(video_data or {})
+                if not candidate.get('is_watermark')
+                and not candidate.get('is_download_addr')
+                and not candidate.get('is_lowbr')
+                and int(candidate.get('height') or 0) > 0
+            ),
+            default=0,
+        )
+
+    def _video_quality_candidate_count(self, video_data: dict) -> int:
+        return sum(
+            1
+            for candidate in self._collect_video_candidates(video_data or {})
+            if not candidate.get('is_watermark')
+            and candidate.get('is_quality_candidate')
+            and not candidate.get('is_download_addr')
+            and not candidate.get('is_lowbr')
+        )
+
+    def _bit_rate_download_key(self, bit_rate: dict) -> str:
+        url_key = '|'.join(
+            url for url in (
+                self._first_url(bit_rate.get('play_addr_h264')),
+                self._first_url(bit_rate.get('play_addr')),
+            )
+            if url
+        )
+        if url_key:
+            return url_key
+        return json.dumps([
+            bit_rate.get('gear_name') or '',
+            bit_rate.get('format') or '',
+            bit_rate.get('quality_type') or 0,
+            bit_rate.get('width') or 0,
+            bit_rate.get('height') or 0,
+            bit_rate.get('data_size') or 0,
+        ], ensure_ascii=False, separators=(',', ':'))
+
+    def merge_video_download_candidates(self, primary: dict, secondary: dict) -> dict:
+        merged = dict(primary or {})
+        secondary = secondary or {}
+
+        for key in (
+            'play_addr',
+            'preview_addr',
+            'play_addr_h264',
+            'play_addr_lowbr',
+            'download_addr',
+            'dash_addr',
+            'audio_addr',
+            'cover',
+            'dynamic_cover',
+            'origin_cover',
+            'ratio',
+        ):
+            if not self._first_url(merged.get(key)) and self._first_url(secondary.get(key)):
+                merged[key] = secondary.get(key)
+
+        for key in ('width', 'height', 'duration'):
+            try:
+                current = int(merged.get(key) or 0)
+            except (TypeError, ValueError):
+                current = 0
+            try:
+                candidate = int(secondary.get(key) or 0)
+            except (TypeError, ValueError):
+                candidate = 0
+            if current <= 0 and candidate > 0:
+                merged[key] = secondary.get(key)
+
+        bit_rates = [
+            dict(item)
+            for item in (merged.get('bit_rate') or [])
+            if isinstance(item, dict)
+        ]
+        seen = {self._bit_rate_download_key(item) for item in bit_rates}
+        for item in secondary.get('bit_rate') or []:
+            if not isinstance(item, dict):
+                continue
+            key = self._bit_rate_download_key(item)
+            if key and key not in seen:
+                seen.add(key)
+                bit_rates.append(dict(item))
+        merged['bit_rate'] = bit_rates
+
+        return merged
 
     def _video_display_url(self, video_data: dict, media_urls: list[dict] | None = None) -> str:
         selected_url = self._select_video_url(video_data or {})

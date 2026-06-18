@@ -24,6 +24,7 @@ import type {
   LinkParseResponse,
   MixVideosResponse,
   PublishCommentResponse,
+  RecommendedFeedType,
   RecommendedResponse,
   SearchUserResponse,
   SendFriendMessageResponse,
@@ -410,6 +411,11 @@ function getDownloadPayload(video: VideoInfo) {
   return {
     aweme_id: normalized.aweme_id,
     desc: normalized.desc || "",
+    create_time: normalized.create_time || 0,
+    author: normalized.author,
+    video: normalized.video,
+    cover_url: normalized.cover_url || normalized.video?.cover || "",
+    media_type: normalized.media_type ?? "video",
     media_urls: mediaUrls,
     raw_media_type: normalized.raw_media_type ?? normalized.media_type ?? "video",
     author_name: authorName,
@@ -868,14 +874,14 @@ export async function setVideoCollected(awemeId: string, collected: boolean): Pr
 }
 
 export async function downloadVideo(video: VideoInfo): Promise<ApiResponse & { task_id?: string }> {
+  const payload = getDownloadPayload(video);
   if (shouldUseBrowserBridge()) {
-    const payload = getDownloadPayload(video);
     return requestJson("/api/download_single_video", {
       method: "POST",
       body: JSON.stringify(payload),
     });
   }
-  return invoke("download_video", { video });
+  return invoke("download_video", { video: payload });
 }
 
 export async function downloadUserVideos(
@@ -923,8 +929,8 @@ export async function downloadLikedAuthors(count: number): Promise<{ success: bo
 }
 
 export async function addDownloadTask(video: VideoInfo, savePath?: string): Promise<string> {
+  const payload = getDownloadPayload(video);
   if (shouldUseBrowserBridge()) {
-    const payload = getDownloadPayload(video);
     const result = await requestJson<ApiResponse & { task_id?: string }>("/api/download_single_video", {
       method: "POST",
       body: JSON.stringify({
@@ -934,7 +940,7 @@ export async function addDownloadTask(video: VideoInfo, savePath?: string): Prom
     });
     return result.task_id || video.aweme_id;
   }
-  return invoke("add_download_task", { video, savePath, save_path: savePath });
+  return invoke("add_download_task", { video: payload, savePath, save_path: savePath });
 }
 
 export async function startDownload(taskId: string): Promise<void> {
@@ -993,18 +999,27 @@ export async function resumeDownload(taskId: string): Promise<ApiResponse> {
   return invoke("resume_download", { taskId, task_id: taskId });
 }
 
-export async function getRecommended(cursor: number, count: number): Promise<RecommendedResponse> {
+export async function getRecommended(
+  cursor: number,
+  count: number,
+  feedType: RecommendedFeedType = "featured"
+): Promise<RecommendedResponse> {
   if (shouldUseBrowserBridge()) {
     const result = await requestJson<RecommendedResponse & { videos?: unknown[] }>("/api/recommended_feed", {
       method: "POST",
-      body: JSON.stringify({ cursor, count }),
+      body: JSON.stringify({ cursor, count, feed_type: feedType, feedType }),
     });
     return {
       ...result,
       videos: normalizeVideos(result.videos),
     };
   }
-  const result = await invoke<RecommendedResponse & { videos?: unknown[] }>("get_recommended", { cursor, count });
+  const result = await invoke<RecommendedResponse & { videos?: unknown[] }>("get_recommended", {
+    cursor,
+    count,
+    feedType,
+    feed_type: feedType,
+  });
   return {
     ...result,
     videos: normalizeVideos(result.videos),
