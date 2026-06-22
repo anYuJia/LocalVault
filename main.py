@@ -76,6 +76,49 @@ if __name__ == '__main__':
     # 延迟导入 webview，避免启动时加载
     import webview
 
+    def patch_macos_pywebview_titlebar():
+        if sys.platform != 'darwin':
+            return
+        try:
+            from pathlib import Path
+            from webview.platforms import cocoa
+
+            cocoa_path = Path(cocoa.__file__)
+            source = cocoa_path.read_text()
+            if "getattr(window, 'macos_overlay_titlebar', False)" in source:
+                return
+
+            original = """            self.window.standardWindowButton_(AppKit.NSWindowCloseButton).setHidden_(True)
+            self.window.standardWindowButton_(AppKit.NSWindowMiniaturizeButton).setHidden_(True)
+            self.window.standardWindowButton_(AppKit.NSWindowZoomButton).setHidden_(True)
+"""
+            patched = """            if getattr(window, 'macos_overlay_titlebar', False):
+                self.window.setMovableByWindowBackground_(True)
+                for button_kind in (
+                    AppKit.NSWindowCloseButton,
+                    AppKit.NSWindowMiniaturizeButton,
+                    AppKit.NSWindowZoomButton,
+                ):
+                    button = self.window.standardWindowButton_(button_kind)
+                    if button is None:
+                        continue
+                    button.setHidden_(False)
+                    button.setEnabled_(True)
+                    button.setAlphaValue_(1.0)
+            else:
+                self.window.standardWindowButton_(AppKit.NSWindowCloseButton).setHidden_(True)
+                self.window.standardWindowButton_(AppKit.NSWindowMiniaturizeButton).setHidden_(True)
+                self.window.standardWindowButton_(AppKit.NSWindowZoomButton).setHidden_(True)
+"""
+            if original in source:
+                cocoa_path.write_text(source.replace(original, patched))
+        except Exception:
+            pass
+
+    patch_macos_pywebview_titlebar()
+
+    macos_window_options = {'frameless': True} if sys.platform == 'darwin' else {}
+
     # 创建pywebview窗口
     window = webview.create_window(
         title='better-douyin',
@@ -85,8 +128,12 @@ if __name__ == '__main__':
         resizable=True,
         text_select=True,
         zoomable=True,
+        **macos_window_options,
     )
     window.events.closing += on_closing
+
+    if sys.platform == 'darwin':
+        window.macos_overlay_titlebar = True
 
     # 在主线程启动pywebview（阻塞），debug模式查看控制台错误
     webview.start()

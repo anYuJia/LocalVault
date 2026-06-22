@@ -2091,20 +2091,55 @@ class DouyinAPI:
                 continue
             text = ''
             content = str(item.get('content') or '')
+            is_system_command = False
             try:
                 parsed_content = json.loads(content)
                 if isinstance(parsed_content, dict):
-                    text = str(parsed_content.get('text') or parsed_content.get('tips') or parsed_content.get('hint_text') or '')
+                    if 'command_type' in parsed_content or parsed_content.get('command_type') == 6:
+                        is_system_command = True
+                        ext_data = parsed_content.get('ext_data') or []
+                        for ext_item in ext_data:
+                            if isinstance(ext_item, dict) and ext_item.get('key') == 'a:consecutive_chat_data':
+                                text = "🔥 连续聊天火花已亮起"
+                                is_system_command = False
+                                val_str = ext_item.get('value') or '{}'
+                                try:
+                                    val_json = json.loads(val_str)
+                                    count_info = val_json.get('consecutive_count_info') or {}
+                                    count = count_info.get('consecutive_count') or 1
+                                    text = f"🔥 连续聊天火花已亮起（第 {count} 天）"
+                                except Exception:
+                                    pass
+                        if is_system_command:
+                            continue
+                    else:
+                        text = str(parsed_content.get('text') or parsed_content.get('tips') or parsed_content.get('hint_text') or '')
+                else:
+                    text = content
             except Exception:
                 text = content
-            ext = item.get('ext') if isinstance(item.get('ext'), dict) else {}
+            ext = item.get('ext')
+            if isinstance(ext, str):
+                try:
+                    ext = json.loads(ext)
+                except Exception:
+                    ext = {}
+            if not isinstance(ext, dict):
+                ext = {}
             create_time = item.get('create_time') or 0
-            if not create_time and isinstance(ext, dict):
+            if not create_time and ext:
                 raw_time = ext.get('s:server_message_create_time') or ext.get('server_message_create_time') or 0
                 try:
                     create_time = int(raw_time or 0)
                 except Exception:
                     create_time = 0
+            if not create_time:
+                create_time = item.get('version') or item.get('group_version') or 0
+                if create_time > 0 and create_time < 10000000000:
+                    create_time *= 1000
+            if not create_time:
+                import time
+                create_time = int(time.time() * 1000)
             normalized.append({
                 'conversation_id': item.get('conversation_id') or '',
                 'conversation_short_id': item.get('conversation_short_id') or 0,
