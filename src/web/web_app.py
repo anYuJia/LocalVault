@@ -1285,43 +1285,81 @@ def _release_asset_payload(asset: dict | None, portable: bool = False, fallback_
 def _select_release_asset_info(release: dict) -> dict:
     assets = release.get('assets') or []
     machine = platform.machine().lower()
+    current_is_portable = Config.is_portable()
 
     preferred_suffixes: list[tuple[str, bool]] = []
     if IS_WINDOWS:
-        preferred_suffixes = [
-            ('windows-x64-installer.exe', False),
-            ('windows-x64-portable.zip', True),
-            ('windows-x64-onefile.exe', True),
-        ]
-    elif IS_MACOS:
-        if 'arm' in machine or 'aarch64' in machine:
+        if current_is_portable:
             preferred_suffixes = [
-                ('macos-arm64.dmg', False),
-                ('macos-arm64-portable.zip', True),
+                ('windows-x64-portable.zip', True),
+                ('windows-x64-onefile.exe', True),
+                ('windows-x64-installer.exe', False),
             ]
         else:
             preferred_suffixes = [
-                ('macos-x64.dmg', False),
-                ('macos-intel.dmg', False),
-                ('macos-x64-portable.zip', True),
-                ('macos-intel-portable.zip', True),
+                ('windows-x64-installer.exe', False),
+                ('windows-x64-portable.zip', True),
+                ('windows-x64-onefile.exe', True),
             ]
+    elif IS_MACOS:
+        if 'arm' in machine or 'aarch64' in machine:
+            if current_is_portable:
+                preferred_suffixes = [
+                    ('macos-arm64-portable.zip', True),
+                    ('macos-arm64.dmg', False),
+                ]
+            else:
+                preferred_suffixes = [
+                    ('macos-arm64.dmg', False),
+                    ('macos-arm64-portable.zip', True),
+                ]
+        else:
+            if current_is_portable:
+                preferred_suffixes = [
+                    ('macos-x64-portable.zip', True),
+                    ('macos-intel-portable.zip', True),
+                    ('macos-x64.dmg', False),
+                    ('macos-intel.dmg', False),
+                ]
+            else:
+                preferred_suffixes = [
+                    ('macos-x64.dmg', False),
+                    ('macos-intel.dmg', False),
+                    ('macos-x64-portable.zip', True),
+                    ('macos-intel-portable.zip', True),
+                ]
     else:
         package_family = _linux_package_family()
         if package_family == 'deb':
-            preferred_suffixes = [
-                ('linux-x64.deb', False),
-                ('linux-x64.appimage', True),
-                ('linux-x64.tar.gz', True),
-                ('linux-x64.rpm', False),
-            ]
+            if current_is_portable:
+                preferred_suffixes = [
+                    ('linux-x64.appimage', True),
+                    ('linux-x64.tar.gz', True),
+                    ('linux-x64.deb', False),
+                    ('linux-x64.rpm', False),
+                ]
+            else:
+                preferred_suffixes = [
+                    ('linux-x64.deb', False),
+                    ('linux-x64.appimage', True),
+                    ('linux-x64.tar.gz', True),
+                    ('linux-x64.rpm', False),
+                ]
         elif package_family == 'rpm':
-            preferred_suffixes = [
-                ('linux-x64.rpm', False),
-                ('linux-x64.appimage', True),
-                ('linux-x64.tar.gz', True),
-                ('linux-x64.deb', False),
-            ]
+            if current_is_portable:
+                preferred_suffixes = [
+                    ('linux-x64.appimage', True),
+                    ('linux-x64.tar.gz', True),
+                    ('linux-x64.rpm', False),
+                    ('linux-x64.deb', False),
+                ]
+            else:
+                preferred_suffixes = [
+                    ('linux-x64.rpm', False),
+                    ('linux-x64.appimage', True),
+                    ('linux-x64.tar.gz', True),
+                    ('linux-x64.deb', False),
+                ]
         else:
             preferred_suffixes = [
                 ('linux-x64.appimage', True),
@@ -2078,6 +2116,30 @@ def _sanitize_friend_chat_message(value):
     text = str(value.get('text') or '').strip()
     if not text:
         return None
+        
+    # Check if text is raw JSON command_type
+    if text.startswith('{') and 'command_type' in text:
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict) and ('command_type' in parsed or parsed.get('command_type') == 6):
+                ext_data = parsed.get('ext_data') or []
+                found_spark = False
+                for ext_item in ext_data:
+                    if isinstance(ext_item, dict) and ext_item.get('key') == 'a:consecutive_chat_data':
+                        val_str = ext_item.get('value') or '{}'
+                        try:
+                            val_json = json.loads(val_str)
+                            count_info = val_json.get('consecutive_count_info') or {}
+                            count = count_info.get('consecutive_count') or 1
+                            text = f"🔥 连续聊天火花已亮起（第 {count} 天）"
+                            found_spark = True
+                        except Exception:
+                            pass
+                if not found_spark:
+                    return None
+        except Exception:
+            pass
+
     try:
         created_at = int(float(value.get('createdAt') or value.get('created_at') or 0))
     except Exception:
@@ -3691,7 +3753,27 @@ def _extract_text_message(message: dict) -> str:
     try:
         parsed = json.loads(content)
         if isinstance(parsed, dict):
-            return str(parsed.get('text') or '')
+            if 'command_type' in parsed or parsed.get('command_type') == 6:
+                ext_data = parsed.get('ext_data') or []
+                found_spark = False
+                text = ""
+                for ext_item in ext_data:
+                    if isinstance(ext_item, dict) and ext_item.get('key') == 'a:consecutive_chat_data':
+                        text = "🔥 连续聊天火花已亮起"
+                        found_spark = True
+                        val_str = ext_item.get('value') or '{}'
+                        try:
+                            val_json = json.loads(val_str)
+                            count_info = val_json.get('consecutive_count_info') or {}
+                            count = count_info.get('consecutive_count') or 1
+                            text = f"🔥 连续聊天火花已亮起（第 {count} 天）"
+                        except Exception:
+                            pass
+                if found_spark:
+                    return text
+                else:
+                    return '__FILTERED_CONTROL_MESSAGE__'
+            return str(parsed.get('text') or parsed.get('tips') or parsed.get('hint_text') or '')
     except Exception:
         pass
     return content
@@ -3703,6 +3785,8 @@ def _emit_im_message(response: dict) -> None:
         return
     try:
         content = _extract_text_message({'content': sent.content})
+        if content == '__FILTERED_CONTROL_MESSAGE__' or not content:
+            return
         payload = {
             'conversation_id': sent.conversation_id,
             'conversation_short_id': sent.conversation_short_id,

@@ -1,8 +1,8 @@
 import os
 import json
 import getpass
-
 import sys
+import platform
 
 # 判断是否被 PyInstaller 打包
 IS_FROZEN = getattr(sys, 'frozen', False)
@@ -20,10 +20,54 @@ def get_resource_path(relative_path):
     """获取程序静态资源或内置代码所在绝对路径"""
     return os.path.join(APP_RESOURCE_DIR, relative_path)
 
+def get_user_data_dir():
+    """获取用户配置数据持久化存储目录"""
+    if not IS_FROZEN:
+        return APP_EXEC_DIR
+    
+    app_name = "better-douyin"
+    system_name = platform.system()
+    if system_name == 'Darwin':
+        return os.path.expanduser(f"~/Library/Application Support/{app_name}")
+    elif system_name == 'Windows':
+        exe_path = sys.executable.lower()
+        is_installed = ("program files" in exe_path) or ("appdata\\local\\programs" in exe_path)
+        if is_installed:
+            appdata = os.environ.get("APPDATA")
+            if appdata:
+                return os.path.join(appdata, app_name)
+        return APP_EXEC_DIR
+    else:
+        exe_path = sys.executable.lower()
+        is_installed = exe_path.startswith("/usr") or exe_path.startswith("/opt") or exe_path.startswith("/var")
+        if is_installed:
+            config_home = os.environ.get("XDG_CONFIG_HOME")
+            if config_home:
+                return os.path.join(config_home, app_name)
+            return os.path.expanduser(f"~/.config/{app_name}")
+        return APP_EXEC_DIR
+
+def get_default_download_dir(user_data_dir):
+    """根据运行模式获取默认下载目录"""
+    if not IS_FROZEN:
+        return os.path.join(APP_EXEC_DIR, "douyin_download")
+        
+    system_name = platform.system()
+    if system_name == 'Darwin':
+        return os.path.expanduser("~/Downloads/better-douyin")
+    
+    if user_data_dir == APP_EXEC_DIR:
+        # 便携模式
+        return os.path.join(APP_EXEC_DIR, "douyin_download")
+    else:
+        # 安装模式
+        return os.path.expanduser("~/Downloads/better-douyin")
+
 class Config:
     """配置类"""
-    # 配置文件路径在执行文件旁边
-    CONFIG_FILE = os.path.join(APP_EXEC_DIR, "config.json")
+    USER_DATA_DIR = get_user_data_dir()
+    # 配置文件路径
+    CONFIG_FILE = os.path.join(USER_DATA_DIR, "config.json")
     
     # Cookie设置
     COOKIE = ""
@@ -31,8 +75,8 @@ class Config:
     CURRENT_USER_PROFILE = None
     APP_VERSION = (os.environ.get("APP_VERSION") or os.environ.get("GITHUB_REF_NAME") or "1.0.25").lstrip("v")
 
-    # 文件保存路径默认在执行文件旁边
-    BASE_DIR = os.path.join(APP_EXEC_DIR, "douyin_download")
+    # 文件保存路径默认值
+    BASE_DIR = get_default_download_dir(USER_DATA_DIR)
     DOWNLOAD_DIR = BASE_DIR
     HISTORY_DIRS = []
     DOWNLOAD_QUALITY = "auto"
@@ -102,6 +146,31 @@ class Config:
     @classmethod
     def load_config(cls):
         """从配置文件或环境变量加载配置"""
+        # 1. 自动从旧的位置 (APP_EXEC_DIR) 迁移配置文件和状态文件
+        old_config_file = os.path.join(APP_EXEC_DIR, "config.json")
+        new_config_file = cls.CONFIG_FILE
+        if old_config_file != new_config_file and os.path.exists(old_config_file) and not os.path.exists(new_config_file):
+            try:
+                config_dir = os.path.dirname(new_config_file)
+                os.makedirs(config_dir, exist_ok=True)
+                import shutil
+                shutil.copy2(old_config_file, new_config_file)
+                print(f"\033[92m已将旧配置文件从 {old_config_file} 迁移至 {new_config_file}\033[0m")
+                
+                # 迁移下载历史记录索引
+                old_history = os.path.join(APP_EXEC_DIR, 'download_history_index.json')
+                new_history = os.path.join(config_dir, 'download_history_index.json')
+                if os.path.exists(old_history) and not os.path.exists(new_history):
+                    shutil.copy2(old_history, new_history)
+                
+                # 迁移好友聊天状态缓存
+                old_chat = os.path.join(APP_EXEC_DIR, 'friend_chat_state.json')
+                new_chat = os.path.join(config_dir, 'friend_chat_state.json')
+                if os.path.exists(old_chat) and not os.path.exists(new_chat):
+                    shutil.copy2(old_chat, new_chat)
+            except Exception as e:
+                print(f"\033[91m自动迁移旧数据失败: {str(e)}\033[0m")
+
         cls.HISTORY_DIRS = []
         cls.DOWNLOAD_DIR = cls.BASE_DIR
         loaded_from_file = False
@@ -162,6 +231,36 @@ class Config:
                     loaded_from_file = True
             except Exception as e:
                 print(f"\033[91m加载配置文件失败: {str(e)}\033[0m")
+
+        # 检测并纠正安装模式/包下不安全的下载路径
+        if IS_FROZEN and not cls.is_portable():
+            abs_base_dir = os.path.abspath(cls.BASE_DIR)
+            abs_base_dir_lower = abs_base_dir.lower()
+            abs_exec_dir = os.path.abspath(APP_EXEC_DIR).lower()
+            # 如果下载目录是执行目录或其子目录，或者在 macOS .app 包内
+            if (abs_base_dir_lower == abs_exec_dir or 
+                abs_base_dir_lower.startswith(abs_exec_dir + os.sep) or 
+                (platform.system() == 'Darwin' and '.app/' in abs_base_dir_lower)):
+                
+                safe_default = os.path.expanduser("~/Downloads/better-douyin")
+                cls.BASE_DIR = safe_default
+                cls.DOWNLOAD_DIR = cls.BASE_DIR
+                cls.save_config(
+                    cookie=cls.COOKIE,
+                    base_dir=cls.BASE_DIR,
+                    history_dirs=cls.HISTORY_DIRS,
+                    download_quality=cls.DOWNLOAD_QUALITY,
+                    max_concurrent=cls.MAX_CONCURRENT,
+                    filename_template=cls.FILENAME_TEMPLATE,
+                    folder_name_template=cls.FOLDER_NAME_TEMPLATE,
+                    auto_create_folder=cls.AUTO_CREATE_FOLDER,
+                    relation_signer=cls.RELATION_SIGNER,
+                    current_user_profile=cls.CURRENT_USER_PROFILE,
+                    im_friend_sec_user_ids=cls.IM_FRIEND_SEC_USER_IDS,
+                    im_friend_include_all_users=cls.IM_FRIEND_INCLUDE_ALL_USERS,
+                    im_friend_refresh_interval_seconds=cls.IM_FRIEND_REFRESH_INTERVAL_SECONDS,
+                )
+                print(f"\033[93m检测到不安全的下载目录在安装包/程序包内，已自动重置为: {safe_default}\033[0m")
 
         cls.apply_env_overrides()
         return loaded_from_file
@@ -346,3 +445,15 @@ class Config:
             print("\033[93m警告: 未设置抖音cookie，部分功能将受限\033[0m")
 
         return True
+
+    @classmethod
+    def is_portable(cls):
+        """判断当前运行版本是否为便携版 (仅对 Windows/Linux 有意义，macOS 统一非便携)"""
+        if not IS_FROZEN:
+            return True
+        system_name = platform.system()
+        if system_name == 'Darwin':
+            return False
+        user_data_dir = get_user_data_dir()
+        return user_data_dir == APP_EXEC_DIR
+
