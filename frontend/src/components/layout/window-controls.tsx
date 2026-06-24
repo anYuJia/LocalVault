@@ -1,4 +1,5 @@
 import { Maximize2, Minus, X } from "lucide-react";
+import type { CSSProperties } from "react";
 
 type PyWebViewWindowApi = {
   minimize?: () => Promise<void> | void;

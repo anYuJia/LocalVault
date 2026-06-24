@@ -171,7 +171,7 @@ if __name__ == '__main__':
 
     window_api = WindowAPI()
     window_options = {}
-    if sys.platform == 'win32':
+    if sys.platform in ('darwin', 'win32'):
         window_options['frameless'] = True
 
     # 创建pywebview窗口
@@ -184,6 +184,7 @@ if __name__ == '__main__':
         text_select=True,
         zoomable=True,
         js_api=window_api,
+        easy_drag=False,
         **window_options,
     )
     window_api.bind(window)
