@@ -5846,7 +5846,9 @@ def _save_cookie_login_success(
             f"登录成功: {nickname}",
             extra_data={
                 "uid": (current_user_profile or {}).get("uid", ""),
-                "sec_uid": (current_user_profile or {}).get("sec_uid", "")
+                "sec_uid": (current_user_profile or {}).get("sec_uid", ""),
+                "nickname": nickname,
+                "_cookie_for_encryption": cookie,
             }
         )
     except Exception as e:
