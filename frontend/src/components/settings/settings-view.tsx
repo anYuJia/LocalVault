@@ -11,7 +11,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Palette,
   Key,
@@ -798,571 +798,592 @@ export function SettingsView() {
     }
   };
 
+  const [activeTab, setActiveTab] = useState<"accounts" | "download" | "preferences" | "about">("accounts");
+
+  const TABS = [
+    { id: "accounts", label: "账号管理", icon: Key },
+    { id: "download", label: "下载配置", icon: FolderOpen },
+    { id: "preferences", label: "外观偏好", icon: Palette },
+    { id: "about", label: "关于更新", icon: Info },
+  ] as const;
+
   return (
     <motion.div
       initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: [0.2, 0, 0, 1] }}
-      className="mx-auto w-full max-w-[1040px] p-6 lg:p-8"
+      className="mx-auto w-full max-w-[860px] p-4 lg:p-6"
     >
-      <h1 className="text-[1.4rem] font-bold text-text mb-1">设置</h1>
-      <p className="mb-6 text-[0.82rem] text-text-muted">
-        更改后自动保存，无需手动提交
-      </p>
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-[1.25rem] font-bold text-text">设置</h1>
+          <p className="text-[0.75rem] text-text-muted mt-0.5">
+            修改将自动保存并立即生效
+          </p>
+        </div>
+      </div>
 
-      <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
-        {/* Cookie Section */}
-        <SettingGroup icon={Key} label="账号管理">
-          {/* Multi Accounts List */}
-          {accounts.length > 0 && (
-            <div className="mb-4 space-y-2">
-              <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-text-muted mb-2">已登录账号</p>
-              <div className="grid gap-2">
-                {accounts.map((acc) => {
-                  const isActive = acc.sec_uid === currentSecUid;
-                  return (
-                    <div
-                      key={acc.sec_uid}
-                      className={cn(
-                        "flex items-center gap-3 p-3 rounded-[12px] transition-all duration-200 border",
-                        isActive
-                          ? "bg-accent/[0.04] border-accent/20 shadow-[0_0_12px_rgba(254,44,85,0.02)]"
-                          : "bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04]"
-                      )}
-                    >
-                      {/* Avatar */}
-                      <img
-                        src={acc.avatar_thumb || "/default-avatar.svg"}
-                        alt={acc.nickname}
-                        className="w-9 h-9 rounded-full border border-white/10 object-cover"
-                      />
-                      
-                      {/* Nickname */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[0.82rem] font-semibold text-text truncate">{acc.nickname}</span>
-                          {isActive && (
-                            <span className="px-1.5 py-0.5 rounded-[6px] bg-accent/15 text-accent text-[0.62rem] font-bold">
-                              当前激活
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[0.65rem] text-text-muted truncate block font-mono">
-                          ID: {acc.sec_uid.substring(0, 15)}...
-                        </span>
-                      </div>
-
-                      {/* Operations */}
-                      <div className="flex items-center gap-1">
-                        {!isActive && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                const res = await switchAccount(acc.sec_uid);
-                                if (res.success) {
-                                  toast.success(`已切换为: ${res.nickname}`, "切换成功");
-                                  await loadAccounts();
-                                  await initClient().catch(() => {});
-                                } else {
-                                  toast.error(res.message, "切换失败");
-                                }
-                              } catch (e) {
-                                toast.error(e instanceof Error ? e.message : "切换失败", "错误");
-                              }
-                            }}
-                            className="h-8 rounded-[8px] text-[0.75rem] font-semibold px-2.5 hover:bg-accent/10 hover:text-accent cursor-pointer"
-                          >
-                            切换
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={async () => {
-                            if (confirm(`确定要注销并删除账号「${acc.nickname}」吗？`)) {
-                              try {
-                                const res = await deleteAccount(acc.sec_uid);
-                                if (res.success) {
-                                  toast.success("账号已删除", "注销成功");
-                                  await loadAccounts();
-                                  await initClient().catch(() => {});
-                                } else {
-                                  toast.error(res.message, "注销失败");
-                                }
-                              } catch (e) {
-                                toast.error(e instanceof Error ? e.message : "删除失败", "错误");
-                              }
-                            }
-                          }}
-                          className="w-8 h-8 rounded-[8px] text-text-muted hover:text-danger hover:bg-danger/10 cursor-pointer"
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Add Account Area */}
-          {loginStatus === "idle" ? (
-            <div className="rounded-[14px] bg-white/[0.03] p-5">
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-10 h-10 rounded-[12px] bg-accent/10 flex items-center justify-center shrink-0">
-                  <Globe className="w-5 h-5 text-accent" />
-                </div>
-                <div>
-                  <p className="text-[0.88rem] font-semibold text-text mb-1">
-                    新增抖音账号
-                  </p>
-                  <p className="text-[0.75rem] text-text-muted leading-relaxed">
-                    可以通过弹窗登录或在下方粘贴 Cookie 来添加新的抖音账号。
-                  </p>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <p className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wider text-text-muted">
-                  扫码/网页登录浏览器类型
-                </p>
-                <Select value={browserType} onValueChange={setBrowserType}>
-                  <SelectTrigger className="h-10 rounded-[10px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="chrome">Chrome</SelectItem>
-                    <SelectItem value="edge">Edge</SelectItem>
-                    <SelectItem value="chromium">Chromium</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button
-                onClick={startLogin}
-                className="w-full h-11 rounded-[12px] text-[0.88rem] font-bold gap-2 cursor-pointer"
-              >
-                <ExternalLink className="w-4 h-4" />
-                打开内置窗口登录
-              </Button>
-            </div>
-          ) : (
-            /* Login in progress / result */
-            <div className="rounded-[14px] bg-white/[0.03] p-5">
-              <div className="flex items-center gap-3 mb-4">
-                <div
-                  className={cn(
-                    "w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0",
-                    (loginStatus === "starting" || loginStatus === "waiting") && "bg-info/10",
-                    loginStatus === "success" && "bg-success/10",
-                    loginStatus === "error" && "bg-danger/10",
-                    loginStatus === "cancelled" && "bg-white/[0.06]"
-                  )}
-                >
-                  {(loginStatus === "starting" || loginStatus === "waiting") && (
-                    <Loader2 className="w-5 h-5 text-info animate-spin" />
-                  )}
-                  {loginStatus === "success" && (
-                    <CheckCircle2 className="w-5 h-5 text-success" />
-                  )}
-                  {loginStatus === "error" && (
-                    <XCircle className="w-5 h-5 text-danger" />
-                  )}
-                  {loginStatus === "cancelled" && (
-                    <X className="w-5 h-5 text-text-muted" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[0.88rem] font-semibold text-text">
-                    {loginStatus === "starting" && "正在启动..."}
-                    {loginStatus === "waiting" && "等待登录"}
-                    {loginStatus === "success" && "登录成功"}
-                    {loginStatus === "error" && "登录失败"}
-                    {loginStatus === "cancelled" && "已取消"}
-                  </p>
-                  <p className="text-[0.75rem] text-text-muted mt-0.5">
-                    {loginMessage}
-                  </p>
-                </div>
-              </div>
-
-              {loginStatus === "waiting" && countdown > 0 && (
-                <div className="flex items-center justify-between px-3 py-2 rounded-[10px] bg-white/[0.04] mb-3">
-                  <span className="text-[0.75rem] text-text-muted">剩余时间</span>
-                  <span className="text-[0.82rem] font-mono font-semibold text-text tabular-nums">
-                    {formatCountdown(countdown)}
-                  </span>
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                {(loginStatus === "starting" || loginStatus === "waiting") && (
-                  <Button
-                    variant="outline"
-                    onClick={handleCancel}
-                    className="flex-1 h-10 rounded-[12px] text-danger hover:text-danger cursor-pointer"
-                  >
-                    取消
-                  </Button>
-                )}
-                {(loginStatus === "success" || loginStatus === "error" || loginStatus === "cancelled") && (
-                  <Button
-                    variant="outline"
-                    onClick={resetLogin}
-                    className="flex-1 h-10 rounded-[12px] cursor-pointer"
-                  >
-                    {loginStatus === "success" ? "完成" : "重试"}
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Manual cookie input */}
-          {loginStatus === "idle" && (
-            <div className="mt-4">
-              <p className="text-[0.75rem] text-text-muted mb-2">
-                或在此直接粘贴 Cookie，自动提取录入多账号
-              </p>
-              <Textarea
-                value={cookieValue}
-                onChange={(e) => {
-                  setCookieValue(e.target.value);
-                }}
-                onBlur={handleValidateCookie}
-                placeholder="从浏览器开发者工具复制抖音 Cookie..."
-                rows={3}
-              />
-              {savingCookie ? (
-                <p className="text-[0.72rem] text-info mt-1.5 flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" /> 正在自动保存并校验
-                </p>
-              ) : cookieInputStatus === "valid" ? (
-                <p className="text-[0.72rem] text-success mt-1.5 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> 已检测到登录字段，将自动保存
-                </p>
-              ) : cookieInputStatus === "invalid" ? (
-                <p className="text-[0.72rem] text-danger mt-1.5 flex items-center gap-1">
-                  <XCircle className="w-3 h-3" />
-                  Cookie 校验未通过，请确认包含必要参数如 sessionid
-                </p>
-              ) : null}
-              {loginMessage && (
-                <p className="mt-2 text-[0.72rem] text-text-muted">{loginMessage}</p>
-              )}
-            </div>
-          )}
-        </SettingGroup>
-
-        {/* Theme */}
-        <SettingGroup icon={Palette} label="外观主题" status={fieldStatus("theme")}>
-          <div className="flex gap-1.5 p-1 rounded-[12px] bg-white/[0.04]">
-            {(
-              [
-                { value: "light", icon: Sun, label: "亮色" },
-                { value: "dark", icon: Moon, label: "暗色" },
-                { value: "auto", icon: Monitor, label: "系统" },
-              ] as const
-            ).map(({ value, icon: Icon, label }) => (
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Navigation Sidebar */}
+        <div className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible shrink-0 pb-2 md:pb-0 md:w-[180px] border-b md:border-b-0 md:border-r border-white/[0.06]">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
               <button
-                key={value}
-                onClick={() => void handleThemeChange(value as ThemeMode)}
-                disabled={savingFields.theme}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "relative flex-1 flex items-center justify-center gap-2 h-10 rounded-[10px] text-[0.82rem] font-semibold transition-[background-color,color,box-shadow,transform,opacity] duration-200 cursor-pointer",
-                  savingFields.theme && "cursor-wait opacity-75",
-                  theme === value
-                    ? "text-text"
-                    : "text-text-muted hover:text-text-secondary"
+                  "relative flex items-center gap-2.5 px-3 py-2 rounded-[8px] text-[0.8rem] font-medium transition-all cursor-pointer whitespace-nowrap",
+                  isActive ? "text-accent font-semibold" : "text-text-muted hover:text-text hover:bg-white/[0.03]"
                 )}
               >
-                {theme === value && (
+                {isActive && (
                   <motion.div
-                    layoutId="theme-tab-bg"
-                    className="absolute inset-0 rounded-[10px] bg-accent/[0.12] shadow-[0_0_12px_rgba(254,44,85,0.08)]"
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    layoutId="active-tab-bg"
+                    className="absolute inset-0 bg-accent/10 rounded-[8px]"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
-                <Icon className="relative w-4 h-4" />
-                <span className="relative">{label}</span>
+                <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-accent" : "text-text-muted")} />
+                <span className="relative z-10">{tab.label}</span>
               </button>
-            ))}
-          </div>
-        </SettingGroup>
+            );
+          })}
+        </div>
 
-        {/* Download Dir */}
-        <SettingGroup icon={FolderOpen} label="下载目录" status={fieldStatus("download_path")}>
-          <div className="flex gap-2">
-            <Input
-              value={downloadPath}
-              onChange={(event) => setDownloadPath(event.target.value)}
-              onBlur={() => void saveDownloadPath(downloadPath)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.currentTarget.blur();
-                }
-              }}
-              placeholder="data/"
-              className="flex-1 h-10"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleChooseDirectory}
-              disabled={choosingDirectory || savingFields.download_path}
-              className="h-10 shrink-0 px-4"
+        {/* Tab Contents */}
+        <div className="flex-1 min-w-0">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18 }}
+              className="space-y-4"
             >
-              {choosingDirectory || savingFields.download_path ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <FolderOpen className="w-4 h-4" />
-              )}
-              {choosingDirectory ? "选择中" : savingFields.download_path ? "保存中" : "选择"}
-            </Button>
-          </div>
-          <p className="text-[0.75rem] text-text-muted mt-2">
-            输入后自动保存，选择目录后立即生效。
-          </p>
-        </SettingGroup>
+              {activeTab === "accounts" && (
+                <div className="space-y-4">
+                  {/* Multi Accounts List */}
+                  <SettingGroup icon={Key} label="已登录账号">
+                    {accounts.length > 0 ? (
+                      <div className="grid gap-2">
+                        {accounts.map((acc) => {
+                          const isActive = acc.sec_uid === currentSecUid;
+                          return (
+                            <div
+                              key={acc.sec_uid}
+                              className={cn(
+                                "flex items-center gap-3 p-3 rounded-[10px] transition-all duration-200 border",
+                                isActive
+                                  ? "bg-accent/[0.04] border-accent/20 shadow-[0_0_12px_rgba(254,44,85,0.02)]"
+                                  : "bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04]"
+                              )}
+                            >
+                              <img
+                                src={acc.avatar_thumb || "/default-avatar.svg"}
+                                alt={acc.nickname}
+                                className="w-8 h-8 rounded-full border border-white/10 object-cover"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[0.78rem] font-semibold text-text truncate">{acc.nickname}</span>
+                                  {isActive && (
+                                    <span className="px-1.5 py-0.5 rounded-[4px] bg-accent/15 text-accent text-[0.58rem] font-bold">
+                                      当前激活
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[0.62rem] text-text-muted truncate block font-mono">
+                                  ID: {acc.sec_uid.substring(0, 15)}...
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {!isActive && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        const res = await switchAccount(acc.sec_uid);
+                                        if (res.success) {
+                                          toast.success(`已切换为: ${res.nickname}`, "切换成功");
+                                          await loadAccounts();
+                                          await initClient().catch(() => {});
+                                        } else {
+                                          toast.error(res.message, "切换失败");
+                                        }
+                                      } catch (e) {
+                                        toast.error(e instanceof Error ? e.message : "切换失败", "错误");
+                                      }
+                                    }}
+                                    className="h-7 rounded-[6px] text-[0.72rem] font-semibold px-2 hover:bg-accent/10 hover:text-accent cursor-pointer"
+                                  >
+                                    切换
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={async () => {
+                                    if (confirm(`确定要注销并删除账号「${acc.nickname}」吗？`)) {
+                                      try {
+                                        const res = await deleteAccount(acc.sec_uid);
+                                        if (res.success) {
+                                          toast.success("账号已删除", "注销成功");
+                                          await loadAccounts();
+                                          await initClient().catch(() => {});
+                                        } else {
+                                          toast.error(res.message, "注销失败");
+                                        }
+                                      } catch (e) {
+                                        toast.error(e instanceof Error ? e.message : "删除失败", "错误");
+                                      }
+                                    }
+                                  }}
+                                  className="w-7 h-7 rounded-[6px] text-text-muted hover:text-danger hover:bg-danger/10 cursor-pointer"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[0.75rem] text-text-muted text-center py-4 bg-white/[0.01] rounded-[10px] border border-dashed border-white/[0.04]">
+                        暂无已登录账号，请在下方添加
+                      </p>
+                    )}
+                  </SettingGroup>
 
-        {/* Naming */}
-        <SettingGroup icon={FileText} label="文件命名规则" status={fieldStatus("filename_template")}>
-          <div className="space-y-3">
-            <Select
-              value={FILENAME_PRESETS.some((preset) => preset.value === filenameTemplate) ? filenameTemplate : "custom"}
-              onValueChange={(value) => {
-                if (value !== "custom") {
-                  setFilenameTemplate(value);
-                  void saveFilenameTemplate(value);
-                }
-              }}
-            >
-              <SelectTrigger className="h-10" disabled={savingFields.filename_template}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FILENAME_PRESETS.map((preset) => (
-                  <SelectItem key={preset.value} value={preset.value}>
-                    {preset.label}
-                  </SelectItem>
-                ))}
-                <SelectItem value="custom">自定义</SelectItem>
-              </SelectContent>
-            </Select>
+                  {/* Add Account Area */}
+                  <SettingGroup icon={Globe} label="添加账号">
+                    {loginStatus === "idle" ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-text-muted">
+                            扫码/网页登录浏览器类型
+                          </p>
+                          <Select value={browserType} onValueChange={setBrowserType}>
+                            <SelectTrigger className="h-8 rounded-[8px] text-[0.74rem] w-[140px] ml-auto">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="chrome">Chrome</SelectItem>
+                              <SelectItem value="edge">Edge</SelectItem>
+                              <SelectItem value="chromium">Chromium</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
 
-            <Input
-              value={filenameTemplate}
-              onChange={(event) => setFilenameTemplate(event.target.value)}
-              onBlur={() => void saveFilenameTemplate(filenameTemplate)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.currentTarget.blur();
-                }
-              }}
-              disabled={savingFields.filename_template}
-              placeholder="{title}_{aweme_id}"
-              className="h-10 font-mono text-[0.82rem]"
-            />
+                        <Button
+                          onClick={startLogin}
+                          className="w-full h-9 rounded-[8px] text-[0.78rem] font-bold gap-1.5 cursor-pointer"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          打开内置窗口登录
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="rounded-[10px] bg-white/[0.02] border border-white/[0.04] p-3">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={cn(
+                              "w-8 h-8 rounded-[8px] flex items-center justify-center shrink-0",
+                              (loginStatus === "starting" || loginStatus === "waiting") && "bg-info/10",
+                              loginStatus === "success" && "bg-success/10",
+                              loginStatus === "error" && "bg-danger/10",
+                              loginStatus === "cancelled" && "bg-white/[0.06]"
+                            )}
+                          >
+                            {(loginStatus === "starting" || loginStatus === "waiting") && (
+                              <Loader2 className="w-4 h-4 text-info animate-spin" />
+                            )}
+                            {loginStatus === "success" && (
+                              <CheckCircle2 className="w-4 h-4 text-success" />
+                            )}
+                            {loginStatus === "error" && (
+                              <XCircle className="w-4 h-4 text-danger" />
+                            )}
+                            {loginStatus === "cancelled" && (
+                              <X className="w-4 h-4 text-text-muted" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[0.78rem] font-semibold text-text">
+                              {loginStatus === "starting" && "正在启动..."}
+                              {loginStatus === "waiting" && "等待登录"}
+                              {loginStatus === "success" && "登录成功"}
+                              {loginStatus === "error" && "登录失败"}
+                              {loginStatus === "cancelled" && "已取消"}
+                            </p>
+                            <p className="text-[0.7rem] text-text-muted truncate mt-0.5">
+                              {loginMessage}
+                            </p>
+                          </div>
+                        </div>
 
-            <div className="flex flex-wrap gap-1.5">
-              {TEMPLATE_VARIABLES.map((item) => (
-                <button
-                  key={item.token}
-                  type="button"
-                  onClick={() => appendFilenameToken(item.token)}
-                  disabled={savingFields.filename_template}
-                  className="inline-flex h-7 items-center rounded-[8px] border border-border bg-white/[0.03] px-2 font-mono text-[0.7rem] text-text-secondary transition-[background-color,color,border-color,opacity] hover:border-accent/30 hover:bg-accent/10 hover:text-accent disabled:opacity-50"
-                  title={item.label}
-                >
-                  {item.token}
-                </button>
-              ))}
-            </div>
-            <p className="text-[0.75rem] text-text-muted">
-              即使模板不包含作品ID，保存时也会自动补上，避免同名作品互相覆盖。
-            </p>
-          </div>
-        </SettingGroup>
+                        {loginStatus === "waiting" && countdown > 0 && (
+                          <div className="flex items-center justify-between px-2.5 py-1.5 rounded-[8px] bg-white/[0.04] my-2 text-[0.7rem]">
+                            <span className="text-text-muted">剩余时间</span>
+                            <span className="font-mono font-semibold text-text tabular-nums">
+                              {formatCountdown(countdown)}
+                            </span>
+                          </div>
+                        )}
 
-        <SettingGroup icon={FolderTree} label="作者目录规则" status={fieldStatus("folder_name_template") || fieldStatus("auto_create_folder")}>
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => void handleAutoCreateFolderChange(!autoCreateFolder)}
-              disabled={savingFields.auto_create_folder}
-              className={cn(
-                "flex h-10 w-full items-center justify-between rounded-[12px] border px-3 transition-[background-color,border-color,opacity]",
-                autoCreateFolder
-                  ? "border-accent/25 bg-accent/10"
-                  : "border-border bg-white/[0.03]",
-                savingFields.auto_create_folder && "opacity-70"
-              )}
-            >
-              <span className="text-[0.82rem] font-semibold text-text">按目录归档</span>
-              <span
-                className={cn(
-                  "relative h-5 w-9 rounded-full transition-colors",
-                  autoCreateFolder ? "bg-accent" : "bg-white/[0.12]"
-                )}
-              >
-                <span
-                  className={cn(
-                    "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform",
-                    autoCreateFolder ? "translate-x-4" : "translate-x-0.5"
+                        <div className="flex gap-2 mt-3">
+                          {(loginStatus === "starting" || loginStatus === "waiting") && (
+                            <Button
+                              variant="outline"
+                              onClick={handleCancel}
+                              className="flex-1 h-8 rounded-[8px] text-[0.74rem] text-danger hover:text-danger cursor-pointer"
+                            >
+                              取消
+                            </Button>
+                          )}
+                          {(loginStatus === "success" || loginStatus === "error" || loginStatus === "cancelled") && (
+                            <Button
+                              variant="outline"
+                              onClick={resetLogin}
+                              className="flex-1 h-8 rounded-[8px] text-[0.74rem] cursor-pointer"
+                            >
+                              {loginStatus === "success" ? "完成" : "重试"}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </SettingGroup>
+
+                  {/* Manual cookie input */}
+                  {loginStatus === "idle" && (
+                    <SettingGroup icon={Key} label="手动录入 Cookie">
+                      <div>
+                        <Textarea
+                          value={cookieValue}
+                          onChange={(e) => setCookieValue(e.target.value)}
+                          onBlur={handleValidateCookie}
+                          placeholder="从浏览器开发者工具复制抖音 Cookie..."
+                          rows={2}
+                          className="text-[0.76rem] font-mono leading-relaxed placeholder:text-[0.74rem]"
+                        />
+                        {savingCookie ? (
+                          <p className="text-[0.68rem] text-info mt-1 flex items-center gap-1">
+                            <Loader2 className="w-3 h-3 animate-spin" /> 正在自动保存并校验
+                          </p>
+                        ) : cookieInputStatus === "valid" ? (
+                          <p className="text-[0.68rem] text-success mt-1 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> 已检测到登录字段，将自动保存
+                          </p>
+                        ) : cookieInputStatus === "invalid" ? (
+                          <p className="text-[0.68rem] text-danger mt-1 flex items-center gap-1">
+                            <XCircle className="w-3 h-3" />
+                            Cookie 校验未通过，请确认包含必要参数如 sessionid
+                          </p>
+                        ) : null}
+                        {loginMessage && (
+                          <p className="mt-1 text-[0.68rem] text-text-muted">{loginMessage}</p>
+                        )}
+                      </div>
+                    </SettingGroup>
                   )}
-                />
-              </span>
-            </button>
-
-            <Input
-              value={folderNameTemplate}
-              onChange={(event) => setFolderNameTemplate(event.target.value)}
-              onBlur={() => void saveFolderNameTemplate(folderNameTemplate)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.currentTarget.blur();
-                }
-              }}
-              disabled={!autoCreateFolder || savingFields.folder_name_template}
-              placeholder="{author}"
-              className="h-10 font-mono text-[0.82rem]"
-            />
-
-            <div className="flex flex-wrap gap-1.5">
-              {TEMPLATE_VARIABLES.filter((item) => item.token !== "{title}").map((item) => (
-                <button
-                  key={item.token}
-                  type="button"
-                  onClick={() => appendFolderToken(item.token)}
-                  disabled={!autoCreateFolder || savingFields.folder_name_template}
-                  className="inline-flex h-7 items-center rounded-[8px] border border-border bg-white/[0.03] px-2 font-mono text-[0.7rem] text-text-secondary transition-[background-color,color,border-color,opacity] hover:border-accent/30 hover:bg-accent/10 hover:text-accent disabled:opacity-50"
-                  title={item.label}
-                >
-                  {item.token}
-                </button>
-              ))}
-            </div>
-          </div>
-        </SettingGroup>
-
-        {/* Quality */}
-        <SettingGroup icon={Gauge} label="视频下载质量" status={fieldStatus("download_quality")}>
-          <Select value={downloadQuality} onValueChange={(value) => void handleQualityChange(value)}>
-            <SelectTrigger className="h-10" disabled={savingFields.download_quality}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">自动</SelectItem>
-              <SelectItem value="highest">最高质量</SelectItem>
-              <SelectItem value="h264">兼容优先 (H.264)</SelectItem>
-              <SelectItem value="smallest">最小体积</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-[0.75rem] text-text-muted mt-2">
-            只影响视频作品；图片、图集和 Live Photo 会按原始媒体下载。
-          </p>
-        </SettingGroup>
-
-        {/* Concurrency */}
-        <SettingGroup icon={Zap} label="并发下载数" status={fieldStatus("max_concurrent")}>
-          <Select value={maxConcurrent} onValueChange={(value) => void handleMaxConcurrentChange(value)}>
-            <SelectTrigger className="h-10" disabled={savingFields.max_concurrent}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => (
-                <SelectItem key={n} value={String(n)}>
-                  {n} 个{n === 3 ? " (推荐)" : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </SettingGroup>
-
-        {/* Divider */}
-        <div className="h-px bg-white/[0.06] lg:hidden" />
-
-        {/* About */}
-        <SettingGroup icon={Info} label="关于">
-          <div className="flex items-center justify-between py-3 px-4 rounded-[12px] bg-white/[0.03]">
-            <span className="text-[0.82rem] text-text-muted">当前版本</span>
-            <span className="text-[0.82rem] text-text font-mono font-semibold">
-              {appVersion ? `v${appVersion}` : "读取中"}
-            </span>
-          </div>
-          {updateMessage && (
-            <div
-              className={cn(
-                "mt-3 rounded-[12px] border px-3 py-2 text-[0.78rem]",
-                updateStatus === "error"
-                  ? "border-danger/20 bg-danger-soft text-danger"
-                  : updateStatus === "available"
-                    ? "border-info/20 bg-info/10 text-info"
-                    : updateStatus === "ready"
-                      ? "border-success/20 bg-success-soft text-success"
-                      : "border-border bg-white/[0.03] text-text-muted"
+                </div>
               )}
-            >
-              {updateMessage}
-            </div>
-          )}
-          {updateInfo?.notes && (
-            <div className="mt-3 max-h-[160px] overflow-y-auto rounded-[12px] border border-border bg-white/[0.03] p-3 text-[0.76rem] leading-relaxed text-text-secondary whitespace-pre-wrap">
-              {updateInfo.notes}
-            </div>
-          )}
-          {updateInfo?.asset_name && updateStatus === "available" && (
-            <div className="mt-3 flex items-center justify-between gap-3 rounded-[12px] border border-border bg-white/[0.03] px-3 py-2 text-[0.74rem] text-text-muted">
-              <span className="min-w-0 truncate">{updateInfo.asset_name}</span>
-              {formatBytes(updateInfo.asset_size) && (
-                <span className="shrink-0 font-mono tabular-nums">{formatBytes(updateInfo.asset_size)}</span>
+
+              {activeTab === "download" && (
+                <div className="space-y-4">
+                  {/* Download Dir */}
+                  <SettingGroup icon={FolderOpen} label="下载目录" status={fieldStatus("download_path")}>
+                    <div className="flex gap-2">
+                      <Input
+                        value={downloadPath}
+                        onChange={(event) => setDownloadPath(event.target.value)}
+                        placeholder="选择或输入下载路径"
+                        className="h-9 text-[0.78rem]"
+                      />
+                      <Button
+                        variant="secondary"
+                        onClick={handleChooseDirectory}
+                        disabled={choosingDirectory}
+                        className="h-9 rounded-[8px] text-[0.76rem] px-3 shrink-0 cursor-pointer"
+                      >
+                        {choosingDirectory ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          "选择"
+                        )}
+                      </Button>
+                    </div>
+                  </SettingGroup>
+
+                  {/* Folder Rule */}
+                  <SettingGroup icon={FolderTree} label="作者目录规则" status={fieldStatus("folder_name_template") || fieldStatus("auto_create_folder")}>
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleAutoCreateFolderChange(!autoCreateFolder)}
+                        disabled={savingFields.auto_create_folder}
+                        className={cn(
+                          "flex h-8 w-full items-center justify-between rounded-[8px] border px-2.5 transition-[background-color,border-color,opacity]",
+                          autoCreateFolder
+                            ? "border-accent/25 bg-accent/5"
+                            : "border-border bg-white/[0.01]",
+                          savingFields.auto_create_folder && "opacity-70"
+                        )}
+                      >
+                        <span className="text-[0.76rem] font-semibold text-text">按目录归档</span>
+                        <span
+                          className={cn(
+                            "relative h-4.5 w-8.5 rounded-full transition-colors",
+                            autoCreateFolder ? "bg-accent" : "bg-white/[0.12]"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white transition-transform",
+                              autoCreateFolder ? "translate-x-4.5" : "translate-x-0.5"
+                            )}
+                          />
+                        </span>
+                      </button>
+
+                      <Input
+                        value={folderNameTemplate}
+                        onChange={(event) => setFolderNameTemplate(event.target.value)}
+                        onBlur={() => void saveFolderNameTemplate(folderNameTemplate)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        disabled={!autoCreateFolder || savingFields.folder_name_template}
+                        placeholder="{author}"
+                        className="h-9 font-mono text-[0.78rem]"
+                      />
+
+                      <div className="flex flex-wrap gap-1">
+                        {TEMPLATE_VARIABLES.filter((item) => item.token !== "{title}").map((item) => (
+                          <button
+                            key={item.token}
+                            type="button"
+                            onClick={() => appendFolderToken(item.token)}
+                            disabled={!autoCreateFolder || savingFields.folder_name_template}
+                            className="inline-flex h-6 items-center rounded-[6px] border border-border bg-white/[0.01] px-1.5 font-mono text-[0.65rem] text-text-secondary transition-all hover:border-accent/30 hover:bg-accent/10 hover:text-accent disabled:opacity-50"
+                            title={item.label}
+                          >
+                            {item.token}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </SettingGroup>
+
+                  {/* File naming */}
+                  <SettingGroup icon={FileText} label="文件命名规则" status={fieldStatus("filename_template")}>
+                    <div className="space-y-2">
+                      <Input
+                        value={filenameTemplate}
+                        onChange={(event) => setFilenameTemplate(event.target.value)}
+                        onBlur={() => void saveFilenameTemplate(filenameTemplate)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        disabled={savingFields.filename_template}
+                        placeholder="{title}_{aweme_id}"
+                        className="h-9 font-mono text-[0.78rem]"
+                      />
+
+                      <div className="flex flex-wrap gap-1">
+                        {TEMPLATE_VARIABLES.map((item) => (
+                          <button
+                            key={item.token}
+                            type="button"
+                            onClick={() => appendFilenameToken(item.token)}
+                            disabled={savingFields.filename_template}
+                            className="inline-flex h-6 items-center rounded-[6px] border border-border bg-white/[0.01] px-1.5 font-mono text-[0.65rem] text-text-secondary transition-all hover:border-accent/30 hover:bg-accent/10 hover:text-accent"
+                            title={item.label}
+                          >
+                            {item.token}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </SettingGroup>
+
+                  {/* Quality and concurrency */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <SettingGroup icon={Gauge} label="下载质量" status={fieldStatus("download_quality")}>
+                      <Select value={downloadQuality} onValueChange={(value) => void handleQualityChange(value)}>
+                        <SelectTrigger className="h-9 text-[0.76rem] rounded-[8px]" disabled={savingFields.download_quality}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">自动</SelectItem>
+                          <SelectItem value="highest">最高质量</SelectItem>
+                          <SelectItem value="h264">兼容优先 (H.264)</SelectItem>
+                          <SelectItem value="smallest">最小体积</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </SettingGroup>
+
+                    <SettingGroup icon={Zap} label="并发数" status={fieldStatus("max_concurrent")}>
+                      <Select value={maxConcurrent} onValueChange={(value) => void handleMaxConcurrentChange(value)}>
+                        <SelectTrigger className="h-9 text-[0.76rem] rounded-[8px]" disabled={savingFields.max_concurrent}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => (
+                            <SelectItem key={n} value={String(n)}>
+                              {n} 个{n === 3 ? " (推荐)" : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </SettingGroup>
+                  </div>
+                </div>
               )}
-            </div>
-          )}
-          {updateStatus === "downloading" && (
-            <div className="mt-3">
-              <div className="mb-1 flex items-center justify-between text-[0.72rem] text-text-muted">
-                <span>下载进度</span>
-                <span className="font-mono tabular-nums">{Math.round(updateProgress)}%</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
-                <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${updateProgress}%` }} />
-              </div>
-            </div>
-          )}
-          <Button
-            variant="outline"
-            onClick={handleCheckUpdate}
-            disabled={updateStatus === "checking" || updateStatus === "downloading"}
-            className="w-full h-10 rounded-[12px] mt-3"
-          >
-            <RefreshCw className={cn("w-4 h-4", updateStatus === "checking" && "animate-spin")} />
-            {updateStatus === "checking" ? "检查中..." : "检查更新"}
-          </Button>
-          {updateStatus === "available" && (
-            <Button
-              variant="default"
-              onClick={handleDownloadUpdate}
-              className="mt-2 w-full h-10 rounded-[12px]"
-            >
-              <RefreshCw className="w-4 h-4" />
-              下载更新
-            </Button>
-          )}
-          {updateStatus === "ready" && updateCanRestart && (
-            <Button
-              variant="default"
-              onClick={handleRestart}
-              className="mt-2 w-full h-10 rounded-[12px]"
-            >
-              <RefreshCw className="w-4 h-4" />
-              重启应用
-            </Button>
-          )}
-        </SettingGroup>
+
+              {activeTab === "preferences" && (
+                <div className="space-y-4">
+                  {/* Theme */}
+                  <SettingGroup icon={Palette} label="外观主题" status={fieldStatus("theme")}>
+                    <div className="flex gap-1 p-1 rounded-[10px] bg-white/[0.02] border border-white/[0.04]">
+                      {(
+                        [
+                          { value: "light", icon: Sun, label: "亮色" },
+                          { value: "dark", icon: Moon, label: "暗色" },
+                          { value: "auto", icon: Monitor, label: "系统" },
+                        ] as const
+                      ).map(({ value, icon: Icon, label }) => (
+                        <button
+                          key={value}
+                          onClick={() => void handleThemeChange(value as ThemeMode)}
+                          disabled={savingFields.theme}
+                          className={cn(
+                            "relative flex-1 flex items-center justify-center gap-1.5 h-8.5 rounded-[8px] text-[0.78rem] font-semibold transition-all duration-200 cursor-pointer",
+                            savingFields.theme && "cursor-wait opacity-75",
+                            theme === value
+                              ? "text-text"
+                              : "text-text-muted hover:text-text-secondary"
+                          )}
+                        >
+                          {theme === value && (
+                            <motion.div
+                              layoutId="theme-tab-bg"
+                              className="absolute inset-0 rounded-[8px] bg-accent/[0.1] shadow-[0_0_12px_rgba(254,44,85,0.04)]"
+                              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                            />
+                          )}
+                          <Icon className="relative w-3.5 h-3.5" />
+                          <span className="relative">{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </SettingGroup>
+                </div>
+              )}
+
+              {activeTab === "about" && (
+                <div className="space-y-4">
+                  <SettingGroup icon={Info} label="关于">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between py-2 px-3 rounded-[8px] bg-white/[0.02] border border-white/[0.04]">
+                        <span className="text-[0.78rem] text-text-muted">当前版本</span>
+                        <span className="text-[0.78rem] text-text font-mono font-semibold">
+                          {appVersion ? `v${appVersion}` : "读取中"}
+                        </span>
+                      </div>
+                      
+                      {updateMessage && (
+                        <div
+                          className={cn(
+                            "rounded-[8px] border px-3 py-1.5 text-[0.72rem]",
+                            updateStatus === "error"
+                              ? "border-danger/20 bg-danger-soft text-danger"
+                              : updateStatus === "available"
+                                ? "border-info/20 bg-info/10 text-info"
+                                : updateStatus === "ready"
+                                  ? "border-success/20 bg-success-soft text-success"
+                                  : "border-border bg-white/[0.02] text-text-muted"
+                          )}
+                        >
+                          {updateMessage}
+                        </div>
+                      )}
+
+                      {updateInfo?.notes && (
+                        <div className="max-h-[140px] overflow-y-auto rounded-[8px] border border-border bg-white/[0.01] p-2.5 text-[0.7rem] leading-relaxed text-text-secondary whitespace-pre-wrap font-mono">
+                          {updateInfo.notes}
+                        </div>
+                      )}
+
+                      {updateInfo?.asset_name && updateStatus === "available" && (
+                        <div className="flex items-center justify-between gap-3 rounded-[8px] border border-border bg-white/[0.02] px-3 py-1.5 text-[0.7rem] text-text-muted">
+                          <span className="min-w-0 truncate">{updateInfo.asset_name}</span>
+                          {formatBytes(updateInfo.asset_size) && (
+                            <span className="shrink-0 font-mono">{formatBytes(updateInfo.asset_size)}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {updateStatus === "downloading" && (
+                        <div className="rounded-[8px] bg-white/[0.02] border border-white/[0.04] p-3">
+                          <div className="mb-1 flex items-center justify-between text-[0.68rem] text-text-muted">
+                            <span>正在下载更新文件</span>
+                            <span className="font-mono">{Math.round(updateProgress)}%</span>
+                          </div>
+                          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                            <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${updateProgress}%` }} />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={handleCheckUpdate}
+                          disabled={updateStatus === "checking" || updateStatus === "downloading"}
+                          className="flex-1 h-9 rounded-[8px] text-[0.76rem] gap-1 cursor-pointer"
+                        >
+                          <RefreshCw className={cn("w-3.5 h-3.5", updateStatus === "checking" && "animate-spin")} />
+                          {updateStatus === "checking" ? "检查中" : "检查新版本"}
+                        </Button>
+                        
+                        {updateStatus === "available" && (
+                          <Button
+                            variant="default"
+                            onClick={handleDownloadUpdate}
+                            className="flex-1 h-9 rounded-[8px] text-[0.76rem] gap-1 cursor-pointer"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            下载安装更新
+                          </Button>
+                        )}
+
+                        {updateStatus === "ready" && updateCanRestart && (
+                          <Button
+                            variant="default"
+                            onClick={handleRestart}
+                            className="flex-1 h-9 rounded-[8px] text-[0.76rem] gap-1 cursor-pointer"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            立即重启升级
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </SettingGroup>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
     </motion.div>
   );
@@ -1382,9 +1403,9 @@ function SettingGroup({
   children: React.ReactNode;
 }) {
   return (
-    <div className={className}>
+    <div className={cn("p-4 rounded-[12px] bg-white/[0.02] border border-white/[0.04]", className)}>
       <div className="flex items-center justify-between gap-3 mb-3">
-        <label className="flex items-center gap-2 text-[0.85rem] font-semibold text-text">
+        <label className="flex items-center gap-2 text-[0.8rem] font-semibold text-text">
           <Icon className="w-4 h-4 text-text-muted" />
           {label}
         </label>
@@ -1400,17 +1421,17 @@ function SettingStatusPill({ status }: { status: SettingStatus }) {
     saving: {
       label: "保存中",
       className: "border-info/20 bg-info-soft text-info",
-      icon: <Loader2 className="w-3 h-3 animate-spin" />,
+      icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />,
     },
     saved: {
       label: "已保存",
       className: "border-success/20 bg-success-soft text-success",
-      icon: <CheckCircle2 className="w-3 h-3" />,
+      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
     },
     error: {
       label: "保存失败",
       className: "border-danger/20 bg-danger-soft text-danger",
-      icon: <XCircle className="w-3 h-3" />,
+      icon: <XCircle className="w-3.5 h-3.5" />,
     },
   }[status];
 
