@@ -52,6 +52,33 @@ if __name__ == '__main__':
             pass
         os._exit(0)
 
+    class WindowAPI:
+        """Expose native pywebview window controls to the React shell."""
+
+        def __init__(self):
+            self.window = None
+            self._maximized = False
+
+        def bind(self, target_window):
+            self.window = target_window
+
+        def minimize(self):
+            if self.window:
+                self.window.minimize()
+
+        def toggle_maximize(self):
+            if not self.window:
+                return
+            if self._maximized:
+                self.window.restore()
+            else:
+                self.window.maximize()
+            self._maximized = not self._maximized
+
+        def close(self):
+            if self.window:
+                self.window.destroy()
+
     # 查找可用端口
     port = find_free_port()
 
@@ -117,7 +144,29 @@ if __name__ == '__main__':
 
     patch_macos_pywebview_titlebar()
 
-    macos_window_options = {'frameless': True} if sys.platform == 'darwin' else {}
+    def configure_macos_native_window(target_window):
+        if sys.platform != 'darwin':
+            return
+        try:
+            import AppKit
+
+            native_window = getattr(target_window, 'native', None)
+            if native_window is None:
+                return
+
+            native_window.setTitlebarAppearsTransparent_(True)
+            native_window.setTitleVisibility_(AppKit.NSWindowTitleHidden)
+            native_window.setMovableByWindowBackground_(True)
+            native_window.setStyleMask_(
+                native_window.styleMask() | AppKit.NSWindowStyleMaskFullSizeContentView
+            )
+        except Exception:
+            pass
+
+    window_api = WindowAPI()
+    window_options = {}
+    if sys.platform in ('darwin', 'win32'):
+        window_options['frameless'] = True
 
     # 创建pywebview窗口
     window = webview.create_window(
@@ -128,12 +177,19 @@ if __name__ == '__main__':
         resizable=True,
         text_select=True,
         zoomable=True,
-        **macos_window_options,
+        js_api=window_api,
+        **window_options,
     )
+    window_api.bind(window)
     window.events.closing += on_closing
 
     if sys.platform == 'darwin':
         window.macos_overlay_titlebar = True
+        window.events.shown += lambda: threading.Timer(
+            0.1,
+            configure_macos_native_window,
+            args=(window,),
+        ).start()
 
     # 在主线程启动pywebview（阻塞），debug模式查看控制台错误
     webview.start()

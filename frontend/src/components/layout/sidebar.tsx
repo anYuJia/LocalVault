@@ -60,12 +60,14 @@ export function Sidebar() {
   };
 
   const isPyWebView = typeof window !== "undefined" && Boolean((window as any).pywebview);
+  const isMacOS = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.platform || "");
 
   return (
     <aside className="flex h-full w-[var(--sidebar-width)] shrink-0 flex-col bg-surface-solid/60 backdrop-blur-2xl shadow-[1px_0_0_0_var(--color-border),16px_0_40px_rgba(0,0,0,0.04)] max-lg:w-[72px]">
       {/* Brand */}
       <motion.div
-        className={`flex items-center gap-3 px-5 pb-5 max-lg:justify-center max-lg:px-3 ${isPyWebView ? "pt-10" : "py-5"}`}
+        className={`flex items-center gap-3 px-5 pb-5 max-lg:justify-center max-lg:px-3 ${isPyWebView && isMacOS ? "pt-12" : isPyWebView ? "pt-10" : "py-5"}`}
+        style={{ WebkitAppRegion: "drag" } as React.CSSProperties & { WebkitAppRegion: string }}
         initial={false}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.3 }}

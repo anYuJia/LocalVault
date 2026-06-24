@@ -32,6 +32,7 @@ import shlex
 import requests as http_requests
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
+from http.cookies import SimpleCookie
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
@@ -3300,6 +3301,7 @@ def _start_native_verify_cookie_sync(window):
 
     session = NativeCookieLoginSession(window=window)
     session.last_cookie_value = Config.COOKIE or ''
+    session.last_core_cookie_signature = _core_login_cookie_signature(Config.COOKIE or '')
     _native_verify_window_session = session
 
     def finish() -> None:
@@ -3338,11 +3340,21 @@ def _start_native_verify_cookie_sync(window):
                     time.sleep(1)
                     continue
 
-                if cookie_string in (session.last_cookie_value, Config.COOKIE or ''):
+                core_signature = _core_login_cookie_signature(cookie_string)
+                current_config_signature = _core_login_cookie_signature(Config.COOKIE or '')
+                if not core_signature:
+                    time.sleep(1)
+                    continue
+
+                if (
+                    core_signature == getattr(session, 'last_core_cookie_signature', ())
+                    or core_signature == current_config_signature
+                ):
                     time.sleep(1)
                     continue
 
                 session.last_cookie_value = cookie_string
+                session.last_core_cookie_signature = core_signature
                 _save_cookie_login_success(cookie_string)
                 logger.info('验证窗口 Cookie 已同步到后端')
                 time.sleep(2)
@@ -5745,6 +5757,20 @@ def handle_test_connection(data):
 # COOKIE 浏览器登录
 # ═══════════════════════════════════════════════
 _native_cookie_login_session = None  # 当前正在运行的原生登录窗口会话
+CORE_LOGIN_COOKIE_NAMES = {'sessionid', 'sessionid_ss', 'sid_guard', 'uid_tt'}
+
+
+def _core_login_cookie_signature(cookie: str) -> tuple[tuple[str, str], ...]:
+    parsed = SimpleCookie()
+    try:
+        parsed.load(str(cookie or ''))
+    except Exception:
+        return ()
+    return tuple(
+        (name, parsed[name].value)
+        for name in sorted(CORE_LOGIN_COOKIE_NAMES)
+        if name in parsed and parsed[name].value
+    )
 
 
 def _emit_cookie_login_status(event: str, message: str, cookie_set: bool = False) -> None:
