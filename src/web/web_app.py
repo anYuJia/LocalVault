@@ -2450,6 +2450,7 @@ def get_accounts():
 @app.route('/api/accounts/switch', methods=['POST'])
 def switch_account():
     """切换当前账号"""
+    _cookie_verify_cache.clear()
     try:
         data = _request_json()
         sec_uid = data.get('sec_uid')
@@ -2493,6 +2494,7 @@ def switch_account():
 @app.route('/api/accounts', methods=['DELETE'])
 def delete_account():
     """删除账号"""
+    _cookie_verify_cache.clear()
     try:
         data = _request_json()
         sec_uid = data.get('sec_uid')
@@ -2540,6 +2542,7 @@ def delete_account():
 @app.route('/api/accounts/add', methods=['POST'])
 def add_account():
     """手动添加账号"""
+    _cookie_verify_cache.clear()
     try:
         data = _request_json()
         cookie = data.get('cookie')
@@ -6046,7 +6049,30 @@ def _emit_cookie_login_status(event: str, message: str, cookie_set: bool = False
     })
 
 
+_cookie_verify_cache = {}
+
 def _verify_native_cookie_login(cookie: str) -> dict:
+    if not cookie:
+        return {'success': False, 'message': 'Cookie 为空'}
+    import hashlib
+    import time
+    try:
+        cookie_hash = hashlib.sha256(cookie.encode('utf-8', errors='ignore')).hexdigest()
+    except Exception:
+        cookie_hash = str(hash(cookie))
+    
+    now = time.time()
+    if cookie_hash in _cookie_verify_cache:
+        result, timestamp = _cookie_verify_cache[cookie_hash]
+        if now - timestamp < 300:
+            return result
+
+    result = _verify_native_cookie_login_impl(cookie)
+    _cookie_verify_cache[cookie_hash] = (result, now)
+    return result
+
+
+def _verify_native_cookie_login_impl(cookie: str) -> dict:
     try:
         cookie_names = set()
         passport_auth_status = ''

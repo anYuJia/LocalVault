@@ -1,6 +1,8 @@
+import { useState, useEffect } from "react";
 import { useAppStore, useDownloadStore } from "@/stores/app-store";
 import type { ViewType } from "@/types";
 import { Badge } from "@/components/ui/badge";
+import { getAccounts, type AccountInfo } from "@/lib/tauri";
 import {
   Home,
   Search,
@@ -54,6 +56,29 @@ export function Sidebar() {
   const cookieLoggedIn = useAppStore((s) => s.cookieLoggedIn);
   const friendUnreadCount = useAppStore((s) => s.friendUnreadCount);
   const activeCount = useDownloadStore((s) => s.activeCount);
+  const [activeAccount, setActiveAccount] = useState<AccountInfo | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const fetchActiveAccount = async () => {
+      try {
+        const res = await getAccounts();
+        if (active && res.success && res.current_sec_uid) {
+          const activeAcc = res.accounts?.find((a) => a.sec_uid === res.current_sec_uid);
+          if (activeAcc) {
+            setActiveAccount(activeAcc);
+          } else {
+            setActiveAccount(null);
+          }
+        } else {
+          setActiveAccount(null);
+        }
+      } catch (e) {
+        console.error("加载边栏头像失败", e);
+      }
+    };
+    void fetchActiveAccount();
+  }, [currentView, cookieLoggedIn]);
 
   const handleNavClick = (item: NavItem) => {
     setView(item.id);
@@ -135,15 +160,43 @@ export function Sidebar() {
 
       {/* Status — pinned to bottom */}
       <div className="px-3 py-3">
-        <div className="flex h-[42px] items-center gap-2 rounded-[14px] bg-surface/50 px-3 text-text-muted max-lg:justify-center max-lg:px-0" title={cookieLoggedIn ? "已登录" : "需要登录 Cookie"}>
-          <Circle className={cn(
-            "w-2 h-2",
-            cookieLoggedIn ? "fill-success text-success" : "fill-warning text-warning"
-          )} />
-          <span className="text-[0.72rem] font-medium max-lg:hidden">
-            {cookieLoggedIn ? "已登录" : "需要登录 Cookie"}
-          </span>
-        </div>
+        <button
+          onClick={() => setView("settings")}
+          className="flex h-[48px] w-full items-center gap-3 rounded-[14px] hover:bg-surface-raised active:scale-95 px-3 transition-[background-color,transform] cursor-pointer max-lg:justify-center max-lg:px-0"
+          title={cookieLoggedIn && activeAccount ? `当前账号: ${activeAccount.nickname} (点击进入设置)` : "需要登录 Cookie"}
+        >
+          {cookieLoggedIn && activeAccount ? (
+            <>
+              <div className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center border border-accent/20 shrink-0">
+                {activeAccount.avatar_thumb ? (
+                  <img src={activeAccount.avatar_thumb} alt={activeAccount.nickname} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-accent-soft text-accent text-[0.62rem] font-bold flex items-center justify-center">
+                    {activeAccount.nickname.slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="flex min-w-0 flex-col items-start max-lg:hidden">
+                <span className="text-[0.72rem] font-semibold text-text truncate w-full">
+                  {activeAccount.nickname}
+                </span>
+                <span className="text-[0.62rem] font-medium text-success">
+                  已登录
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <Circle className={cn(
+                "w-2.5 h-2.5 ml-1 shrink-0",
+                cookieLoggedIn ? "fill-success text-success" : "fill-warning text-warning"
+              )} />
+              <span className="text-[0.72rem] font-medium text-text-muted max-lg:hidden">
+                {cookieLoggedIn ? "已登录" : "需要登录 Cookie"}
+              </span>
+            </>
+          )}
+        </button>
       </div>
     </aside>
   );

@@ -42,6 +42,8 @@ import type {
 } from "./contracts";
 
 let verifyCookieInFlight: Promise<CookieStatus> | null = null;
+let lastVerifyCookieResult: CookieStatus | null = null;
+let lastVerifyCookieTime = 0;
 
 export type * from "./contracts";
 
@@ -1354,7 +1356,7 @@ export async function getFriendMessageHistory(payload: {
   });
 }
 
-export async function getFriendChatState(): Promise<FriendChatStateResponse> {
+export async function getFriendChatState(currentSecUid?: string): Promise<FriendChatStateResponse> {
   if (shouldUseBrowserBridge()) {
     return requestJson<FriendChatStateResponse>("/api/friend_chat_state");
   }
@@ -1364,7 +1366,7 @@ export async function getFriendChatState(): Promise<FriendChatStateResponse> {
 export async function saveFriendChatState(payload: {
   summaries?: Record<string, unknown>;
   unreadCounts?: Record<string, number>;
-}): Promise<ApiResponse> {
+}, currentSecUid?: string): Promise<ApiResponse> {
   if (shouldUseBrowserBridge()) {
     return requestJson<ApiResponse>("/api/friend_chat_state", {
       method: "POST",
@@ -1375,17 +1377,37 @@ export async function saveFriendChatState(payload: {
 }
 
 export async function verifyCookie(): Promise<CookieStatus> {
+  const now = Date.now();
+  if (lastVerifyCookieResult && (now - lastVerifyCookieTime < 300_000)) {
+    return lastVerifyCookieResult;
+  }
   if (!verifyCookieInFlight) {
-    verifyCookieInFlight = (shouldUseBrowserBridge()
-      ? requestJson<CookieStatus>("/api/verify_cookie", {
-        suppressCookieInvalidEvent: true,
-      })
-      : invoke<CookieStatus>("verify_cookie"))
-      .finally(() => {
+    verifyCookieInFlight = (async () => {
+      let result: CookieStatus;
+      try {
+        if (shouldUseBrowserBridge()) {
+          result = await requestJson<CookieStatus>("/api/verify_cookie", {
+            suppressCookieInvalidEvent: true,
+          });
+        } else {
+          result = await invoke<CookieStatus>("verify_cookie");
+        }
+        if (result && result.valid) {
+          lastVerifyCookieResult = result;
+          lastVerifyCookieTime = Date.now();
+        }
+        return result;
+      } finally {
         verifyCookieInFlight = null;
-      });
+      }
+    })();
   }
   return verifyCookieInFlight;
+}
+
+export function clearVerifyCookieCache() {
+  lastVerifyCookieResult = null;
+  lastVerifyCookieTime = 0;
 }
 
 export async function cookieBrowserLogin(timeout?: number, browser?: string, cookie?: string): Promise<{ success: boolean; message: string }> {
@@ -1421,6 +1443,7 @@ export async function getAccounts(): Promise<{ success: boolean; accounts: Accou
 }
 
 export async function switchAccount(secUid: string): Promise<{ success: boolean; message: string; nickname?: string }> {
+  clearVerifyCookieCache();
   if (shouldUseBrowserBridge()) {
     return requestJson("/api/accounts/switch", {
       method: "POST",
@@ -1431,6 +1454,7 @@ export async function switchAccount(secUid: string): Promise<{ success: boolean;
 }
 
 export async function deleteAccount(secUid: string): Promise<{ success: boolean; message: string }> {
+  clearVerifyCookieCache();
   if (shouldUseBrowserBridge()) {
     return requestJson("/api/accounts", {
       method: "DELETE",
@@ -1441,6 +1465,7 @@ export async function deleteAccount(secUid: string): Promise<{ success: boolean;
 }
 
 export async function addAccount(cookie: string): Promise<{ success: boolean; message: string; nickname?: string; sec_uid?: string; avatar_thumb?: string }> {
+  clearVerifyCookieCache();
   if (shouldUseBrowserBridge()) {
     return requestJson("/api/accounts/add", {
       method: "POST",

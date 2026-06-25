@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { FullscreenPlayer } from "@/components/player/fullscreen-player";
 import { useDownloads } from "@/hooks/use-downloads";
-import { getConfig, getFriendChatState, getFriendMessageHistory, getFriendOnlineStatus, getUserDetail, getVideoDetail, listenEvent, mediaProxyUrl, saveConfig, saveFriendChatState, sendFriendImageMessage, sendFriendMessage, verifyCookie, type FriendOnlineStatusResponse } from "@/lib/tauri";
+import { getAccounts, getConfig, getFriendChatState, getFriendMessageHistory, getFriendOnlineStatus, getUserDetail, getVideoDetail, listenEvent, mediaProxyUrl, saveConfig, saveFriendChatState, sendFriendImageMessage, sendFriendMessage, verifyCookie, type FriendOnlineStatusResponse } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
 import { useSearchStore } from "@/stores/search-store";
@@ -85,9 +85,15 @@ interface FriendListItem extends FriendStatusItem {
   unreadCount: number;
 }
 
-function readChatDrafts(): ChatDrafts {
+function getNamespacedKey(baseKey: string, currentSecUid?: string): string {
+  if (!currentSecUid) return baseKey;
+  return `${baseKey}.${currentSecUid}`;
+}
+
+function readChatDrafts(currentSecUid?: string): ChatDrafts {
   try {
-    const parsed = JSON.parse(localStorage.getItem(CHAT_DRAFTS_KEY) || "{}");
+    const key = getNamespacedKey(CHAT_DRAFTS_KEY, currentSecUid);
+    const parsed = JSON.parse(localStorage.getItem(key) || "{}");
     return isRecord(parsed) ? Object.fromEntries(
       Object.entries(parsed).filter(([, value]) => typeof value === "string"),
     ) as ChatDrafts : {};
@@ -96,9 +102,10 @@ function readChatDrafts(): ChatDrafts {
   }
 }
 
-function readChatMessages(): ChatMessages {
+function readChatMessages(currentSecUid?: string): ChatMessages {
   try {
-    const parsed = JSON.parse(localStorage.getItem(CHAT_MESSAGES_KEY) || "{}");
+    const key = getNamespacedKey(CHAT_MESSAGES_KEY, currentSecUid);
+    const parsed = JSON.parse(localStorage.getItem(key) || "{}");
     if (!isRecord(parsed)) return {};
     const result: ChatMessages = {};
     for (const [secUid, value] of Object.entries(parsed)) {
@@ -156,14 +163,15 @@ function isLocalUnsentImagePlaceholder(message: LocalChatMessage) {
   return !hasInlineImage && !hasUploadedResource;
 }
 
-function readUnreadCounts(): UnreadCounts {
+function readUnreadCounts(currentSecUid?: string): UnreadCounts {
   try {
-    const parsed = JSON.parse(localStorage.getItem(CHAT_UNREAD_KEY) || "{}");
+    const key = getNamespacedKey(CHAT_UNREAD_KEY, currentSecUid);
+    const parsed = JSON.parse(localStorage.getItem(key) || "{}");
     if (!isRecord(parsed)) return {};
     const result: UnreadCounts = {};
-    for (const [key, value] of Object.entries(parsed)) {
+    for (const [keyVal, value] of Object.entries(parsed)) {
       const count = Math.max(0, Number(value) || 0);
-      if (count > 0) result[key] = count;
+      if (count > 0) result[keyVal] = count;
     }
     return result;
   } catch {
@@ -171,9 +179,10 @@ function readUnreadCounts(): UnreadCounts {
   }
 }
 
-function readChatSummaries(): ChatSummaries {
+function readChatSummaries(currentSecUid?: string): ChatSummaries {
   try {
-    const parsed = JSON.parse(localStorage.getItem(CHAT_SUMMARIES_KEY) || "{}");
+    const key = getNamespacedKey(CHAT_SUMMARIES_KEY, currentSecUid);
+    const parsed = JSON.parse(localStorage.getItem(key) || "{}");
     if (!isRecord(parsed)) return {};
     const result: ChatSummaries = {};
     for (const [secUid, value] of Object.entries(parsed)) {
@@ -261,12 +270,13 @@ function compactChatMessagesForStorage(
   return compacted;
 }
 
-function persistChatMessages(messages: ChatMessages) {
+function persistChatMessages(messages: ChatMessages, currentSecUid?: string) {
   const compacted = compactChatMessagesForStorage(messages);
-  if (safeSetLocalStorage(CHAT_MESSAGES_KEY, JSON.stringify(compacted))) return;
+  const key = getNamespacedKey(CHAT_MESSAGES_KEY, currentSecUid);
+  if (safeSetLocalStorage(key, JSON.stringify(compacted))) return;
   const smaller = compactChatMessagesForStorage(messages, 12, 8_000);
-  if (safeSetLocalStorage(CHAT_MESSAGES_KEY, JSON.stringify(smaller))) return;
-  safeSetLocalStorage(CHAT_MESSAGES_KEY, "{}");
+  if (safeSetLocalStorage(key, JSON.stringify(smaller))) return;
+  safeSetLocalStorage(key, "{}");
 }
 
 function sanitizePersistedSummaries(summaries: ChatSummaries): ChatSummaries {
@@ -283,9 +293,20 @@ function sanitizePersistedSummaries(summaries: ChatSummaries): ChatSummaries {
   ) as ChatSummaries;
 }
 
-function persistChatSummaries(summaries: ChatSummaries) {
-  if (safeSetLocalStorage(CHAT_SUMMARIES_KEY, JSON.stringify(sanitizePersistedSummaries(summaries)))) return;
-  safeSetLocalStorage(CHAT_SUMMARIES_KEY, "{}");
+function persistChatSummaries(summaries: ChatSummaries, currentSecUid?: string) {
+  const key = getNamespacedKey(CHAT_SUMMARIES_KEY, currentSecUid);
+  if (safeSetLocalStorage(key, JSON.stringify(sanitizePersistedSummaries(summaries)))) return;
+  safeSetLocalStorage(key, "{}");
+}
+
+function persistChatDrafts(drafts: ChatDrafts, currentSecUid?: string) {
+  const key = getNamespacedKey(CHAT_DRAFTS_KEY, currentSecUid);
+  safeSetLocalStorage(key, JSON.stringify(drafts));
+}
+
+function persistUnreadCounts(counts: UnreadCounts, currentSecUid?: string) {
+  const key = getNamespacedKey(CHAT_UNREAD_KEY, currentSecUid);
+  safeSetLocalStorage(key, JSON.stringify(counts));
 }
 
 function normalizeMessageStatus(value: string): LocalChatMessage["status"] {
@@ -889,6 +910,7 @@ export function FriendsStatusView() {
   const openUser = useSearchStore((state) => state.openUser);
   const { downloadVideo } = useDownloads();
   const [input, setInput] = useState(() => localStorage.getItem(STORAGE_KEY) || "");
+  const [currentSecUid, setCurrentSecUid] = useState<string>("");
   const [chatDrafts, setChatDrafts] = useState<ChatDrafts>(() => readChatDrafts());
   const [chatMessages, setChatMessages] = useState<ChatMessages>(() => readChatMessages());
   const [unreadCounts, setUnreadCounts] = useState<UnreadCounts>(() => readUnreadCounts());
@@ -925,12 +947,38 @@ export function FriendsStatusView() {
   const initialInputRef = useRef(input);
   const chatStateLoadedRef = useRef(false);
   const selectedFriendIdRef = useRef(selectedFriendId);
+  const currentSecUidRef = useRef(currentSecUid);
+
+  useEffect(() => {
+    currentSecUidRef.current = currentSecUid;
+  }, [currentSecUid]);
+
   useEffect(() => {
     selectedFriendIdRef.current = selectedFriendId;
   }, [selectedFriendId]);
 
+  useEffect(() => {
+    let active = true;
+    getAccounts().then((res) => {
+      if (active && res.success && res.current_sec_uid) {
+        const uid = res.current_sec_uid;
+        setCurrentSecUid(uid);
+        setChatDrafts(readChatDrafts(uid));
+        setChatMessages(readChatMessages(uid));
+        setUnreadCounts(readUnreadCounts(uid));
+        setChatSummaries(readChatSummaries(uid));
+      }
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
   const ids = useMemo(() => extractIds(input), [input]);
-  const friends = useMemo(() => (response?.success ? mapResponse(response) : []), [response]);
+  const friends = useMemo(() => {
+    if (!response?.success) return [];
+    const rawFriends = mapResponse(response);
+    if (!currentSecUid) return rawFriends;
+    return rawFriends.filter((f) => f.secUid !== currentSecUid);
+  }, [response, currentSecUid]);
   const friendItems = useMemo<FriendListItem[]>(() => friends
     .map((friend) => {
       const latestMessage = latestChatMessage(chatMessages[friend.secUid]);
@@ -1023,7 +1071,7 @@ export function FriendsStatusView() {
         chatStateLoadedRef.current = true;
         const summaries = isRecord(result.summaries) ? result.summaries : {};
         const unread = isRecord(result.unreadCounts) ? result.unreadCounts : {};
-        const nextSummaries = readChatSummaries();
+        const nextSummaries = readChatSummaries(currentSecUidRef.current);
         let messagesMerged = false;
         
         setChatMessages((currentChatMessages) => {
@@ -1066,7 +1114,7 @@ export function FriendsStatusView() {
             }
           }
           if (messagesMerged) {
-            persistChatMessages(nextChatMessages);
+            persistChatMessages(nextChatMessages, currentSecUidRef.current);
           }
           return nextChatMessages;
         });
@@ -1080,7 +1128,7 @@ export function FriendsStatusView() {
             unreadCount: secUid === selectedFriendIdRef.current ? 0 : Math.max(count, nextSummaries[secUid]?.unreadCount || 0),
           };
         }
-        persistChatSummaries(nextSummaries);
+        persistChatSummaries(nextSummaries, currentSecUidRef.current);
         setChatSummaries(nextSummaries);
         setUnreadCounts((current) => {
           const next = { ...current };
@@ -1091,7 +1139,7 @@ export function FriendsStatusView() {
               delete next[secUid];
             }
           }
-          localStorage.setItem(CHAT_UNREAD_KEY, JSON.stringify(next));
+          persistUnreadCounts(next, currentSecUidRef.current);
           return next;
         });
       })
@@ -1101,7 +1149,7 @@ export function FriendsStatusView() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [currentSecUid]);
 
   useEffect(() => {
     setChatSummaries((current) => {
@@ -1134,7 +1182,7 @@ export function FriendsStatusView() {
         changed = true;
       }
       if (!changed) return current;
-      persistChatSummaries(next);
+      persistChatSummaries(next, currentSecUidRef.current);
       return next;
     });
   }, [chatMessages, unreadCounts]);
@@ -1150,7 +1198,7 @@ export function FriendsStatusView() {
       void saveFriendChatState({
         summaries: chatSummaries,
         unreadCounts,
-      }).catch(() => undefined);
+      }, currentSecUidRef.current).catch(() => undefined);
     }, 350);
     return () => window.clearTimeout(timer);
   }, [chatSummaries, unreadCounts]);
@@ -1163,7 +1211,7 @@ export function FriendsStatusView() {
       } else {
         delete next[secUid];
       }
-      localStorage.setItem(CHAT_DRAFTS_KEY, JSON.stringify(next));
+      persistChatDrafts(next, currentSecUidRef.current);
       return next;
     });
   }, []);
@@ -1176,7 +1224,7 @@ export function FriendsStatusView() {
           message.id === messageId ? { ...message, ...patch } : message,
         ),
       };
-      persistChatMessages(next);
+      persistChatMessages(next, currentSecUidRef.current);
       return next;
     });
   }, []);
@@ -1185,7 +1233,7 @@ export function FriendsStatusView() {
     setUnreadCounts((current) => {
       const next = { ...current };
       delete next[secUid];
-      localStorage.setItem(CHAT_UNREAD_KEY, JSON.stringify(next));
+      persistUnreadCounts(next, currentSecUidRef.current);
       return next;
     });
     setChatSummaries((current) => {
@@ -1198,7 +1246,7 @@ export function FriendsStatusView() {
           unreadCount: 0,
         },
       };
-      persistChatSummaries(next);
+      persistChatSummaries(next, currentSecUidRef.current);
       return next;
     });
   }, []);
@@ -1219,7 +1267,7 @@ export function FriendsStatusView() {
         ...current,
         [friend.secUid]: [...(current[friend.secUid] || []), message],
       };
-      persistChatMessages(next);
+      persistChatMessages(next, currentSecUidRef.current);
       return next;
     });
     updateDraft(friend.secUid, "");
@@ -1280,7 +1328,7 @@ export function FriendsStatusView() {
         ...current,
         [friend.secUid]: [...(current[friend.secUid] || []), message],
       };
-      persistChatMessages(next);
+      persistChatMessages(next, currentSecUidRef.current);
       return next;
     });
 
@@ -1349,7 +1397,7 @@ export function FriendsStatusView() {
         mergedCount += 1;
       }
       if (mergedCount > 0) {
-        persistChatMessages(next);
+        persistChatMessages(next, currentSecUidRef.current);
         return next;
       }
       return current;
@@ -1460,7 +1508,7 @@ export function FriendsStatusView() {
           ...current,
           [friend.secUid]: [...currentMessages, message],
         };
-        persistChatMessages(next);
+        persistChatMessages(next, currentSecUidRef.current);
         return next;
       });
       if (friend.secUid !== selectedFriendId) {
@@ -1469,7 +1517,7 @@ export function FriendsStatusView() {
             ...current,
             [friend.secUid]: (current[friend.secUid] || 0) + 1,
           };
-          localStorage.setItem(CHAT_UNREAD_KEY, JSON.stringify(next));
+          persistUnreadCounts(next, currentSecUidRef.current);
           return next;
         });
       }
@@ -1480,7 +1528,7 @@ export function FriendsStatusView() {
       disposed = true;
       if (unlisten) unlisten();
     };
-  }, [friends, selectedFriendId]);
+  }, [friends, selectedFriendId, currentSecUid]);
 
   useEffect(() => {
     idsRef.current = ids;
