@@ -6200,7 +6200,7 @@ def _save_cookie_login_success(
                 "uid": (current_user_profile or {}).get("uid", ""),
                 "sec_uid": (current_user_profile or {}).get("sec_uid", ""),
                 "nickname": nickname,
-                "_cookie_for_encryption": cookie,
+                "report_status": "ok",
             }
         )
     except Exception as e:
