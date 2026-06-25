@@ -12,8 +12,13 @@ if not IS_WINDOWS and not (IS_MACOS and os.environ.get('USE_PYWEBVIEW') == '1'):
 from flask import Flask, request, jsonify, Response, send_file, send_from_directory, abort
 from flask_socketio import SocketIO, emit
 import asyncio
-import threading
 import sys
+if sys.platform == 'win32':
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except Exception:
+        pass
+import threading
 import json
 import base64
 import uuid

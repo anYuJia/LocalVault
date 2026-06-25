@@ -8,6 +8,13 @@ import multiprocessing
 # PyInstaller 打包时需要调用这个方法以防在双击执行时进入多进程递归死循环
 multiprocessing.freeze_support()
 
+if sys.platform == 'win32':
+    import asyncio
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except Exception:
+        pass
+
 if __name__ == '__main__':
     # ==========================================
     # 常规主进程启动逻辑 (pywebview 原生窗口)
