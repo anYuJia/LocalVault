@@ -11,6 +11,7 @@ import { useDownloads } from "@/hooks/use-downloads";
 
 export function BottomBar() {
   const expanded = useAppStore((s) => s.bottomBarExpanded);
+  const setExpanded = useAppStore((s) => s.setBottomBarExpanded);
   const toggleExpanded = useAppStore((s) => s.toggleBottomBar);
   const activeCount = useDownloadStore((s) => s.activeCount);
   const tasks = useDownloadStore((s) => s.tasks);
@@ -56,41 +57,31 @@ export function BottomBar() {
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between h-[var(--bottombar-height)] px-3 cursor-pointer select-none"
+        className="flex items-center justify-end h-[var(--bottombar-height)] px-3 cursor-pointer select-none gap-2"
         onClick={toggleExpanded}
       >
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-[0.8125rem] font-medium text-text-secondary">
-            <Download className="w-3.5 h-3.5" />
-            下载
-            {hasActiveTasks && (
-              <Badge variant="secondary" size="sm">{activeCount}</Badge>
-            )}
-          </span>
-
-          <AnimatePresence>
-            {hasActiveTasks && (
-              <motion.div
-                initial={false}
-                animate={{ opacity: 1, width: 80 }}
-                exit={{ opacity: 0, width: 0 }}
-                className="h-[3px] rounded-full bg-surface overflow-hidden"
-              >
-                <div className="h-full bg-accent rounded-full transition-[width] duration-200" style={{ width: `${activeProgress}%` }} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div onClick={(event) => event.stopPropagation()}>
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList>
-                <TabsTrigger value="progress">进度</TabsTrigger>
-                <TabsTrigger value="logs">日志</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
+        <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+          <Tabs
+            value={activeTab}
+            onValueChange={(val) => {
+              setActiveTab(val);
+              if (!expanded) {
+                setExpanded(true);
+              }
+            }}
+          >
+            <TabsList>
+              <TabsTrigger value="progress">
+                进度
+                {hasActiveTasks && (
+                  <Badge variant="secondary" size="sm" className="ml-1.5 shrink-0 px-1 min-w-[16px] h-4 text-[10px]">
+                    {activeCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="logs">日志</TabsTrigger>
+            </TabsList>
+          </Tabs>
 
           <button
             onClick={(event) => {
@@ -104,6 +95,10 @@ export function BottomBar() {
           </button>
 
           <motion.button
+            onClick={(event) => {
+              event.stopPropagation();
+              toggleExpanded();
+            }}
             className="w-7 h-7 rounded-[var(--radius-sm)] flex items-center justify-center text-text-muted hover:text-text hover:bg-surface-raised transition-[background-color,color,transform] duration-[var(--duration-fast)] cursor-pointer"
             animate={{ rotate: expanded ? 180 : 0 }}
             transition={{ duration: 0.2 }}
