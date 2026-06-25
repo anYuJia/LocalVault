@@ -202,6 +202,7 @@ function LikedVideosPanel({
   authorLoadingId: string | null;
   onDownloadAll: () => void;
 }) {
+  const cookieLoggedIn = useAppStore((s) => s.cookieLoggedIn);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -249,7 +250,11 @@ function LikedVideosPanel({
       ) : error && videos.length === 0 ? (
         <ErrorState message={error} />
       ) : videos.length === 0 ? (
-        <EmptyState title="暂无点赞视频" description="需要登录抖音账号后才能读取点赞视频列表" />
+        <EmptyState
+          title="暂无点赞视频"
+          description={cookieLoggedIn ? "这个账号还没有点赞任何视频" : "需要登录抖音账号后才能读取点赞视频列表"}
+          loggedIn={cookieLoggedIn}
+        />
       ) : (
         <>
           <motion.div
@@ -566,7 +571,7 @@ function LoadingGrid() {
   );
 }
 
-function EmptyState({ title, description, icon: Icon = Heart }: { title: string; description: string; icon?: React.ElementType }) {
+function EmptyState({ title, description, icon: Icon = Heart, loggedIn = false }: { title: string; description: string; icon?: React.ElementType; loggedIn?: boolean }) {
   const setView = useAppStore((s) => s.setView);
   return (
     <motion.div
@@ -581,15 +586,17 @@ function EmptyState({ title, description, icon: Icon = Heart }: { title: string;
       <p className="text-[0.82rem] text-text-muted mb-8 max-w-[280px] leading-relaxed">
         {description}
       </p>
-      <Button
-        variant="outline"
-        size="lg"
-        onClick={() => setView("settings")}
-        className="gap-2 rounded-[14px] px-8 border-accent/20 hover:bg-accent-soft hover:text-accent"
-      >
-        <Key className="w-4 h-4" />
-        前往登录 Cookie
-      </Button>
+      {!loggedIn && (
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={() => setView("settings")}
+          className="gap-2 rounded-[14px] px-8 border-accent/20 hover:bg-accent-soft hover:text-accent"
+        >
+          <Key className="w-4 h-4" />
+          前往登录 Cookie
+        </Button>
+      )}
     </motion.div>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   AlertCircle,
+  Copy,
   Download,
   Loader2,
   Search,
@@ -255,6 +256,16 @@ export function UserDetailCard({ user, busy, onDownloadAll, onViewVideos }: User
     { label: "获赞", value: user.total_favorited || 0 },
   ];
 
+  const copyUid = async () => {
+    if (!user.uid) return;
+    try {
+      await navigator.clipboard.writeText(user.uid);
+      toast("已复制 UID", "success");
+    } catch {
+      addLog("复制 UID 失败", "error");
+    }
+  };
+
   const handleFollow = async () => {
     if (!user.uid || followLoading) return;
     const nextFollow = !following;
@@ -304,8 +315,18 @@ export function UserDetailCard({ user, busy, onDownloadAll, onViewVideos }: User
             {user.nickname}
           </h3>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-flex max-w-full items-center rounded-full border border-border bg-background-soft/70 px-2.5 py-1 text-[0.72rem] font-mono text-text-secondary">
+            <span className="inline-flex max-w-[220px] items-center gap-1 rounded-full border border-border bg-background-soft/70 pl-2.5 pr-1.5 py-1 text-[0.72rem] font-mono text-text-secondary">
               <span className="truncate">@{user.unique_id || user.sec_uid}</span>
+              {user.uid && (
+                <button
+                  type="button"
+                  onClick={() => void copyUid()}
+                  title={`复制 UID: ${user.uid}`}
+                  className="shrink-0 rounded-full p-0.5 text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
+                >
+                  <Copy className="w-3 h-3" />
+                </button>
+              )}
             </span>
             {user.uid && (
               <Button

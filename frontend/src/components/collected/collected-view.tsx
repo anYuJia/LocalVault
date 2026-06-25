@@ -117,6 +117,7 @@ export function CollectedView() {
 function CollectedVideosPanel() {
   const { downloadVideo, downloadBatch } = useDownloads();
   const addLog = useLogStore((s) => s.addLog);
+  const cookieLoggedIn = useAppStore((s) => s.cookieLoggedIn);
   const openUser = useSearchStore((s) => s.openUser);
   const [videos, setVideos] = useState<VideoInfo[]>(() => loadCollectedVideosCache());
   const [loading, setLoading] = useState(false);
@@ -235,7 +236,11 @@ function CollectedVideosPanel() {
       ) : error && videos.length === 0 ? (
         <ErrorState message={error} />
       ) : videos.length === 0 ? (
-        <EmptyState title="暂无收藏视频" description="需要登录抖音账号后才能读取收藏列表" />
+        <EmptyState
+          title="暂无收藏视频"
+          description={cookieLoggedIn ? "这个账号还没有收藏任何视频" : "需要登录抖音账号后才能读取收藏列表"}
+          loggedIn={cookieLoggedIn}
+        />
       ) : (
         <>
           {error && <InlineWarning message={error} />}
@@ -699,7 +704,7 @@ function MixSkeletonGrid() {
   );
 }
 
-function EmptyState({ title, description }: { title: string; description: string }) {
+function EmptyState({ title, description, loggedIn = false }: { title: string; description: string; loggedIn?: boolean }) {
   const setView = useAppStore((s) => s.setView);
   return (
     <motion.div
@@ -712,15 +717,17 @@ function EmptyState({ title, description }: { title: string; description: string
       </div>
       <h3 className="mb-2 text-[1.05rem] font-bold text-text">{title}</h3>
       <p className="mb-8 max-w-[280px] text-[0.82rem] leading-relaxed text-text-muted">{description}</p>
-      <Button
-        variant="outline"
-        size="lg"
-        onClick={() => setView("settings")}
-        className="gap-2 rounded-[14px] border-accent/20 px-8 hover:bg-accent-soft hover:text-accent"
-      >
-        <Key className="h-4 w-4" />
-        前往登录 Cookie
-      </Button>
+      {!loggedIn && (
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={() => setView("settings")}
+          className="gap-2 rounded-[14px] border-accent/20 px-8 hover:bg-accent-soft hover:text-accent"
+        >
+          <Key className="h-4 w-4" />
+          前往登录 Cookie
+        </Button>
+      )}
     </motion.div>
   );
 }

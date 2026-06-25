@@ -1407,7 +1407,7 @@ class DouyinUserManager:
                     'message': (resp or {}).get('message') or (resp or {}).get('status_msg') or '获取点赞视频失败，请检查 Cookie 或稍后重试',
                 }
 
-            posts = resp.get('aweme_list', [])
+            posts = resp.get('aweme_list') or []
             next_cursor = resp.get('max_cursor') or resp.get('cursor') or resp.get('min_cursor') or 0
             has_more = resp.get('has_more') in (1, True, '1', 'true', 'True')
             if not posts:
@@ -1719,7 +1719,7 @@ class DouyinUserManager:
                 }
 
             videos = [
-                item for item in (self._build_collection_video_item(post) for post in resp.get('aweme_list', []))
+                item for item in (self._build_collection_video_item(post) for post in (resp.get('aweme_list') or []))
                 if item
             ]
             return {
@@ -1821,7 +1821,7 @@ class DouyinUserManager:
                 }
 
             videos = [
-                item for item in (self._build_collection_video_item(post) for post in resp.get('aweme_list', []))
+                item for item in (self._build_collection_video_item(post) for post in (resp.get('aweme_list') or []))
                 if item
             ]
             return {
