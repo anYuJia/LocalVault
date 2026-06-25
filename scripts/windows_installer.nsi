@@ -2,7 +2,7 @@
 
 ; 定义版本号（由 CI 自动更新）
 !define APP_NAME "better-douyin"
-!define APP_VERSION "1.0.26"
+!define APP_VERSION "1.0.28"
 !define APP_PUBLISHER "anYuJia"
 !define APP_EXE "better-douyin.exe"
 !define APP_GUID "E4F9A7B3-8C2D-4F1E-9A5B-3C7D2E8F1A6B"
