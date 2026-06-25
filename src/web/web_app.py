@@ -1985,7 +1985,13 @@ def get_or_create_loop():
     global _global_loop, _loop_thread
     if _global_loop is None:
         _global_loop = asyncio.new_event_loop()
-        _loop_thread = threading.Thread(target=_global_loop.run_forever, daemon=True)
+        def _run_loop():
+            try:
+                asyncio.set_event_loop(_global_loop)
+            except Exception:
+                pass
+            _global_loop.run_forever()
+        _loop_thread = threading.Thread(target=_run_loop, daemon=True)
         _loop_thread.start()
         logger.info("Global asyncio loop started in background thread")
     return _global_loop
@@ -2620,8 +2626,19 @@ def check_update():
     current_version = _get_current_app_version()
 
     try:
-        metadata = _fetch_updater_metadata()
-        release = None if metadata else _fetch_latest_release()
+        metadata = run_async(asyncio.to_thread(_fetch_updater_metadata))
+        
+        def fetch_release_if_needed():
+            if metadata:
+                return None
+            try:
+                return _fetch_latest_release()
+            except Exception as exc:
+                logger.debug(f"Fetch latest release failed: {exc}")
+                return None
+                
+        release = run_async(asyncio.to_thread(fetch_release_if_needed))
+
         latest_version = _normalize_version_text(
             (metadata or {}).get('version') or
             (release or {}).get('tag_name') or
@@ -2629,7 +2646,7 @@ def check_update():
             ''
         )
         has_update = bool(latest_version) and _is_newer_version(latest_version, current_version)
-        asset = _select_update_asset(release, metadata)
+        asset = _select_update_asset(release or {}, metadata)
 
         return jsonify({
             'success': True,
@@ -2659,8 +2676,19 @@ def check_update():
 def download_update():
     """在应用内下载对应平台的发布资源，并打开安装包或所在目录。"""
     try:
-        metadata = _fetch_updater_metadata()
-        release = None if metadata else _fetch_latest_release()
+        metadata = run_async(asyncio.to_thread(_fetch_updater_metadata))
+        
+        def fetch_release_if_needed():
+            if metadata:
+                return None
+            try:
+                return _fetch_latest_release()
+            except Exception as exc:
+                logger.debug(f"Fetch latest release failed: {exc}")
+                return None
+                
+        release = run_async(asyncio.to_thread(fetch_release_if_needed))
+
         current_version = _get_current_app_version()
         latest_version = _normalize_version_text(
             (metadata or {}).get('version') or
@@ -2674,7 +2702,7 @@ def download_update():
                 'message': '当前已是最新版本'
             }), 409
 
-        asset = _select_update_asset(release, metadata)
+        asset = _select_update_asset(release or {}, metadata)
         download_url = str(asset.get('url') or '')
 
         if not download_url or asset.get('install_mode') == 'browser':
