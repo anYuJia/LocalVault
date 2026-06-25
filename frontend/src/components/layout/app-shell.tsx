@@ -39,7 +39,7 @@ export function AppShell() {
           className="pywebview-drag-region absolute left-0 right-[132px] top-0 z-30 h-6 pointer-events-auto"
           style={{ WebkitAppRegion: "drag" } as React.CSSProperties & { WebkitAppRegion: string }}
         />
-        <div ref={scrollRef} className="flex-1 overflow-x-hidden overflow-y-auto">
+        <div ref={scrollRef} className="flex-1 overflow-x-hidden overflow-y-auto pb-16">
           <AnimatePresence initial={false} mode="wait">
             {renderView(currentView)}
           </AnimatePresence>

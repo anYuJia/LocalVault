@@ -51,13 +51,16 @@ export function BottomBar() {
 
   return (
     <motion.div
-      className="bg-background shadow-[0_-18px_42px_rgba(0,0,0,0.18)] shrink-0"
-      animate={{ height: expanded ? "var(--bottombar-expanded)" : "var(--bottombar-height)" }}
+      className="absolute bottom-4 right-4 z-40 bg-background/95 backdrop-blur shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-border/80 rounded-xl flex flex-col overflow-hidden"
+      animate={{
+        height: expanded ? 320 : 42,
+        width: expanded ? 400 : 230,
+      }}
       transition={{ type: "spring", stiffness: 350, damping: 30 }}
     >
       {/* Header */}
       <div
-        className="flex items-center justify-end h-[var(--bottombar-height)] px-3 cursor-pointer select-none gap-2"
+        className="flex items-center justify-end h-[42px] px-3 cursor-pointer select-none gap-2 border-b border-border/10"
         onClick={toggleExpanded}
       >
         <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
@@ -115,7 +118,7 @@ export function BottomBar() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="px-3 pb-2 h-[calc(var(--bottombar-expanded)-var(--bottombar-height))] overflow-hidden"
+            className="px-3 pb-2 flex-1 overflow-hidden"
           >
             {/* Progress Panel */}
             {activeTab === "progress" && (
