@@ -4213,10 +4213,31 @@ def get_friend_online_status_api():
                 'message': _api_message(auto_response, '没有获取到 IM 好友关系；Cookie 可用，但 spotlight relation 没有返回可用 sec_user_id。'),
             })
 
+        # Fallback: spotlight 返回空时，用关注列表补全（与 Rust 版本一致）
+        if not sec_user_ids:
+            current_user, cu_success = run_async(api.get_current_user())
+            if cu_success and isinstance(current_user, dict):
+                uid = str(current_user.get('uid') or '').strip()
+                cu_sec_uid = str(current_user.get('sec_uid') or '').strip()
+                if uid and cu_sec_uid:
+                    include_all = bool(getattr(Config, 'IM_FRIEND_INCLUDE_ALL_USERS', False))
+                    following_ids, fw_success, _ = run_async(
+                        api.get_following_sec_user_ids(uid, cu_sec_uid, 500, not include_all)
+                    )
+                    if fw_success and following_ids:
+                        sec_user_ids = Config.normalize_sec_user_ids(following_ids)
+                        merged = Config.normalize_sec_user_ids([
+                            *getattr(Config, 'IM_FRIEND_SEC_USER_IDS', []),
+                            *sec_user_ids,
+                        ])
+                        if merged != getattr(Config, 'IM_FRIEND_SEC_USER_IDS', []):
+                            _save_im_friend_cache(merged)
+                        sec_user_ids = merged
+
         if not sec_user_ids:
             return jsonify({
                 'success': False,
-                'message': '没有获取到 IM 好友关系；Cookie 可用，但 spotlight relation 没有返回可用 sec_user_id。',
+                'message': '没有获取到 IM 好友关系；Cookie 可用，但 spotlight relation 和关注列表都没有返回可用 sec_user_id。',
             })
 
         user_info_data = []

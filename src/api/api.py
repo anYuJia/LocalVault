@@ -1085,7 +1085,8 @@ class DouyinAPI:
                     ids.append(value)
                     return
 
-        for item in response.get('followings') or []:
+        followings = response.get('followings') or []
+        for item in followings:
             if not isinstance(item, dict):
                 continue
             is_mutual = int(item.get('follow_status') or 0) > 0 and int(item.get('follower_status') or 0) > 0
@@ -1269,6 +1270,55 @@ class DouyinAPI:
         if not success:
             return [], False, response
         return self._collect_spotlight_sec_user_ids(response, include_all_users, limit), True, response
+
+    async def get_following_sec_user_ids(self, user_id: str, sec_uid: str, limit: int = 500, mutual_only: bool = False) -> tuple[list[str], bool, dict]:
+        """获取关注列表的 sec_user_id，作为 spotlight relation 的 fallback。"""
+        ids: list[str] = []
+        seen: set[str] = set()
+        max_time = "0"
+        for _ in range(20):
+            params = {
+                "user_id": user_id,
+                "sec_user_id": sec_uid,
+                "count": "100",
+                "max_time": max_time,
+                "min_time": "0",
+                "source_type": "1",
+            }
+            resp, success = await self.common_request(
+                '/aweme/v1/web/user/following/list/',
+                params,
+                {'Referer': 'https://www.douyin.com/'},
+                skip_sign=True,
+            )
+            if not success:
+                return ids, False, resp
+
+            for item in resp.get('followings') or resp.get('user_list') or resp.get('data') or []:
+                if not isinstance(item, dict):
+                    continue
+                if mutual_only and int(item.get('follower_status') or 0) <= 0:
+                    continue
+                sec = str(item.get('sec_uid') or item.get('sec_user_id') or '').strip()
+                if sec and sec not in seen:
+                    seen.add(sec)
+                    ids.append(sec)
+                    if len(ids) >= limit:
+                        return ids, True, resp
+
+            has_more = resp.get('has_more')
+            if isinstance(has_more, bool) and not has_more:
+                break
+            if isinstance(has_more, (int, str)) and str(has_more) != '1':
+                break
+
+            next_max_time = resp.get('max_time')
+            next_max_time = str(next_max_time) if next_max_time is not None else ''
+            if not next_max_time or next_max_time == max_time:
+                break
+            max_time = next_max_time
+
+        return ids, True, {}
 
     async def get_im_share_friends(self, limit: int = 50) -> tuple[dict, bool]:
         safe_limit = max(1, min(int(limit or 50), 100))
