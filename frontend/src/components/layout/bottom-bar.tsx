@@ -44,6 +44,21 @@ export function BottomBar() {
     viewport.scrollTo({ top: viewport.scrollHeight, behavior });
   }, []);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setExpanded(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [expanded, setExpanded]);
+
   useEffect(() => {
     if (!expanded || activeTab !== "logs") return;
     scrollLogsToBottom("auto");
@@ -51,6 +66,7 @@ export function BottomBar() {
 
   return (
     <motion.div
+      ref={containerRef}
       className="absolute bottom-4 right-4 z-40 bg-background/95 backdrop-blur shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-border/80 rounded-xl flex flex-col overflow-hidden"
       animate={{
         height: expanded ? 320 : 42,

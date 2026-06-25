@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAppStore, useDownloadStore } from "@/stores/app-store";
 import type { ViewType } from "@/types";
 import { Badge } from "@/components/ui/badge";
-import { getAccounts, type AccountInfo } from "@/lib/tauri";
+import { getAccounts, switchAccount, initClient, type AccountInfo } from "@/lib/tauri";
+import { useToast } from "@/components/ui/toast";
 import {
   Home,
   Search,
@@ -16,7 +17,7 @@ import {
   Circle,
   Users,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -51,34 +52,57 @@ const itemVariants = {
 };
 
 export function Sidebar() {
+  const toast = useToast();
   const currentView = useAppStore((s) => s.currentView);
   const setView = useAppStore((s) => s.setView);
   const cookieLoggedIn = useAppStore((s) => s.cookieLoggedIn);
   const friendUnreadCount = useAppStore((s) => s.friendUnreadCount);
   const activeCount = useDownloadStore((s) => s.activeCount);
   const [activeAccount, setActiveAccount] = useState<AccountInfo | null>(null);
+  const [accounts, setAccounts] = useState<AccountInfo[]>([]);
+  const [showUserPopover, setShowUserPopover] = useState(false);
+  const hoverTimerRef = useRef<any>(null);
 
-  useEffect(() => {
-    let active = true;
-    const fetchActiveAccount = async () => {
-      try {
-        const res = await getAccounts();
-        if (active && res.success && res.current_sec_uid) {
+  const fetchActiveAccount = useCallback(async () => {
+    try {
+      const res = await getAccounts();
+      if (res.success) {
+        setAccounts(res.accounts || []);
+        if (res.current_sec_uid) {
           const activeAcc = res.accounts?.find((a) => a.sec_uid === res.current_sec_uid);
-          if (activeAcc) {
-            setActiveAccount(activeAcc);
-          } else {
-            setActiveAccount(null);
-          }
+          setActiveAccount(activeAcc || null);
         } else {
           setActiveAccount(null);
         }
-      } catch (e) {
-        console.error("加载边栏头像失败", e);
+      } else {
+        setActiveAccount(null);
+        setAccounts([]);
       }
-    };
+    } catch (e) {
+      console.error("加载边栏头像失败", e);
+    }
+  }, []);
+
+  useEffect(() => {
     void fetchActiveAccount();
-  }, [currentView, cookieLoggedIn]);
+  }, [currentView, cookieLoggedIn, fetchActiveAccount]);
+
+  const handleMouseEnter = () => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setShowUserPopover(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+    }
+    hoverTimerRef.current = setTimeout(() => {
+      setShowUserPopover(false);
+    }, 200);
+  };
 
   const handleNavClick = (item: NavItem) => {
     setView(item.id);
@@ -159,7 +183,89 @@ export function Sidebar() {
       </motion.nav>
 
       {/* Status — pinned to bottom */}
-      <div className="px-3 py-3">
+      <div
+        className="relative px-3 py-3"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <AnimatePresence>
+          {showUserPopover && (
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+              className="absolute bottom-[calc(100%-4px)] left-3 w-[220px] max-lg:left-[76px] max-lg:bottom-3 z-50 bg-background/95 backdrop-blur shadow-[0_10px_30px_rgba(0,0,0,0.15)] border border-border/80 rounded-xl p-2 flex flex-col gap-1 overflow-hidden pointer-events-auto"
+            >
+              <div className="px-2 py-1 text-[10px] font-bold text-text-muted border-b border-border/10 mb-1">
+                切换账号
+              </div>
+              {accounts.length === 0 ? (
+                <div className="text-[11px] text-text-muted text-center py-2">
+                  无其他账号
+                </div>
+              ) : (
+                <div className="max-h-[200px] overflow-y-auto flex flex-col gap-0.5">
+                  {accounts.map((acc) => {
+                    const isActive = activeAccount?.sec_uid === acc.sec_uid;
+                    const isValid = acc.is_valid !== false; // if undefined or true, it's valid
+                    return (
+                      <button
+                        key={acc.sec_uid}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (isActive) return;
+                          try {
+                            const res = await switchAccount(acc.sec_uid);
+                            if (res.success) {
+                              toast.success(`已切换为: ${res.nickname}`, "切换成功");
+                              useAppStore.getState().setCookieLoggedIn(true, res.nickname);
+                              await initClient().catch(() => {});
+                              await fetchActiveAccount();
+                            } else {
+                              toast.error(res.message, "切换失败");
+                            }
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : "切换失败", "错误");
+                          }
+                        }}
+                        className={cn(
+                          "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors cursor-pointer",
+                          isActive
+                            ? "bg-accent-soft text-accent"
+                            : "hover:bg-surface-raised text-text"
+                        )}
+                      >
+                        {/* Avatar */}
+                        <div className="w-6 h-6 rounded-full overflow-hidden flex items-center justify-center border border-border shrink-0">
+                          {acc.avatar_thumb ? (
+                            <img src={acc.avatar_thumb} alt={acc.nickname} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full bg-accent-soft text-accent text-[9px] font-bold flex items-center justify-center">
+                              {acc.nickname.slice(0, 1).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        {/* Name & Validity */}
+                        <div className="flex-1 flex items-center justify-between min-w-0">
+                          <span className="text-[11px] font-semibold truncate">
+                            {acc.nickname}
+                          </span>
+                          {!isValid && (
+                            <span className="text-[9px] font-semibold px-1 py-0.5 rounded bg-danger-soft text-danger shrink-0 scale-90 origin-right">
+                              无效
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <button
           onClick={() => setView("settings")}
           className="flex h-[48px] w-full items-center gap-3 rounded-[14px] hover:bg-surface-raised active:scale-95 px-3 transition-[background-color,transform] cursor-pointer max-lg:justify-center max-lg:px-0"
