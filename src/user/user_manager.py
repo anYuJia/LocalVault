@@ -1622,6 +1622,37 @@ class DouyinUserManager:
             'message': '点赞成功' if liked else '已取消点赞',
         }
 
+    async def set_user_followed(self, user_id: str, follow: bool) -> dict:
+        """关注或取消关注用户。"""
+        user_id = str(user_id or '').strip()
+        if not user_id:
+            return {'_error': True, 'message': '用户ID不能为空'}
+
+        resp, success = await self.api.signed_form_action_request(
+            '/aweme/v1/web/commit/follow/user/',
+            {
+                'type': '1' if follow else '0',
+                'user_id': user_id,
+            },
+            {
+                'Referer': 'https://www.douyin.com/',
+                'Origin': 'https://www.douyin.com',
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            },
+            host='https://www-hj.douyin.com',
+        )
+
+        if not success:
+            return resp if isinstance(resp, dict) else {'_error': True, 'message': '关注失败'}
+
+        return {
+            'success': True,
+            'user_id': user_id,
+            'is_follow': follow,
+            'raw': resp,
+            'message': '关注成功' if follow else '已取消关注',
+        }
+
     async def set_video_collected(self, aweme_id: str, collected: bool) -> dict:
         """收藏或取消收藏作品。"""
         aweme_id = str(aweme_id or '').strip()

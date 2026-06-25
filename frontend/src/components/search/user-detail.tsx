@@ -7,12 +7,15 @@ import {
   Search,
   Sparkles,
   User,
+  UserCheck,
+  UserPlus,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppStore, useDownloadStore, useLogStore } from "@/stores/app-store";
 import { useSearchStore } from "@/stores/search-store";
-import { downloadUserVideos, mediaProxyUrl, type UserInfo } from "@/lib/tauri";
+import { useToastStore } from "@/components/ui/toast";
+import { downloadUserVideos, mediaProxyUrl, setUserFollowed, type UserInfo } from "@/lib/tauri";
 import { formatNumber } from "@/lib/utils";
 
 export function UserDetail() {
@@ -235,12 +238,53 @@ interface UserDetailCardProps {
 }
 
 export function UserDetailCard({ user, busy, onDownloadAll, onViewVideos }: UserDetailCardProps) {
+  const addLog = useLogStore((s) => s.addLog);
+  const toast = useToastStore.getState().toast;
+  const [following, setFollowing] = useState(Boolean(user.is_follow));
+  const [followLoading, setFollowLoading] = useState(false);
+
+  // Sync local state when user prop changes (e.g. switching users)
+  useEffect(() => {
+    setFollowing(Boolean(user.is_follow));
+  }, [user.uid, user.sec_uid, user.is_follow]);
+
   const stats = [
     { label: "作品", value: user.aweme_count || 0 },
     { label: "粉丝", value: user.follower_count || 0 },
     { label: "关注", value: user.following_count || 0 },
     { label: "获赞", value: user.total_favorited || 0 },
   ];
+
+  const handleFollow = async () => {
+    if (!user.uid || followLoading) return;
+    const nextFollow = !following;
+    setFollowLoading(true);
+    // Optimistic update
+    setFollowing(nextFollow);
+    try {
+      const result = await setUserFollowed(user.uid, nextFollow);
+      if (!result.success) {
+        // Revert on failure
+        setFollowing(!nextFollow);
+        addLog(result.message || "关注失败", "error");
+        toast(result.message || "关注失败", "error");
+        return;
+      }
+      // Update store so the state persists across navigation
+      const current = useSearchStore.getState().currentUser;
+      if (current && (current.uid === user.uid || current.sec_uid === user.sec_uid)) {
+        useSearchStore.setState({ currentUser: { ...current, is_follow: nextFollow } });
+      }
+      addLog(result.message || (nextFollow ? "关注成功" : "已取消关注"), "success");
+    } catch (error) {
+      setFollowing(!nextFollow);
+      const msg = error instanceof Error ? error.message : "关注失败";
+      addLog(msg, "error");
+      toast(msg, "error");
+    } finally {
+      setFollowLoading(false);
+    }
+  };
 
   return (
     <motion.div
@@ -259,9 +303,29 @@ export function UserDetailCard({ user, busy, onDownloadAll, onViewVideos }: User
           <h3 className="text-[1.2rem] font-[780] tracking-tight text-text mb-1.5">
             {user.nickname}
           </h3>
-          <span className="inline-flex max-w-full items-center rounded-full border border-border bg-background-soft/70 px-2.5 py-1 text-[0.72rem] font-mono text-text-secondary">
-            <span className="truncate">@{user.unique_id || user.sec_uid}</span>
-          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex max-w-full items-center rounded-full border border-border bg-background-soft/70 px-2.5 py-1 text-[0.72rem] font-mono text-text-secondary">
+              <span className="truncate">@{user.unique_id || user.sec_uid}</span>
+            </span>
+            {user.uid && (
+              <Button
+                variant={following ? "outline" : "default"}
+                size="sm"
+                disabled={followLoading || busy}
+                onClick={handleFollow}
+                className="h-7 gap-1.5 rounded-full px-3 text-[0.72rem] font-semibold"
+              >
+                {followLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : following ? (
+                  <UserCheck className="w-3.5 h-3.5" />
+                ) : (
+                  <UserPlus className="w-3.5 h-3.5" />
+                )}
+                {following ? "已关注" : "关注"}
+              </Button>
+            )}
+          </div>
           {user.signature && (
             <p className="text-[0.8rem] text-text-secondary mt-2 line-clamp-2 leading-relaxed">
               {user.signature}

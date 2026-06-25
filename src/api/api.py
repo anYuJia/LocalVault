@@ -797,6 +797,7 @@ class DouyinAPI:
             'aweme/v1/web/commit/item/digg' in uri
             or 'aweme/v1/web/aweme/collect' in uri
             or 'aweme/v1/web/comment/digg' in uri
+            or 'aweme/v1/web/commit/follow/user' in uri
         ):
             query_params.update({
                 'update_version_code': '170400',
@@ -824,6 +825,7 @@ class DouyinAPI:
             'aweme/v1/web/commit/item/digg' in uri
             or 'aweme/v1/web/aweme/collect' in uri
             or 'aweme/v1/web/comment/digg' in uri
+            or 'aweme/v1/web/commit/follow/user' in uri
         )
         dtrait = self._relation_dtrait()
         if is_relation_action and not dtrait:

@@ -5486,6 +5486,47 @@ def set_video_collected_api():
         logger.error(f'设置收藏状态异常: {str(e)}', exc_info=True)
         return jsonify({'success': False, 'message': f'收藏失败: {str(e)}'}), 500
 
+@app.route('/api/user_follow', methods=['POST'])
+def set_user_followed_api():
+    """关注或取消关注用户"""
+    try:
+        data = _request_json()
+        user_id = str(data.get('user_id') or data.get('uid') or '').strip()
+        follow = _coerce_bool(data.get('follow'), False)
+
+        if not user_id:
+            return jsonify({'success': False, 'message': '用户ID不能为空'}), 400
+        if not user_manager:
+            return jsonify({'success': False, 'message': '请先设置Cookie'}), 400
+
+        result = run_async(user_manager.set_user_followed(user_id, follow))
+        if isinstance(result, dict):
+            if result.get('_security_blocked'):
+                return jsonify({
+                    'success': False,
+                    'security_blocked': True,
+                    'message': _api_message(result, '关注被抖音安全校验拒绝，请稍后重试'),
+                })
+            if result.get('_need_verify'):
+                return jsonify(_verify_error_response(result, '关注失败，请完成验证后重试'))
+            if result.get('_need_login'):
+                return jsonify(_login_error_response(result))
+            if result.get('_error') or result.get('status_code', 0) not in (0, None):
+                return jsonify({
+                    'success': False,
+                    'message': _api_message(result, '关注失败，请检查 Cookie 或稍后重试'),
+                })
+
+        return jsonify({
+            'success': True,
+            'user_id': user_id,
+            'is_follow': follow,
+            'message': '关注成功' if follow else '已取消关注',
+        })
+    except Exception as e:
+        logger.error(f'设置关注状态异常: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'message': f'关注失败: {str(e)}'}), 500
+
 @app.route('/api/parse_link', methods=['POST'])
 def parse_link():
     """解析抖音链接"""
