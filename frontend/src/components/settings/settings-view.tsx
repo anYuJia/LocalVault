@@ -1452,11 +1452,11 @@ export function SettingsView() {
                             </div>
                           </div>
                         </div>
-                        <div className="w-[124px] h-[124px] rounded-[10px] bg-white p-1.5 flex items-center justify-center shrink-0 shadow-lg border border-white/10">
+                        <div className="w-[180px] rounded-[10px] bg-white p-1 flex items-center justify-center shrink-0 shadow-lg border border-white/10">
                           <img
                             src="/qq-group.jpg"
                             alt="QQ群二维码"
-                            className="w-full h-full object-contain rounded-[6px]"
+                            className="w-full h-auto object-contain rounded-[6px]"
                           />
                         </div>
                       </div>
