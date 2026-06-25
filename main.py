@@ -178,7 +178,7 @@ if __name__ == '__main__':
 
     window_api = WindowAPI()
     window_options = {}
-    if sys.platform in ('darwin', 'win32'):
+    if sys.platform == 'darwin':
         window_options['frameless'] = True
 
     # 创建pywebview窗口
