@@ -232,6 +232,11 @@ def react_assets(filename: str):
 def default_cover():
     return send_frontend_asset('default-cover.svg', 'image/svg+xml')
 
+
+@app.route('/qq-group.jpg')
+def qq_group():
+    return send_frontend_asset('qq-group.jpg', 'image/jpeg')
+
 # 全局 Loop 处理
 _global_loop = None
 _loop_thread = None
