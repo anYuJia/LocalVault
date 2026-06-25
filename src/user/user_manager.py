@@ -807,27 +807,18 @@ class DouyinUserManager:
         """
         if self.debug_mode:
             print(f"\033[94m[UserManager] 开始搜索用户: {keyword}\033[0m")
-        else:
-            print(f"\033[94m开始搜索用户: {keyword}\033[0m")
         
         # 处理URL输入的情况
         if "https" in keyword:
+            user_id = keyword.split("/")[-1].split("?")[0]
             if self.debug_mode:
-                print(f"\033[93m[UserManager] 检测到URL输入，提取用户ID\033[0m")
-                user_id = keyword.split("/")[-1].split("?")[0]
-                print(f"\033[93m[UserManager] 提取的用户ID: {user_id}\033[0m")
-            else:
-                print(f"\033[93m检测到URL输入，提取用户ID\033[0m")
-                user_id = keyword.split("/")[-1].split("?")[0]
-                print(f"\033[93m提取的用户ID: {user_id}\033[0m")
+                print(f"\033[93m[UserManager] 检测到URL输入，提取用户ID: {user_id}\033[0m")
             return {"sec_uid": user_id}
         
         # 处理抖音号搜索
         if keyword.startswith("@") or any(c.isdigit() for c in keyword):
             if self.debug_mode:
                 print(f"\033[93m[UserManager] 检测到抖音号或包含数字的关键词，使用精确搜索\033[0m")
-            else:
-                print(f"\033[93m检测到抖音号或包含数字的关键词，使用精确搜索\033[0m")
                 
             params = {
                 "keyword": keyword,
@@ -848,8 +839,6 @@ class DouyinUserManager:
             
             if self.debug_mode:
                 print(f"\033[93m[UserManager] 发送抖音号搜索请求\033[0m")
-            else:
-                print(f"\033[93m发送抖音号搜索请求\033[0m")
                 
             # 不再直接传递cookie，让API类处理cookie
             resp, succ = await self.api.common_request('/aweme/v1/web/discover/search/',
@@ -862,29 +851,21 @@ class DouyinUserManager:
                     user_list = await self._enrich_search_users(user_list)
                     if self.debug_mode:
                         print(f"\033[92m[UserManager] 搜索成功，找到用户\033[0m")
-                    else:
-                        print(f"\033[92m搜索成功，找到用户\033[0m")
                     return user_list[0].get('user_info', user_list[0])  # 直接返回用户信息
                 else:
                     if self.debug_mode:
                         print(f"\033[91m[UserManager] 搜索成功但未找到用户，响应: {resp}\033[0m")
-                    else:
-                        print(f"\033[91m搜索成功但未找到用户，响应: {resp}\033[0m")
             else:
                 # 传递验证码信号
                 if resp.get('_need_verify') or resp.get('_need_login'):
                     return resp
                 if self.debug_mode:
                     print(f"\033[91m[UserManager] 搜索失败\033[0m")
-                else:
-                    print(f"\033[91m搜索失败\033[0m")
             return None
             
         # 关键词搜索
         if self.debug_mode:
             print(f"\033[93m[UserManager] 使用关键词搜索: {keyword}\033[0m")
-        else:
-            print(f"\033[93m使用关键词搜索: {keyword}\033[0m")
             
         params = {
             "keyword": keyword,
@@ -905,8 +886,6 @@ class DouyinUserManager:
         
         if self.debug_mode:
             print(f"\033[93m[UserManager] 发送关键词搜索请求\033[0m")
-        else:
-            print(f"\033[93m发送关键词搜索请求\033[0m")
 
         resp, succ = await self.api.common_request('/aweme/v1/web/discover/search/',
                                                  params,
@@ -919,15 +898,11 @@ class DouyinUserManager:
                 return resp
             if self.debug_mode:
                 print(f"\033[91m[UserManager] 关键词搜索失败或未找到用户\033[0m")
-            else:
-                print(f"\033[91m关键词搜索失败或未找到用户\033[0m")
             return None
         user_list = await self._enrich_search_users(user_list)
         
         if self.debug_mode:
             print(f"\033[92m[UserManager] 关键词搜索成功，找到 {len(user_list)} 个用户\033[0m")
-        else:
-            print(f"\033[92m关键词搜索成功，找到 {len(user_list)} 个用户\033[0m")
         return user_list if user_list else None
 
     def _extract_search_user_items(self, resp: dict) -> list[dict]:
@@ -1173,16 +1148,15 @@ class DouyinUserManager:
                     async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
                         async with session.get(share_link, allow_redirects=False) as response:
                             if response.status in [301, 302]:
-                                # print("aaaaaaaaa",response.headers)
                                 real_url = response.headers.get('Location', '')
                                 if real_url:
                                     share_link = real_url
                 except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                    print("aaaaaaaaa",e)
                     if self.debug_mode:
                         print(f"\033[93m[UserManager] 获取重定向链接失败: {str(e)}，使用原链接\033[0m")
                     # 如果重定向失败，继续使用原链接
-            print(f"重定向后的URL: {share_link}")
+            if self.debug_mode:
+                print(f"\033[94m[UserManager] 重定向后的URL: {share_link}\033[0m")
             # 从链接中提取视频ID
             aweme_id_match = re.search(r'/video/(\d+)', share_link)
             if not aweme_id_match:
@@ -1195,7 +1169,8 @@ class DouyinUserManager:
                 return None
                 
             aweme_id = aweme_id_match.group(1)
-            print(f"提取的视频ID: {aweme_id}")
+            if self.debug_mode:
+                print(f"\033[94m[UserManager] 提取的视频ID: {aweme_id}\033[0m")
             # 尝试获取完整详情
             detail = await self.get_video_detail(aweme_id)
             if detail:

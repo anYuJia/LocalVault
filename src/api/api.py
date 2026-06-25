@@ -679,11 +679,6 @@ class DouyinAPI:
                 'message': f'网络请求失败: {e}',
             }, False
         if self.debug_mode:
-            print(f'[DEBUG] response.status_code={response.status_code}, len(response.content)={len(response.content)}, len(response.text)={len(response.text)}')
-            sys.stderr.write(f'*** [API] 普通请求响应：status={response.status_code}, content_len={len(response.content)} ***\n')
-            sys.stderr.flush()
-        
-        if self.debug_mode:
             print(f'\033[94m[API] 响应状态码: {response.status_code}\033[0m')
             print(f'\033[94m[API] 响应内容长度: {len(response.text)}, 前500字符: {response.text[:500]}\033[0m')
 
@@ -867,7 +862,7 @@ class DouyinAPI:
             signer_present = isinstance(Config.RELATION_SIGNER, dict)
         except Exception:
             signer_present = False
-        logger.info(
+        logger.debug(
             'Douyin relation action request: path=%s query_keys=%s uid_present=%s uid_prefix=%s body_keys=%s signer_present=%s ticket_guard_cookie=%s ticket_guard_header=%s csrf_present=%s dtrait_present=%s',
             uri,
             ','.join(sorted(query_params.keys())),
@@ -942,7 +937,7 @@ class DouyinAPI:
                 'message': f'JSON解析失败: {e}',
             }, False
 
-        logger.info(
+        logger.debug(
             'Douyin relation action response: path=%s status_code=%s status_msg=%s',
             uri,
             json_response.get('status_code', 0),

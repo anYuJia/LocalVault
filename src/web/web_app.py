@@ -6654,7 +6654,7 @@ def get_recommended_feed():
             })
 
         # 直接调用 DouyinAPI，与其他接口保持一致
-        logger.info(f"[推荐视频] 请求 {count} 个视频, feed_type={feed_type}, cursor={cursor}")
+        logger.debug(f"[推荐视频] 请求 {count} 个视频, feed_type={feed_type}, cursor={cursor}")
 
         async def fetch_recommended():
             resp, success = await api.get_recommended_feed(count, cursor, feed_type)
@@ -6675,7 +6675,7 @@ def get_recommended_feed():
             })
 
         aweme_list = resp.get('aweme_list', [])
-        logger.info(f"[推荐视频] API 返回 {len(aweme_list)} 个视频")
+        logger.debug(f"[推荐视频] API 返回 {len(aweme_list)} 个视频")
 
         # 格式化视频信息
         videos = []
@@ -6785,7 +6785,7 @@ def get_recommended_feed():
                 logger.error(traceback.format_exc())
                 continue
 
-        logger.info(f"[推荐视频] 返回 {len(videos)} 个有效视频, 跳过 {skipped_count} 个无效视频")
+        logger.debug(f"[推荐视频] 返回 {len(videos)} 个有效视频, 跳过 {skipped_count} 个无效视频")
 
         has_more = resp.get('has_more', False)
         has_more_bool = has_more == 1 or has_more is True
