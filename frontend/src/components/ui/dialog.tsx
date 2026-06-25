@@ -39,6 +39,7 @@ const DialogContent = React.forwardRef<
         "duration-200 ease-[var(--ease-spring)]",
         "data-[state=open]:opacity-100 data-[state=open]:scale-100",
         "data-[state=closed]:opacity-0 data-[state=closed]:scale-95",
+        "outline-none focus:outline-none focus-visible:outline-none",
         className
       )}
       {...props}

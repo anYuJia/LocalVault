@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useAppStore, useLogStore } from "@/stores/app-store";
+import { useAppStore, useLogStore, useAlertStore } from "@/stores/app-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -103,6 +103,7 @@ export function SettingsView() {
   const setCookieLoggedIn = useAppStore((s) => s.setCookieLoggedIn);
   const addLog = useLogStore((s) => s.addLog);
   const toast = useToast();
+  const showAlert = useAlertStore((s) => s.showAlert);
 
   // Browser login flow state
   const [loginStatus, setLoginStatus] = useState<LoginStatus>("idle");
@@ -285,7 +286,7 @@ export function SettingsView() {
     };
   }, []);
 
-  const startLogin = async () => {
+  const startLogin = async (cookie?: string) => {
     setLoginStatus("starting");
     setLoginMessage("正在启动浏览器...");
 
@@ -350,7 +351,7 @@ export function SettingsView() {
         }
       });
 
-      await cookieBrowserLogin(300, browserType);
+      await cookieBrowserLogin(300, browserType, cookie);
     } catch (e) {
       cleanup();
       setLoginStatus("error");
@@ -857,6 +858,7 @@ export function SettingsView() {
                       <div className="grid gap-2">
                         {accounts.map((acc) => {
                           const isActive = acc.sec_uid === currentSecUid;
+                          const isExpired = acc.is_valid === false;
                           return (
                             <div
                               key={acc.sec_uid}
@@ -880,53 +882,76 @@ export function SettingsView() {
                                       当前激活
                                     </span>
                                   )}
+                                  {isExpired && (
+                                    <span className="px-1.5 py-0.5 rounded-[4px] bg-danger/15 text-danger text-[0.58rem] font-bold">
+                                      已失效
+                                    </span>
+                                  )}
                                 </div>
                                 <span className="text-[0.62rem] text-text-muted truncate block font-mono">
                                   ID: {acc.sec_uid.substring(0, 15)}...
                                 </span>
                               </div>
                               <div className="flex items-center gap-1">
-                                {!isActive && (
+                                {isExpired ? (
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={async () => {
-                                      try {
-                                        const res = await switchAccount(acc.sec_uid);
-                                        if (res.success) {
-                                          toast.success(`已切换为: ${res.nickname}`, "切换成功");
-                                          await loadAccounts();
-                                          await initClient().catch(() => {});
-                                        } else {
-                                          toast.error(res.message, "切换失败");
-                                        }
-                                      } catch (e) {
-                                        toast.error(e instanceof Error ? e.message : "切换失败", "错误");
-                                      }
-                                    }}
-                                    className="h-7 rounded-[6px] text-[0.72rem] font-semibold px-2 hover:bg-accent/10 hover:text-accent cursor-pointer"
+                                    onClick={() => startLogin(acc.cookie)}
+                                    className="h-7 rounded-[6px] text-[0.72rem] font-semibold px-2 hover:bg-danger/10 hover:text-danger text-danger cursor-pointer animate-pulse"
                                   >
-                                    切换
+                                    重新登录
                                   </Button>
+                                ) : (
+                                  !isActive && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={async () => {
+                                        try {
+                                          const res = await switchAccount(acc.sec_uid);
+                                          if (res.success) {
+                                            toast.success(`已切换为: ${res.nickname}`, "切换成功");
+                                            await loadAccounts();
+                                            await initClient().catch(() => {});
+                                          } else {
+                                            toast.error(res.message, "切换失败");
+                                          }
+                                        } catch (e) {
+                                          toast.error(e instanceof Error ? e.message : "切换失败", "错误");
+                                        }
+                                      }}
+                                      className="h-7 rounded-[6px] text-[0.72rem] font-semibold px-2 hover:bg-accent/10 hover:text-accent cursor-pointer"
+                                    >
+                                      切换
+                                    </Button>
+                                  )
                                 )}
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={async () => {
-                                    if (confirm(`确定要注销并删除账号「${acc.nickname}」吗？`)) {
-                                      try {
-                                        const res = await deleteAccount(acc.sec_uid);
-                                        if (res.success) {
-                                          toast.success("账号已删除", "注销成功");
-                                          await loadAccounts();
-                                          await initClient().catch(() => {});
-                                        } else {
-                                          toast.error(res.message, "注销失败");
+                                  onClick={() => {
+                                    showAlert({
+                                      title: "注销并删除账号",
+                                      variant: "danger",
+                                      description: `确定要注销并删除账号「${acc.nickname}」吗？`,
+                                      actionLabel: "确定注销",
+                                      cancelLabel: "取消",
+                                      onAction: async () => {
+                                        try {
+                                          const res = await deleteAccount(acc.sec_uid);
+                                          if (res.success) {
+                                            toast.success("账号已删除", "注销成功");
+                                            await loadAccounts();
+                                            await initClient().catch(() => {});
+                                          } else {
+                                            toast.error(res.message, "注销失败");
+                                          }
+                                        } catch (e) {
+                                          toast.error(e instanceof Error ? e.message : "删除失败", "错误");
                                         }
-                                      } catch (e) {
-                                        toast.error(e instanceof Error ? e.message : "删除失败", "错误");
                                       }
-                                    }
+                                    });
                                   }}
                                   className="w-7 h-7 rounded-[6px] text-text-muted hover:text-danger hover:bg-danger/10 cursor-pointer"
                                 >
@@ -965,7 +990,7 @@ export function SettingsView() {
                         </div>
 
                         <Button
-                          onClick={startLogin}
+                          onClick={() => startLogin()}
                           className="w-full h-9 rounded-[8px] text-[0.78rem] font-bold gap-1.5 cursor-pointer"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />

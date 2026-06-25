@@ -2412,10 +2412,34 @@ def get_app_version():
 @app.route('/api/accounts', methods=['GET'])
 def get_accounts():
     """获取所有账号信息"""
+    accounts = getattr(Config, 'ACCOUNTS', [])
+    current_sec_uid = getattr(Config, 'CURRENT_SEC_UID', '')
+    
+    verified_accounts = []
+    if accounts:
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(accounts))) as executor:
+            futures = {executor.submit(_verify_native_cookie_login, acc.get('cookie', '')): acc for acc in accounts}
+            for future in concurrent.futures.as_completed(futures):
+                acc = futures[future]
+                try:
+                    res = future.result()
+                    is_valid = res.get('success', False)
+                except Exception:
+                    is_valid = False
+                verified_accounts.append({
+                    **acc,
+                    'is_valid': is_valid
+                })
+        # Restore original order
+        verified_accounts.sort(key=lambda x: next((i for i, a in enumerate(accounts) if a.get('sec_uid') == x.get('sec_uid')), 0))
+    else:
+        verified_accounts = []
+
     return jsonify({
         'success': True,
-        'accounts': getattr(Config, 'ACCOUNTS', []),
-        'current_sec_uid': getattr(Config, 'CURRENT_SEC_UID', ''),
+        'accounts': verified_accounts,
+        'current_sec_uid': current_sec_uid,
     })
 
 
@@ -6126,7 +6150,7 @@ def _save_cookie_login_success(
         logger.debug(f"Failed to trigger login_success report: {e}")
 
 
-def _start_native_cookie_login(timeout: int) -> tuple[bool, str]:
+def _start_native_cookie_login(timeout: int, old_cookie: str = None) -> tuple[bool, str]:
     global _native_cookie_login_session
 
     if not is_native_cookie_login_available():
@@ -6137,6 +6161,9 @@ def _start_native_cookie_login(timeout: int) -> tuple[bool, str]:
     except Exception as error:
         logger.warning('创建原生登录窗口失败，将回退其他方案: %s', error)
         return False, str(error)
+
+    if old_cookie:
+        apply_cookie_to_window(login_window, old_cookie, reload_after_apply=True, force=True, post_load_delay=0.5)
 
     session = NativeCookieLoginSession(window=login_window)
     _native_cookie_login_session = session
@@ -6326,8 +6353,9 @@ def cookie_browser_login():
     data = _request_json()
     timeout = _coerce_int(data.get('timeout'), 300, 30, 900)
     _ = data.get('browser', 'chrome')
+    old_cookie = data.get('cookie')
 
-    started, reason = _start_native_cookie_login(timeout)
+    started, reason = _start_native_cookie_login(timeout, old_cookie)
     if started:
         return jsonify({'success': True, 'message': '登录窗口已启动，请在弹出的窗口中登录抖音'})
 

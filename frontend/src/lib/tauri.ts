@@ -1388,14 +1388,14 @@ export async function verifyCookie(): Promise<CookieStatus> {
   return verifyCookieInFlight;
 }
 
-export async function cookieBrowserLogin(timeout?: number, browser?: string): Promise<{ success: boolean; message: string }> {
+export async function cookieBrowserLogin(timeout?: number, browser?: string, cookie?: string): Promise<{ success: boolean; message: string }> {
   if (shouldUseBrowserBridge()) {
     return requestJson("/api/cookie/browser_login", {
       method: "POST",
-      body: JSON.stringify({ timeout, browser }),
+      body: JSON.stringify({ timeout, browser, cookie }),
     });
   }
-  return invoke("cookie_browser_login", { timeout, browser });
+  return invoke("cookie_browser_login", { timeout, browser, cookie });
 }
 
 export async function cancelCookieBrowserLogin(): Promise<{ success: boolean; message: string }> {
@@ -1410,6 +1410,7 @@ export interface AccountInfo {
   nickname: string;
   avatar_thumb: string;
   cookie: string;
+  is_valid?: boolean;
 }
 
 export async function getAccounts(): Promise<{ success: boolean; accounts: AccountInfo[]; current_sec_uid: string }> {
