@@ -78,7 +78,7 @@ export function Toaster() {
   const dismiss = useToastStore((s) => s.dismiss);
 
   return (
-    <div className="fixed inset-x-3 bottom-3 z-[8500] flex flex-col items-stretch gap-2 pointer-events-none sm:inset-x-auto sm:bottom-4 sm:right-4 sm:items-end">
+    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[8500] flex flex-col items-center gap-2 pointer-events-none w-full max-w-[340px] px-4">
       <AnimatePresence mode="popLayout" initial={false}>
         {toasts.map((toast, index) => (
           <ToastItem
@@ -115,10 +115,10 @@ function ToastItem({
     }
   }, [onDismiss, toast.duration]);
 
-  // Magnetic Stacking logic
+  // Magnetic Stacking logic for top-center
   const reverseIndex = total - 1 - index;
-  const scale = 1 - reverseIndex * 0.05;
-  const yOffset = reverseIndex * -12; // Slide up
+  const scale = 1 - reverseIndex * 0.03;
+  const yOffset = reverseIndex * 8; // Stack downwards slightly
   const zIndex = total - reverseIndex;
   const opacity = 1 - reverseIndex * 0.15;
 
@@ -128,7 +128,7 @@ function ToastItem({
       aria-live={toast.type === "error" || toast.type === "warning" ? "assertive" : "polite"}
       aria-atomic="true"
       layout
-      initial={{ opacity: 0, y: 24, scale: 0.9, filter: "blur(10px)" }}
+      initial={{ opacity: 0, y: -16, scale: 0.96, filter: "blur(10px)" }}
       animate={{
         opacity,
         scale,
@@ -144,48 +144,48 @@ function ToastItem({
       }}
       exit={{ 
         opacity: 0, 
-        x: 40, 
-        scale: 0.9, 
+        y: -12, 
+        scale: 0.96, 
         filter: "blur(10px)",
-        transition: { duration: 0.2, ease: "easeIn" } 
+        transition: { duration: 0.15, ease: "easeIn" } 
       }}
       style={{ 
         zIndex,
-        originX: 1,
-        originY: 1,
+        originX: 0.5,
+        originY: 0,
       }}
       className={cn(
-        "pointer-events-auto relative flex w-full flex-col overflow-hidden rounded-[14px] sm:w-[292px]",
-        "bg-surface-solid/80 backdrop-blur-3xl shadow-[0_18px_36px_-16px_rgba(0,0,0,0.45)]",
-        "border border-white/[0.08] transition-colors duration-300",
-        toast.type === "loading" && "border-accent/30 shadow-[0_0_40px_-12px_rgba(254,44,85,0.2)]",
-        toast.type === "success" && "border-success/30 shadow-[0_0_40px_-12px_rgba(34,197,94,0.15)]",
-        toast.type === "error" && "border-danger/30 shadow-[0_0_40px_-12px_rgba(239,68,68,0.15)]"
+        "pointer-events-auto relative flex w-full flex-col overflow-hidden rounded-[12px] sm:w-[280px]",
+        "bg-surface-solid/80 backdrop-blur-3xl shadow-[0_8px_24px_-8px_rgba(0,0,0,0.3)]",
+        "border border-white/[0.06] transition-colors duration-300",
+        toast.type === "loading" && "border-accent/30 shadow-[0_0_30px_-10px_rgba(254,44,85,0.15)]",
+        toast.type === "success" && "border-success/30 shadow-[0_0_30px_-10px_rgba(34,197,94,0.1)]",
+        toast.type === "error" && "border-danger/30 shadow-[0_0_30px_-10px_rgba(239,68,68,0.1)]"
       )}
     >
-      <div className="flex items-start gap-3 p-3">
+      <div className="flex items-start gap-2.5 py-2 px-3">
         <div className={cn(
-          "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] bg-surface-raised shadow-sm border border-white/[0.05]",
+          "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] bg-surface-raised shadow-sm border border-white/[0.04]",
           colorMap[toast.type],
         )}>
-          <Icon className={cn("h-3.5 w-3.5", toast.type === "loading" && "animate-spin")} />
+          <Icon className={cn("h-3 w-3", toast.type === "loading" && "animate-spin")} />
         </div>
         
         <div className="flex-1 min-w-0">
           {toast.title && (
-            <div className="mb-1 truncate text-[0.78rem] font-black leading-tight text-text tracking-tight">
+            <div className="mb-0.5 truncate text-[0.74rem] font-black leading-tight text-text tracking-tight">
               {toast.title}
             </div>
           )}
           <div className={cn(
-            "text-[0.74rem] leading-[1.45] text-text-secondary line-clamp-3",
-            !toast.title && "font-bold text-text text-[0.78rem]"
+            "text-[0.7rem] leading-[1.4] text-text-secondary line-clamp-3",
+            !toast.title && "font-bold text-text text-[0.74rem]"
           )}>
             {toast.message}
           </div>
 
           {toast.action && (
-            <div className="mt-3 flex justify-end">
+            <div className="mt-2.5 flex justify-end">
               <button
                 type="button"
                 aria-label={toast.action.label}
@@ -194,10 +194,10 @@ function ToastItem({
                   toast.action?.onClick();
                   onDismiss();
                 }}
-                className="group relative flex h-7 items-center justify-center rounded-[8px] bg-accent px-3 text-[0.68rem] font-black text-white shadow-lg shadow-accent/20 active:scale-[0.96] transition-[background-color,color,box-shadow,transform,opacity]"
+                className="group relative flex h-6.5 items-center justify-center rounded-[6px] bg-accent px-2.5 text-[0.65rem] font-black text-white shadow-lg shadow-accent/20 active:scale-[0.96] transition-[background-color,color,box-shadow,transform,opacity]"
               >
                 <span className="relative z-10">{toast.action.label}</span>
-                <div className="absolute inset-0 rounded-[8px] bg-white opacity-0 group-hover:opacity-10 transition-opacity" />
+                <div className="absolute inset-0 rounded-[6px] bg-white opacity-0 group-hover:opacity-10 transition-opacity" />
               </button>
             </div>
           )}
@@ -207,15 +207,15 @@ function ToastItem({
           type="button"
           aria-label="关闭通知"
           onClick={onDismiss}
-          className="-mr-1 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted hover:text-text hover:bg-white/[0.05] active:scale-[0.96] transition-[background-color,color,transform,opacity]"
+          className="-mr-1 -mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-muted hover:text-text hover:bg-white/[0.05] active:scale-[0.96] transition-[background-color,color,transform,opacity]"
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="h-3 w-3" />
         </button>
       </div>
 
       {/* Modern thin progress bar */}
       {typeof toast.duration === "number" && toast.duration > 0 && isPresent && (
-        <div className="absolute bottom-0 left-0 w-full h-[3px] bg-white/[0.03]">
+        <div className="absolute bottom-0 left-0 w-full h-[2px] bg-white/[0.03]">
           <motion.div
             initial={{ width: "100%" }}
             animate={{ width: "0%" }}
