@@ -55,10 +55,20 @@ if __name__ == '__main__':
         return False
 
     def on_closing():
-        """窗口关闭回调 — 立即退出"""
+        """窗口关闭回调 — 立即退出（对 Alt+F4 / 任务栏关闭等系统路径生效）"""
         if IS_WINDOWS:
-            # Windows: daemon 子进程会被系统自动清理
-            pass
+            # closing 事件在 UI 线程同步执行（_should_lock=True），
+            # 直接 Hide() + os._exit(0) 即可瞬间退出，无任何清理延迟。
+            try:
+                import webview.platforms.winforms as _wf
+                i = next(iter(_wf.BrowserView.instances.values()), None)
+                if i is not None:
+                    try:
+                        i.Hide()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
         os._exit(0)
 
     class WindowAPI:
@@ -90,9 +100,27 @@ if __name__ == '__main__':
             WindowAPI._maximized = not WindowAPI._maximized
 
         def close(self):
-            # 直接强制退出，避免 WebView2 evaluate_js 回传阻塞（约 1s）
-            # w.destroy() 会触发 js_bridge_call 的 _call() 继续执行 evaluate_js，
-            # 而此时 WebView2 正在销毁，信号量永远无法释放，导致约 1s 的超时等待。
+            # Windows: 通过 WinForms Invoke 在 UI 主线程上执行，
+            # 先 Hide() 让窗口立刻从屏幕消失（用户感知瞬间关闭），
+            # 再 os._exit(0) 强制退出进程，避免任何清理延迟。
+            if IS_WINDOWS:
+                try:
+                    import clr  # noqa: F401
+                    from System import Action
+                    from System.Windows.Forms import Application
+                    import webview.platforms.winforms as _wf
+                    i = next(iter(_wf.BrowserView.instances.values()), None)
+                    if i is not None:
+                        def _do_close():
+                            try:
+                                i.Hide()
+                            except Exception:
+                                pass
+                            os._exit(0)
+                        i.Invoke(Action(_do_close))
+                        return
+                except Exception:
+                    pass
             os._exit(0)
 
         def open_external_url(self, url):
