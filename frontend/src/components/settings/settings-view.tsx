@@ -56,35 +56,16 @@ import {
 } from "@/lib/tauri";
 import type { AccountInfo } from "@/lib/tauri";
 import type { ThemeMode } from "@/types";
-
-type LoginStatus = "idle" | "starting" | "waiting" | "success" | "error" | "cancelled";
-type SettingsField =
-  | "theme"
-  | "download_path"
-  | "download_quality"
-  | "max_concurrent"
-  | "filename_template"
-  | "folder_name_template"
-  | "auto_create_folder";
-type SavingFields = Partial<Record<SettingsField, boolean>>;
-type SettingsPatch = Parameters<typeof saveConfig>[0];
-type SettingStatus = "saving" | "saved" | "error";
-
-const TEMPLATE_VARIABLES = [
-  { token: "{title}", label: "标题" },
-  { token: "{aweme_id}", label: "作品ID" },
-  { token: "{author}", label: "作者" },
-  { token: "{date}", label: "日期" },
-  { token: "{time}", label: "时间" },
-  { token: "{media_type}", label: "类型" },
-];
-
-const FILENAME_PRESETS = [
-  { value: "{title}_{aweme_id}", label: "标题 + 作品ID" },
-  { value: "{author}_{title}_{aweme_id}", label: "作者 + 标题 + 作品ID" },
-  { value: "{date}_{title}_{aweme_id}", label: "日期 + 标题 + 作品ID" },
-  { value: "{title}", label: "只写标题，自动补ID" },
-];
+import {
+  FILENAME_PRESETS,
+  TEMPLATE_VARIABLES,
+  type LoginStatus,
+  type SavingFields,
+  type SettingsField,
+  type SettingsPatch,
+  type SettingStatus,
+} from "./settings-utils";
+import { SettingGroup } from "./settings-components";
 
 export function SettingsView() {
   const theme = useAppStore((s) => s.theme);
@@ -1428,65 +1409,3 @@ export function SettingsView() {
   );
 }
 
-function SettingGroup({
-  icon: Icon,
-  label,
-  status,
-  className,
-  children,
-}: {
-  icon: React.ElementType;
-  label: string;
-  status?: SettingStatus;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={cn("p-4 rounded-[12px] bg-white/[0.02] border border-white/[0.04]", className)}>
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <label className="flex items-center gap-2 text-[0.8rem] font-semibold text-text">
-          <Icon className="w-4 h-4 text-text-muted" />
-          {label}
-        </label>
-        {status && <SettingStatusPill status={status} />}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function SettingStatusPill({ status }: { status: SettingStatus }) {
-  const config = {
-    saving: {
-      label: "保存中",
-      className: "border-info/20 bg-info-soft text-info",
-      icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />,
-    },
-    saved: {
-      label: "已保存",
-      className: "border-success/20 bg-success-soft text-success",
-      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
-    },
-    error: {
-      label: "保存失败",
-      className: "border-danger/20 bg-danger-soft text-danger",
-      icon: <XCircle className="w-3.5 h-3.5" />,
-    },
-  }[status];
-
-  return (
-    <motion.span
-      initial={{ opacity: 0, y: -2 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -2 }}
-      transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
-      className={cn(
-        "inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border px-2 text-[0.68rem] font-semibold tabular-nums",
-        config.className
-      )}
-    >
-      {config.icon}
-      {config.label}
-    </motion.span>
-  );
-}
