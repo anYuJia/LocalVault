@@ -20,6 +20,16 @@ function isMacOS() {
   return /Mac|iPhone|iPad|iPod/i.test(platform);
 }
 
+function isPyWebViewRuntime() {
+  return typeof window !== "undefined" && Boolean((window as DesktopWindow).pywebview);
+}
+
+function isWindows() {
+  if (typeof navigator === "undefined") return false;
+  const platform = navigator.platform || "";
+  return /Win/i.test(platform);
+}
+
 async function callWindowAction(action: "minimize" | "toggle_maximize" | "close") {
   if (typeof window === "undefined") return;
   const desktopWindow = window as DesktopWindow;
@@ -42,6 +52,7 @@ async function callWindowAction(action: "minimize" | "toggle_maximize" | "close"
 
 export function WindowControls() {
   if (isMacOS()) return null;
+  if (isPyWebViewRuntime() && !isWindows()) return null;
 
   return (
     <div className="fixed right-0 top-0 z-[9000] flex h-9 select-none" data-no-window-drag>

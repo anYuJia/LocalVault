@@ -22,6 +22,8 @@ export function AppShell() {
   const currentView = useAppStore((s) => s.currentView);
   const commandOpen = useAppStore((s) => s.commandOpen);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isPyWebView = typeof window !== "undefined" && Boolean((window as any).pywebview);
+  const isWindows = typeof navigator !== "undefined" && /Win/i.test(navigator.platform || "");
 
   useLayoutEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
@@ -35,10 +37,12 @@ export function AppShell() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 relative">
-        <div
-          className="pywebview-drag-region absolute left-0 right-[132px] top-0 z-30 h-6 pointer-events-auto"
-          style={{ WebkitAppRegion: "drag" } as React.CSSProperties & { WebkitAppRegion: string }}
-        />
+        {isPyWebView && isWindows && (
+          <div
+            className="pywebview-drag-region absolute left-0 right-[132px] top-0 z-30 h-6 pointer-events-auto"
+            style={{ WebkitAppRegion: "drag" } as React.CSSProperties & { WebkitAppRegion: string }}
+          />
+        )}
         <div ref={scrollRef} className="flex-1 overflow-x-hidden overflow-y-auto pb-16">
           <AnimatePresence initial={false} mode="wait">
             {renderView(currentView)}
