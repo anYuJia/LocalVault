@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type Chang
 import { Activity, ImagePlus, Loader2, MapPin, MessageCircle, Play, RefreshCw, Send, ShoppingBag, UserRound, Users, Wifi, WifiOff, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ThemeLogo } from "@/components/common/theme-logo";
 import { Textarea } from "@/components/ui/textarea";
 import { FullscreenPlayer } from "@/components/player/fullscreen-player";
 import { useDownloads } from "@/hooks/use-downloads";
@@ -2466,7 +2467,7 @@ function ChatWorkspace({
           ) : (
             <div className="flex h-full min-h-[280px] flex-col items-center justify-center text-center">
               <div className="mb-3 flex h-16 w-16 items-center justify-center overflow-hidden rounded-[18px] border border-border bg-surface">
-                <img src="/animated_icon.svg" alt="" className="h-14 w-14 object-contain opacity-90" />
+                <ThemeLogo className="h-14 w-14 object-contain opacity-90" />
               </div>
               <p className="text-[0.88rem] font-semibold text-text">未选择会话</p>
               <p className="mt-1 max-w-sm text-[0.74rem] leading-relaxed text-text-muted">

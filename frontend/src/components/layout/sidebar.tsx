@@ -4,6 +4,7 @@ import type { ViewType } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { getAccounts, switchAccount, initClient, type AccountInfo } from "@/lib/tauri";
 import { useToast } from "@/components/ui/toast";
+import { ThemeLogo } from "@/components/common/theme-logo";
 import {
   Home,
   Search,
@@ -126,7 +127,7 @@ export function Sidebar() {
         transition={{ duration: 0.3 }}
       >
         <div className="w-10 h-10 rounded-[14px] overflow-hidden flex items-center justify-center">
-          <img src="/animated_icon.svg" alt="better-douyin" className="w-10 h-10" />
+          <ThemeLogo label="better-douyin" className="w-10 h-10" />
         </div>
         <div className="flex min-w-0 flex-col max-lg:hidden">
           <span className="text-[0.9rem] font-[780] tracking-tight text-text truncate">

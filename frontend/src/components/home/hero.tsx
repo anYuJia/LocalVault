@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { ViewType } from "@/types";
 import { cn } from "@/lib/utils";
+import { ThemeLogo } from "@/components/common/theme-logo";
 import { AmbientBackground } from "./ambient-background";
 import { QuickStats } from "./quick-stats";
 
@@ -113,7 +114,7 @@ export function Hero() {
         {/* Title */}
         <motion.div variants={item} className="mb-2 flex max-w-full min-w-0 items-center gap-2 max-lg:flex-col max-lg:gap-1">
           <div className="h-9 w-9 overflow-visible rounded-[14px] bg-transparent drop-shadow-[0_10px_24px_rgba(0,0,0,0.14)]">
-            <img src="/animated_icon.svg" alt="better-douyin" className="h-full w-full object-contain" />
+            <ThemeLogo label="better-douyin" className="h-full w-full object-contain" />
           </div>
           <h1 className="min-w-0 truncate text-center text-[1.18rem] font-[750] tracking-[-0.02em] text-text sm:text-[1.35rem] max-lg:text-[1.08rem]">
             better-douyin
