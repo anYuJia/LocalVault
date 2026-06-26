@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from flask import Blueprint, jsonify
+from src.web.download_task_store import ThreadPauseEvent
 
 downloads_bp = Blueprint("downloads", __name__)
 
@@ -29,13 +30,7 @@ _normalize_download_media_urls: Callable[..., list] | None = None
 _build_download_title: Callable[..., str] | None = None
 _build_download_name: Callable[..., str] | None = None
 _get_or_create_loop: Callable[..., Any] | None = None
-_ThreadPauseEvent: type | None = None
-_store_download_task: Callable[[str, dict], None] | None = None
-_set_task_status: Callable[..., None] | None = None
-_update_task_fields: Callable[..., None] | None = None
-_get_task: Callable[[str], dict | None] | None = None
-_active_tasks: dict | None = None
-_download_tasks_lock: Any | None = None
+_task_store = None
 
 
 def setup_downloads_routes(
@@ -53,21 +48,14 @@ def setup_downloads_routes(
     build_download_title: Callable[..., str],
     build_download_name: Callable[..., str],
     get_or_create_loop: Callable[..., Any],
-    thread_pause_event_cls: type,
-    store_download_task: Callable[[str, dict], None],
-    set_task_status: Callable[..., None],
-    update_task_fields: Callable[..., None],
-    get_task: Callable[[str], dict | None],
-    active_tasks: dict,
-    download_tasks_lock: Any,
+    task_store,
 ) -> None:
     """注入 web_app 模块的全局对象，避免循环导入。"""
     global _logger, _Config, _socketio, _request_json, _coerce_int, _run_async
     global _api_message, _verify_error_response, _login_error_response
     global _normalize_download_media_urls, _build_download_title, _build_download_name
-    global _get_or_create_loop, _ThreadPauseEvent
-    global _store_download_task, _set_task_status, _update_task_fields, _get_task
-    global _active_tasks, _download_tasks_lock
+    global _get_or_create_loop
+    global _task_store
     _logger = logger
     _Config = Config
     _socketio = socketio
@@ -81,13 +69,7 @@ def setup_downloads_routes(
     _build_download_title = build_download_title
     _build_download_name = build_download_name
     _get_or_create_loop = get_or_create_loop
-    _ThreadPauseEvent = thread_pause_event_cls
-    _store_download_task = store_download_task
-    _set_task_status = set_task_status
-    _update_task_fields = update_task_fields
-    _get_task = get_task
-    _active_tasks = active_tasks
-    _download_tasks_lock = download_tasks_lock
+    _task_store = task_store
 
 
 def _get_user_manager():
@@ -396,7 +378,7 @@ def download_user_video():
         pause_event = asyncio.Event()  # 暂停事件，默认不暂停
 
         display_name = f'{nickname or "用户"} 全部作品'
-        _store_download_task(task_id, {
+        _task_store.store(task_id, {
             'status': 'running',
             'sec_uid': sec_uid,
             'nickname': nickname,
@@ -439,14 +421,14 @@ def download_user_video():
                 total_failed = [0]
                 total_videos = aweme_count # 初始总量
                 consumer_count = max(1, int(getattr(_Config, 'MAX_CONCURRENT', 3) or 1))
-                pause_control = _ThreadPauseEvent(pause_event)
+                pause_control = ThreadPauseEvent(pause_event)
                 batch_started_at = time.monotonic()
 
                 def update_task_snapshot(**fields):
-                    _update_task_fields(task_id, **fields)
+                    _task_store.update_fields(task_id, **fields)
 
                 def emit_batch_progress(**payload):
-                    current_task = _get_task(task_id)
+                    current_task = _task_store.get(task_id)
                     _socketio.emit('user_video_download_progress', payload)
                     update_task_snapshot(
                         status=payload.get('status') or (current_task or {}).get('status', 'running'),
@@ -758,10 +740,10 @@ def download_user_video():
                     raise Exception(_api_message(fetch_result, '获取用户作品失败，请检查 Cookie 或稍后重试'))
 
                 if cancel_event.is_set():
-                    _set_task_status(task_id, 'cancelled')
+                    _task_store.set_status(task_id, 'cancelled')
                     _socketio.emit('download_cancelled', {'task_id': task_id, 'message': '下载任务已取消'})
                 else:
-                    _set_task_status(task_id, 'completed', end_time=datetime.now())
+                    _task_store.set_status(task_id, 'completed', end_time=datetime.now())
                     _socketio.emit('download_completed', {
                         'task_id': task_id,
                         'message': f'用户 {_nickname} 的作品全部处理完成',
@@ -775,24 +757,23 @@ def download_user_video():
                         'remaining': 0
                     })
             except asyncio.CancelledError:
-                _set_task_status(task_id, 'cancelled')
+                _task_store.set_status(task_id, 'cancelled')
                 _socketio.emit('download_cancelled', {'task_id': task_id, 'message': '下载任务已取消'})
             except Exception as e:
                 _logger.error(f"Task {task_id} error: {e}")
-                _set_task_status(task_id, 'failed')
+                _task_store.set_status(task_id, 'failed')
                 _socketio.emit('download_failed', {'task_id': task_id, 'message': f'任务出错: {str(e)}'})
             finally:
-                with _download_tasks_lock:
-                    _active_tasks.pop(task_id, None)
+                _task_store.pop_active(task_id)
 
         # 启动任务
         loop = _get_or_create_loop()
         future = asyncio.run_coroutine_threadsafe(do_download_task(), loop)
-        _active_tasks[task_id] = {
+        _task_store.add_active(task_id, {
             "future": future,
             "event": cancel_event,
             "pause_event": pause_event
-        }
+        })
 
         return jsonify({
             'success': True,
@@ -813,15 +794,15 @@ def cancel_download():
     task_id = data.get('task_id')
     _logger.info(f"Request to cancel task: {task_id}")
 
-    if task_id in _active_tasks:
-        info = _active_tasks[task_id]
+    info = _task_store.get_active(task_id)
+    if info is not None:
         # 设置取消事件
         info["event"].set()
-        _set_task_status(task_id, 'cancelled')
+        _task_store.set_status(task_id, 'cancelled')
         return jsonify({'success': True, 'message': '正在取消任务...'})
 
-    if _get_task(task_id) is not None:
-        _set_task_status(task_id, 'cancelled')
+    if _task_store.get(task_id) is not None:
+        _task_store.set_status(task_id, 'cancelled')
         return jsonify({'success': True, 'message': '任务已标记为取消'})
 
     return jsonify({'success': False, 'message': '未找到活跃任务'})
@@ -834,11 +815,11 @@ def pause_download():
     task_id = data.get('task_id')
     _logger.info(f"Request to pause task: {task_id}")
 
-    if task_id in _active_tasks:
-        info = _active_tasks[task_id]
+    info = _task_store.get_active(task_id)
+    if info is not None:
         if 'pause_event' in info:
             info['pause_event'].set()  # 设置暂停事件
-            _set_task_status(task_id, 'paused')
+            _task_store.set_status(task_id, 'paused')
             _socketio.emit('user_video_download_progress', {
                 'task_id': task_id,
                 'status': 'paused',
@@ -859,11 +840,11 @@ def resume_download():
     task_id = data.get('task_id')
     _logger.info(f"Request to resume task: {task_id}")
 
-    if task_id in _active_tasks:
-        info = _active_tasks[task_id]
+    info = _task_store.get_active(task_id)
+    if info is not None:
         if 'pause_event' in info:
             info['pause_event'].clear()  # 清除暂停事件
-            _set_task_status(task_id, 'running')
+            _task_store.set_status(task_id, 'running')
             _socketio.emit('user_video_download_progress', {
                 'task_id': task_id,
                 'status': 'downloading',
@@ -892,7 +873,7 @@ def download_liked():
 
         # 生成任务ID
         task_id = str(uuid.uuid4())
-        _store_download_task(task_id, {
+        _task_store.store(task_id, {
             'status': 'running',
             'type': 'liked_videos',
             'start_time': datetime.now()
@@ -908,7 +889,7 @@ def download_liked():
 
                 completed = await user_manager.download_liked_videos(count)
 
-                _set_task_status(task_id, 'completed', end_time=datetime.now())
+                _task_store.set_status(task_id, 'completed', end_time=datetime.now())
 
                 _socketio.emit('download_completed', {
                     'task_id': task_id,
@@ -916,7 +897,7 @@ def download_liked():
                 })
             except Exception as e:
                 _logger.error(f"Download liked error: {e}")
-                _set_task_status(task_id, 'failed')
+                _task_store.set_status(task_id, 'failed')
                 _socketio.emit('download_failed', {'task_id': task_id, 'message': f'任务出错: {str(e)}'})
 
         loop = _get_or_create_loop()
@@ -948,7 +929,7 @@ def download_liked_authors():
 
         # 生成任务ID
         task_id = str(uuid.uuid4())
-        _store_download_task(task_id, {
+        _task_store.store(task_id, {
             'status': 'running',
             'type': 'liked_authors',
             'start_time': datetime.now()
@@ -964,7 +945,7 @@ def download_liked_authors():
 
                 completed = await user_manager.download_liked_authors(count=count, selected_sec_uids=selected_sec_uids)
 
-                _set_task_status(task_id, 'completed', end_time=datetime.now())
+                _task_store.set_status(task_id, 'completed', end_time=datetime.now())
 
                 _socketio.emit('download_completed', {
                     'task_id': task_id,
@@ -972,7 +953,7 @@ def download_liked_authors():
                 })
             except Exception as e:
                 _logger.error(f"Download liked authors error: {e}")
-                _set_task_status(task_id, 'failed')
+                _task_store.set_status(task_id, 'failed')
                 _socketio.emit('download_failed', {'task_id': task_id, 'message': f'任务出错: {str(e)}'})
 
         loop = _get_or_create_loop()
