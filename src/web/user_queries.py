@@ -267,16 +267,16 @@ def get_liked_authors_api():
         count = _coerce_int(data.get('count'), 20, 1, 100)
 
         user_manager = _get_user_manager()
-        if not user_manager:
-            return jsonify({'success': False, 'message': '请先设置Cookie'}), 400
+        if not user_manager or not (_Config.COOKIE or '').strip():
+            return jsonify(_feature_login_error_response('点赞作者')), 200
 
         authors = _run_async(user_manager.get_liked_authors(count))
 
         if isinstance(authors, dict):
-            if authors.get('_need_verify'):
-                return jsonify(_verify_error_response(authors, '获取点赞作者失败，请完成验证后重试'))
             if authors.get('_need_login'):
-                return jsonify(_login_error_response(authors))
+                return jsonify(_feature_login_error_response('点赞作者'))
+            if authors.get('_need_verify'):
+                return jsonify(_verify_error_response_without_login_check(authors, '获取点赞作者失败，请完成验证后重试'))
             return jsonify({
                 'success': False,
                 'message': _api_message(authors, '获取点赞作者失败，请检查 Cookie 或稍后重试'),
@@ -285,12 +285,11 @@ def get_liked_authors_api():
         if not authors:
             login_status = _verify_native_cookie_login(_Config.COOKIE or '')
             if not login_status.get('success'):
-                return jsonify(_login_error_response(login_status))
+                return jsonify(_feature_login_error_response('点赞作者'))
             return jsonify({
-                'success': False,
-                'need_verify': True,
-                'verify_url': 'https://www.douyin.com/',
-                'message': '获取点赞作者失败。该接口需要登录态，请确认Cookie有效且包含完整的登录信息。',
+                'success': True,
+                'data': [],
+                'count': 0,
             })
 
         return jsonify({
