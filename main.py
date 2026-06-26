@@ -157,6 +157,16 @@ if __name__ == '__main__':
             native_window.setStyleMask_(
                 native_window.styleMask() | AppKit.NSWindowStyleMaskFullSizeContentView
             )
+            if hasattr(native_window, 'setToolbarStyle_') and hasattr(AppKit, 'NSWindowToolbarStyleUnifiedCompact'):
+                native_window.setToolbarStyle_(AppKit.NSWindowToolbarStyleUnifiedCompact)
+            if hasattr(native_window, 'setTitlebarSeparatorStyle_') and hasattr(AppKit, 'NSTitlebarSeparatorStyleNone'):
+                native_window.setTitlebarSeparatorStyle_(AppKit.NSTitlebarSeparatorStyleNone)
+            content_view = native_window.contentView()
+            if content_view is not None:
+                content_view.setWantsLayer_(True)
+                layer = content_view.layer()
+                if layer is not None:
+                    layer.setMasksToBounds_(False)
             # 确保三个系统按键可见
             for button_kind in (
                 AppKit.NSWindowCloseButton,
