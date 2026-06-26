@@ -40,6 +40,7 @@ export default function App() {
   const showAlert = useAlertStore((s) => s.showAlert);
   const { showLoader, hideLoader } = useLoaderStore();
   const lastCookieInvalidLogAt = useRef(0);
+  const cookieInvalidRetryRef = useRef<number | null>(null);
   const updateInFlightRef = useRef(false);
   const updateReadyPromptShownRef = useRef(false);
 
@@ -167,11 +168,10 @@ export default function App() {
   }, [setFriendUnreadCount]);
 
   useEffect(() => {
-    const handleCookieInvalid = (event: Event) => {
-      const detail = (event as CustomEvent<{ message?: string }>).detail || {};
-      const message = detail.message || "Cookie 已失效，请重新登录以继续使用搜索和推荐功能。";
-      setCookieLoggedIn(false);
+    let disposed = false;
 
+    const showConfirmedCookieInvalid = (message: string) => {
+      setCookieLoggedIn(false);
       const now = Date.now();
       if (now - lastCookieInvalidLogAt.current <= 12_000) {
         return;
@@ -195,8 +195,55 @@ export default function App() {
       });
     };
 
+    const scheduleCookieInvalidConfirmation = (message: string) => {
+      if (cookieInvalidRetryRef.current !== null) return;
+      cookieInvalidRetryRef.current = window.setTimeout(() => {
+        cookieInvalidRetryRef.current = null;
+        void (async () => {
+          try {
+            const config = await getConfig().catch(() => null);
+            if (disposed || !config?.cookie_set) {
+              setCookieLoggedIn(false);
+              return;
+            }
+
+            const status = await verifyCookie();
+            if (disposed) return;
+            if (status.valid) {
+              setCookieLoggedIn(true, status.user_name || undefined);
+              return;
+            }
+            if (status.need_verify && !status.need_login) {
+              useLogStore.getState().addLog(status.message || message, "warning");
+              return;
+            }
+            showConfirmedCookieInvalid(status.message || message);
+          } catch (error) {
+            if (!disposed) {
+              useLogStore
+                .getState()
+                .addLog(error instanceof Error ? error.message : "Cookie 状态暂时无法确认", "warning");
+            }
+          }
+        })();
+      }, 800);
+    };
+
+    const handleCookieInvalid = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string }>).detail || {};
+      const message = detail.message || "Cookie 已失效，请重新登录以继续使用搜索和推荐功能。";
+      scheduleCookieInvalidConfirmation(message);
+    };
+
     window.addEventListener("dy-cookie-invalid", handleCookieInvalid);
-    return () => window.removeEventListener("dy-cookie-invalid", handleCookieInvalid);
+    return () => {
+      disposed = true;
+      if (cookieInvalidRetryRef.current !== null) {
+        window.clearTimeout(cookieInvalidRetryRef.current);
+        cookieInvalidRetryRef.current = null;
+      }
+      window.removeEventListener("dy-cookie-invalid", handleCookieInvalid);
+    };
   }, [setCookieLoggedIn, showAlert]);
 
   useEffect(() => {
