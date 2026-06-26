@@ -8,6 +8,7 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+react_dist/
 /downloads/
 eggs/
 .eggs/
