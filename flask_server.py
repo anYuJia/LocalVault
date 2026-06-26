@@ -9,7 +9,7 @@ import sys
 import os
 
 
-def run_flask_process(port: int, project_root: str) -> None:
+def run_flask_process(port: int, project_root: str, exit_event=None) -> None:
     """子进程入口函数。"""
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
@@ -23,5 +23,7 @@ def run_flask_process(port: int, project_root: str) -> None:
         except Exception:
             pass
 
-    from src.web.web_app import start_server
+    from src.web.web_app import start_server, set_main_process_exit_event
+    if exit_event is not None:
+        set_main_process_exit_event(exit_event)
     start_server(port=port)

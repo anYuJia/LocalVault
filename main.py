@@ -103,10 +103,22 @@ if __name__ == '__main__':
 
     # 在独立子进程启动Flask服务（避免与 WebView2 的 GIL 竞争）
     project_root = os.path.dirname(os.path.abspath(__file__))
+    _flask_exit_event = multiprocessing.Event()
     flask_proc = multiprocessing.Process(
-        target=run_flask_process, args=(port, project_root), daemon=True
+        target=run_flask_process, args=(port, project_root, _flask_exit_event), daemon=True
     )
     flask_proc.start()
+
+    # 监听 Flask 子进程的退出信号（用于更新后自动关闭）
+    def _watch_flask_exit():
+        _flask_exit_event.wait()
+        try:
+            flask_proc.terminate()
+        except Exception:
+            pass
+        os._exit(0)
+    _exit_watcher = threading.Thread(target=_watch_flask_exit, daemon=True)
+    _exit_watcher.start()
 
     # 等待服务就绪
     if not wait_for_server(port):

@@ -75,7 +75,7 @@ class Config:
     CURRENT_USER_PROFILE = None
     ACCOUNTS = []
     CURRENT_SEC_UID = ""
-    APP_VERSION = (os.environ.get("APP_VERSION") or os.environ.get("GITHUB_REF_NAME") or "1.0.26").lstrip("v")
+    APP_VERSION = (os.environ.get("APP_VERSION") or os.environ.get("GITHUB_REF_NAME") or "1.0.29").lstrip("v")
 
     # 文件保存路径默认值
     BASE_DIR = get_default_download_dir(USER_DATA_DIR)

@@ -176,6 +176,13 @@ api = None
 downloader = None
 user_manager = None
 download_tasks = {} # 用于存储任务状态和元数据（同步Dict）
+
+# 主进程退出事件（Flask 子进程通过此事件通知主进程关闭）
+_main_process_exit_event = None
+
+def set_main_process_exit_event(event) -> None:
+    global _main_process_exit_event
+    _main_process_exit_event = event
 active_tasks = {} # 用于存储活跃的 asyncio.Future 和 asyncio.Event
 _im_message_ws = None
 _im_message_thread = None
@@ -1708,9 +1715,9 @@ function Write-UpdateLog($message) {{
   try {{ Add-Content -LiteralPath $log -Value ("[{0}] {1}" -f (Get-Date -Format s), $message) }} catch {{}}
 }}
 try {{
-  Write-UpdateLog "waiting for app process $pidToWait"
-  Wait-Process -Id $pidToWait -ErrorAction SilentlyContinue
-  Start-Sleep -Milliseconds 800
+  Write-UpdateLog "killing app process tree $pidToWait"
+  taskkill /T /F /PID $pidToWait 2>$null
+  Start-Sleep -Seconds 2
 
   if ($package.ToLower().EndsWith('.zip')) {{
     Write-UpdateLog "extracting portable update"
@@ -1931,6 +1938,10 @@ def _schedule_app_exit_for_update() -> None:
             socketio.stop()
         except Exception:
             pass
+        # 通知主进程退出（Flask 子进程无法直接终止主进程）
+        if _main_process_exit_event is not None:
+            _main_process_exit_event.set()
+        # 退出 Flask 子进程自身
         os._exit(0)
 
     threading.Timer(1.2, exit_app).start()
