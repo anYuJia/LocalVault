@@ -607,7 +607,7 @@ function EmptyState({ title, description, icon: Icon = Heart, loggedIn = false }
 
 function ErrorState({ message }: { message: string }) {
   const setView = useAppStore((s) => s.setView);
-  const needsLogin = /请登录后获取|请先设置\s*Cookie|未登录/.test(message);
+  const needsLogin = /请登录后获取|请先设置\s*Cookie|未登录|登录态|decoding response body/i.test(message);
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.98 }}

@@ -137,7 +137,7 @@ function emitCookieInvalidIfNeeded(payload: unknown) {
   const data = payload as Record<string, unknown>;
   if (data.security_blocked) return;
   const message = String(data.message || "Cookie 已失效，请重新登录").trim();
-  if (/请先设置\s*Cookie/i.test(message)) return;
+  if (isLocalLoginPromptMessage(message)) return;
   const failedWithLoginMessage = data.success === false && isCookieInvalidMessage(message);
   if (!data.need_login && !failedWithLoginMessage) return;
 
@@ -147,13 +147,17 @@ function emitCookieInvalidIfNeeded(payload: unknown) {
 function emitCookieInvalidFromError(error: unknown) {
   const message = getErrorMessage(error, "");
   if (!message) return;
-  if (/请先设置\s*Cookie/i.test(message)) return;
+  if (isLocalLoginPromptMessage(message)) return;
   if (!isCookieInvalidMessage(message)) return;
   window.dispatchEvent(new CustomEvent("dy-cookie-invalid", { detail: { message } }));
 }
 
 function isCookieInvalidMessage(message: string) {
   return /用户未登录|未登录|请先登录|请先设置\s*Cookie|登录态|重新登录|not login|not logged in|login required|session expired/i.test(message);
+}
+
+function isLocalLoginPromptMessage(message: string) {
+  return /请先设置\s*Cookie|请登录后获取(?:点赞视频|收藏视频|收藏合集)/i.test(message);
 }
 
 function normalizeFeatureLoginResponse<T>(
