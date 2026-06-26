@@ -795,6 +795,7 @@ export async function searchUser(keyword: string): Promise<SearchUserResponse> {
   if (shouldUseBrowserBridge()) {
     const result = await requestJson<SearchUserResponse>("/api/search_user", {
       method: "POST",
+      suppressCookieInvalidEvent: true,
       body: JSON.stringify({ keyword }),
     });
     return {
@@ -803,7 +804,7 @@ export async function searchUser(keyword: string): Promise<SearchUserResponse> {
       users: Array.isArray(result.users) ? result.users.map(normalizeUser) : undefined,
     };
   }
-  const result = await invoke<SearchUserResponse>("search_user", { keyword });
+  const result = await invokeLocal<SearchUserResponse>("search_user", { keyword });
   return {
     ...result,
     user: result.user ? normalizeUser(result.user) : undefined,
@@ -815,11 +816,12 @@ export async function getUserDetail(secUid: string, nickname?: string): Promise<
   if (shouldUseBrowserBridge()) {
     const result = await requestJson<UserDetailResponse>("/api/user_detail", {
       method: "POST",
+      suppressCookieInvalidEvent: true,
       body: JSON.stringify({ sec_uid: secUid, nickname }),
     });
     return { ...result, user: result.user ? normalizeUser(result.user) : undefined };
   }
-  const result = await invoke<UserDetailResponse>("get_user_detail", {
+  const result = await invokeLocal<UserDetailResponse>("get_user_detail", {
     secUid,
     sec_uid: secUid,
     nickname,
@@ -834,6 +836,7 @@ export async function getUserVideos(secUid: string, count: number, cursor: numbe
   if (shouldUseBrowserBridge()) {
     const result = await requestJson<UserVideosResponse & { videos?: unknown[] }>("/api/user_videos", {
       method: "POST",
+      suppressCookieInvalidEvent: true,
       body: JSON.stringify({ sec_uid: secUid, count, cursor }),
     });
     return {
@@ -841,7 +844,7 @@ export async function getUserVideos(secUid: string, count: number, cursor: numbe
       videos: normalizeVideos(result.videos),
     };
   }
-  const result = await invoke<UserVideosResponse & { videos?: unknown[] }>("get_user_videos", {
+  const result = await invokeLocal<UserVideosResponse & { videos?: unknown[] }>("get_user_videos", {
     secUid,
     sec_uid: secUid,
     count,

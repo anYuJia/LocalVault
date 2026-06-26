@@ -237,7 +237,6 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
         const message = result.message || "搜索用户需要登录";
         set({ searching: false, error: message, pendingVerifySearch: null });
         addLog(message, "warning");
-        toast(message, "warning", "需要登录");
         return;
       }
 
@@ -383,7 +382,6 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
         const message = detail.message || "获取用户详情需要登录";
         set({ loadingUser: false, error: message, currentUser: user });
         addLog(message, "warning");
-        toast(message, "warning", "需要登录");
         return;
       }
 
@@ -473,7 +471,6 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
         const message = result.message || "获取作品列表需要登录";
         set({ loadingVideos: false, error: message });
         addLog(message, "warning");
-        toast(message, "warning", "需要登录");
         return;
       }
 
