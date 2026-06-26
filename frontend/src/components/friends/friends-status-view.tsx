@@ -1712,6 +1712,8 @@ export function FriendsStatusView() {
     };
     const loadAvatar = async (attempt = 0) => {
       try {
+        const config = await getConfig().catch(() => null);
+        if (disposed || !config?.cookie_set) return;
         const status = await verifyCookie();
         if (disposed) return;
         if (!status.valid) {

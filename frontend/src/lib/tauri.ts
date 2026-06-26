@@ -157,7 +157,7 @@ function isCookieInvalidMessage(message: string) {
 }
 
 function isLocalLoginPromptMessage(message: string) {
-  return /请先设置\s*Cookie|请登录后获取(?:点赞视频|收藏视频|收藏合集)/i.test(message);
+  return /请先设置\s*Cookie|未配置\s*Cookie|请登录后获取(?:点赞视频|收藏视频|收藏合集)/i.test(message);
 }
 
 function normalizeFeatureLoginResponse<T>(
@@ -1432,7 +1432,7 @@ export async function verifyCookie(): Promise<CookieStatus> {
             suppressCookieInvalidEvent: true,
           });
         } else {
-          result = await invoke<CookieStatus>("verify_cookie");
+          result = await invokeLocal<CookieStatus>("verify_cookie");
         }
         if (result && result.valid) {
           lastVerifyCookieResult = result;
