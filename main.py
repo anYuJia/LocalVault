@@ -29,6 +29,9 @@ if __name__ == '__main__':
 
     from flask_server import run_flask_process
 
+    IS_MACOS = sys.platform == 'darwin'
+    IS_WINDOWS = sys.platform == 'win32'
+
     def find_free_port(start=5001, end=5010):
         """查找可用端口"""
         for port in range(start, end + 1):
@@ -53,7 +56,10 @@ if __name__ == '__main__':
         return False
 
     def on_closing():
-        """窗口关闭回调 — 立即退出，daemon 子进程会被系统自动清理"""
+        """窗口关闭回调 — 立即退出"""
+        if IS_WINDOWS:
+            # Windows: daemon 子进程会被系统自动清理
+            pass
         os._exit(0)
 
     class WindowAPI:
@@ -97,20 +103,31 @@ if __name__ == '__main__':
     # 查找可用端口
     port = find_free_port()
 
-    # 在独立子进程启动Flask服务（避免与 WebView2 的 GIL 竞争）
+    # 启动 Flask 服务
+    # Windows: 独立子进程（避免 WebView2 GIL 竞争导致窗口卡死）
+    # Mac/Linux: 线程（Cocoa 与 GIL 协作良好，且子进程会在 Dock 显示多个图标）
     project_root = os.path.dirname(os.path.abspath(__file__))
     _flask_exit_event = multiprocessing.Event()
-    flask_proc = multiprocessing.Process(
-        target=run_flask_process, args=(port, project_root, _flask_exit_event), daemon=True
-    )
-    flask_proc.start()
 
-    # 监听 Flask 子进程的退出信号（用于更新后自动关闭）
-    def _watch_flask_exit():
-        _flask_exit_event.wait()
-        os._exit(0)
-    _exit_watcher = threading.Thread(target=_watch_flask_exit, daemon=True)
-    _exit_watcher.start()
+    if IS_WINDOWS:
+        flask_proc = multiprocessing.Process(
+            target=run_flask_process, args=(port, project_root, _flask_exit_event), daemon=True
+        )
+        flask_proc.start()
+
+        def _watch_flask_exit():
+            _flask_exit_event.wait()
+            os._exit(0)
+        _exit_watcher = threading.Thread(target=_watch_flask_exit, daemon=True)
+        _exit_watcher.start()
+    else:
+        # Mac/Linux: 线程启动，避免多进程在 Dock 显示多个图标
+        from src.web.web_app import start_server, set_main_process_exit_event
+        set_main_process_exit_event(_flask_exit_event)
+        flask_thread = threading.Thread(
+            target=start_server, kwargs={'port': port}, daemon=True
+        )
+        flask_thread.start()
 
     # 等待服务就绪
     if not wait_for_server(port):
@@ -127,48 +144,8 @@ if __name__ == '__main__':
     # 延迟导入 webview，避免启动时加载
     import webview
 
-    def patch_macos_pywebview_titlebar():
-        if sys.platform != 'darwin':
-            return
-        try:
-            from pathlib import Path
-            from webview.platforms import cocoa
-
-            cocoa_path = Path(cocoa.__file__)
-            source = cocoa_path.read_text()
-            if "getattr(window, 'macos_overlay_titlebar', False)" in source:
-                return
-
-            original = """            self.window.standardWindowButton_(AppKit.NSWindowCloseButton).setHidden_(True)
-            self.window.standardWindowButton_(AppKit.NSWindowMiniaturizeButton).setHidden_(True)
-            self.window.standardWindowButton_(AppKit.NSWindowZoomButton).setHidden_(True)
-"""
-            patched = """            if getattr(window, 'macos_overlay_titlebar', False):
-                self.window.setMovableByWindowBackground_(True)
-                for button_kind in (
-                    AppKit.NSWindowCloseButton,
-                    AppKit.NSWindowMiniaturizeButton,
-                    AppKit.NSWindowZoomButton,
-                ):
-                    button = self.window.standardWindowButton_(button_kind)
-                    if button is None:
-                        continue
-                    button.setHidden_(False)
-                    button.setEnabled_(True)
-                    button.setAlphaValue_(1.0)
-            else:
-                self.window.standardWindowButton_(AppKit.NSWindowCloseButton).setHidden_(True)
-                self.window.standardWindowButton_(AppKit.NSWindowMiniaturizeButton).setHidden_(True)
-                self.window.standardWindowButton_(AppKit.NSWindowZoomButton).setHidden_(True)
-"""
-            if original in source:
-                cocoa_path.write_text(source.replace(original, patched))
-        except Exception:
-            pass
-
-    patch_macos_pywebview_titlebar()
-
     def configure_macos_native_window(target_window):
+        """Mac: 隐藏标题栏文字，保留左上角三个系统按键（关闭/最小化/缩放）"""
         if sys.platform != 'darwin':
             return
         try:
@@ -184,13 +161,25 @@ if __name__ == '__main__':
             native_window.setStyleMask_(
                 native_window.styleMask() | AppKit.NSWindowStyleMaskFullSizeContentView
             )
+            # 确保三个系统按键可见
+            for button_kind in (
+                AppKit.NSWindowCloseButton,
+                AppKit.NSWindowMiniaturizeButton,
+                AppKit.NSWindowZoomButton,
+            ):
+                button = native_window.standardWindowButton_(button_kind)
+                if button is not None:
+                    button.setHidden_(False)
+                    button.setEnabled_(True)
+                    button.setAlphaValue_(1.0)
         except Exception:
             pass
 
     window_api = WindowAPI()
     window_options = {}
-    if sys.platform in ('darwin', 'win32'):
+    if IS_WINDOWS:
         window_options['frameless'] = True
+    # Mac 不用 frameless，保留原生窗口边框和系统按键，通过 AppKit 隐藏标题栏文字
 
     # 创建pywebview窗口
     window = webview.create_window(
@@ -207,8 +196,7 @@ if __name__ == '__main__':
     )
     window.events.closing += on_closing
 
-    if sys.platform == 'darwin':
-        window.macos_overlay_titlebar = True
+    if IS_MACOS:
         window.events.shown += lambda: threading.Timer(
             0.1,
             configure_macos_native_window,
