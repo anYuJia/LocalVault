@@ -180,7 +180,7 @@ if __name__ == '__main__':
                         view.setWantsLayer_(True)
                         layer = view.layer()
                         if layer is not None:
-                            layer.setBackgroundColor_(AppKit.NSColor.clearColor().CGColor())
+                            layer.setBackgroundColor_(None)
                             layer.setOpaque_(False)
                             layer.setMasksToBounds_(False)
                 except Exception:
@@ -208,12 +208,11 @@ if __name__ == '__main__':
                 clear_view_background(frame_host, force=True)
 
                 if content_view is not None:
-                    content_view.removeFromSuperview()
                     content_view.setFrame_(frame_host.bounds())
                     content_view.setAutoresizingMask_(
                         AppKit.NSViewWidthSizable | AppKit.NSViewHeightSizable
                     )
-                    frame_host.addSubview_positioned_relativeTo_(content_view, AppKit.NSWindowBelow, None)
+                    clear_view_background(content_view)
             for button_kind in (
                 AppKit.NSWindowCloseButton,
                 AppKit.NSWindowMiniaturizeButton,
