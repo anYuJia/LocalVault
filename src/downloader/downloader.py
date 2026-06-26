@@ -548,12 +548,17 @@ class DouyinDownloader:
         if not os.path.exists(candidate):
             return candidate
 
-        counter = 2
-        while True:
+        # 限制最大重试次数，避免在只读目录、权限问题或异常文件系统状态下陷入死循环。
+        max_attempts = 1000
+        for counter in range(2, 2 + max_attempts):
             candidate = os.path.join(directory, f"{filename}_{counter}.{safe_extension}")
             if not os.path.exists(candidate):
                 return candidate
-            counter += 1
+
+        raise RuntimeError(
+            f"无法为文件 {filename}.{safe_extension} 在 {directory} 中找到可用名称"
+            f"（已尝试 {max_attempts} 次）"
+        )
 
     def _emit_download_progress(self, socketio, task_id, progress_callback=None, **payload):
         """同时兼容旧 download_progress 事件和新的批量当前作品回调。"""

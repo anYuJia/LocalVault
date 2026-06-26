@@ -189,6 +189,9 @@ _im_message_ws = None
 _im_message_thread = None
 _im_message_stop_event = threading.Event()
 _im_message_lock = threading.Lock()
+# download_tasks / active_tasks 同时被 Flask 路由线程和 asyncio 协程（run_coroutine_threadsafe 提交到独立事件循环线程）访问，
+# 需要锁保护迭代与读-改-写场景，避免 'dictionary changed size during iteration' 和 KeyError。
+_download_tasks_lock = threading.Lock()
 
 TERMINAL_TASK_STATUSES = {'completed', 'failed', 'error', 'cancelled', 'canceled'}
 
@@ -2076,25 +2079,56 @@ def _task_sort_timestamp(task: dict) -> float:
 
 
 def _prune_download_tasks() -> None:
-    overflow = len(download_tasks) - DOWNLOAD_TASK_HISTORY_MAX_SIZE
-    if overflow <= 0:
-        return
+    with _download_tasks_lock:
+        overflow = len(download_tasks) - DOWNLOAD_TASK_HISTORY_MAX_SIZE
+        if overflow <= 0:
+            return
 
-    removable = [
-        (task_id, task)
-        for task_id, task in download_tasks.items()
-        if task_id not in active_tasks
-        and str(task.get('status') or '').lower() in TERMINAL_TASK_STATUSES
-    ]
-    removable.sort(key=lambda item: _task_sort_timestamp(item[1]))
+        removable = [
+            (task_id, task)
+            for task_id, task in download_tasks.items()
+            if task_id not in active_tasks
+            and str(task.get('status') or '').lower() in TERMINAL_TASK_STATUSES
+        ]
+        removable.sort(key=lambda item: _task_sort_timestamp(item[1]))
 
-    for task_id, _ in removable[:overflow]:
-        download_tasks.pop(task_id, None)
+        for task_id, _ in removable[:overflow]:
+            download_tasks.pop(task_id, None)
 
 
 def _store_download_task(task_id: str, task: dict) -> None:
-    download_tasks[task_id] = task
+    with _download_tasks_lock:
+        download_tasks[task_id] = task
     _prune_download_tasks()
+
+
+def _set_task_status(task_id: str, status: str, **extra) -> None:
+    """原子地更新某任务的状态及附加字段，避免读-改-写期间被并发 pop。"""
+    with _download_tasks_lock:
+        task = download_tasks.get(task_id)
+        if task is None:
+            return
+        task['status'] = status
+        for key, value in extra.items():
+            task[key] = value
+
+
+def _update_task_fields(task_id: str, **fields) -> None:
+    with _download_tasks_lock:
+        task = download_tasks.get(task_id)
+        if task is not None:
+            task.update(fields)
+
+
+def _get_task(task_id: str):
+    with _download_tasks_lock:
+        task = download_tasks.get(task_id)
+        return dict(task) if task is not None else None
+
+
+def _list_download_tasks():
+    with _download_tasks_lock:
+        return [(tid, dict(task)) for tid, task in download_tasks.items()]
 
 
 def init_app():
@@ -4987,14 +5021,13 @@ def download_user_video():
                 batch_started_at = time.monotonic()
 
                 def update_task_snapshot(**fields):
-                    snapshot = download_tasks.get(task_id)
-                    if snapshot is not None:
-                        snapshot.update(fields)
+                    _update_task_fields(task_id, **fields)
 
                 def emit_batch_progress(**payload):
+                    current_task = _get_task(task_id)
                     socketio.emit('user_video_download_progress', payload)
                     update_task_snapshot(
-                        status=payload.get('status') or download_tasks.get(task_id, {}).get('status', 'running'),
+                        status=payload.get('status') or (current_task or {}).get('status', 'running'),
                         progress=payload.get('overall_progress'),
                         overall_progress=payload.get('overall_progress'),
                         processed=payload.get('processed') if payload.get('processed') is not None else payload.get('current_downloaded'),
@@ -5303,11 +5336,10 @@ def download_user_video():
                     raise Exception(_api_message(fetch_result, '获取用户作品失败，请检查 Cookie 或稍后重试'))
                 
                 if cancel_event.is_set():
-                    download_tasks[task_id]['status'] = 'cancelled'
+                    _set_task_status(task_id, 'cancelled')
                     socketio.emit('download_cancelled', {'task_id': task_id, 'message': '下载任务已取消'})
                 else:
-                    download_tasks[task_id]['status'] = 'completed'
-                    download_tasks[task_id]['end_time'] = datetime.now()
+                    _set_task_status(task_id, 'completed', end_time=datetime.now())
                     socketio.emit('download_completed', {
                         'task_id': task_id,
                         'message': f'用户 {_nickname} 的作品全部处理完成',
@@ -5321,15 +5353,15 @@ def download_user_video():
                         'remaining': 0
                     })
             except asyncio.CancelledError:
-                download_tasks[task_id]['status'] = 'cancelled'
+                _set_task_status(task_id, 'cancelled')
                 socketio.emit('download_cancelled', {'task_id': task_id, 'message': '下载任务已取消'})
             except Exception as e:
                 logger.error(f"Task {task_id} error: {e}")
-                download_tasks[task_id]['status'] = 'failed'
+                _set_task_status(task_id, 'failed')
                 socketio.emit('download_failed', {'task_id': task_id, 'message': f'任务出错: {str(e)}'})
             finally:
-                if task_id in active_tasks:
-                    del active_tasks[task_id]
+                with _download_tasks_lock:
+                    active_tasks.pop(task_id, None)
 
         # 启动任务
         loop = get_or_create_loop()
@@ -5362,12 +5394,11 @@ def cancel_download():
         info = active_tasks[task_id]
         # 设置取消事件
         info["event"].set()
-        if task_id in download_tasks:
-            download_tasks[task_id]['status'] = 'cancelled'
+        _set_task_status(task_id, 'cancelled')
         return jsonify({'success': True, 'message': '正在取消任务...'})
-    
-    if task_id in download_tasks:
-        download_tasks[task_id]['status'] = 'cancelled'
+
+    if _get_task(task_id) is not None:
+        _set_task_status(task_id, 'cancelled')
         return jsonify({'success': True, 'message': '任务已标记为取消'})
         
     return jsonify({'success': False, 'message': '未找到活跃任务'})
@@ -5383,8 +5414,7 @@ def pause_download():
         info = active_tasks[task_id]
         if 'pause_event' in info:
             info['pause_event'].set()  # 设置暂停事件
-            if task_id in download_tasks:
-                download_tasks[task_id]['status'] = 'paused'
+            _set_task_status(task_id, 'paused')
             socketio.emit('user_video_download_progress', {
                 'task_id': task_id,
                 'status': 'paused',
@@ -5408,8 +5438,7 @@ def resume_download():
         info = active_tasks[task_id]
         if 'pause_event' in info:
             info['pause_event'].clear()  # 清除暂停事件
-            if task_id in download_tasks:
-                download_tasks[task_id]['status'] = 'running'
+            _set_task_status(task_id, 'running')
             socketio.emit('user_video_download_progress', {
                 'task_id': task_id,
                 'status': 'downloading',
@@ -5451,17 +5480,16 @@ def download_liked():
                 })
                 
                 completed = await user_manager.download_liked_videos(count)
-                
-                download_tasks[task_id]['status'] = 'completed'
-                download_tasks[task_id]['end_time'] = datetime.now()
-                
+
+                _set_task_status(task_id, 'completed', end_time=datetime.now())
+
                 socketio.emit('download_completed', {
                     'task_id': task_id,
                     'message': f'点赞视频下载完成，共处理 {completed} 个作品'
                 })
             except Exception as e:
                 logger.error(f"Download liked error: {e}")
-                download_tasks[task_id]['status'] = 'failed'
+                _set_task_status(task_id, 'failed')
                 socketio.emit('download_failed', {'task_id': task_id, 'message': f'任务出错: {str(e)}'})
 
         loop = get_or_create_loop()
@@ -5755,17 +5783,16 @@ def download_liked_authors():
                 })
                 
                 completed = await user_manager.download_liked_authors(count=count, selected_sec_uids=selected_sec_uids)
-                
-                download_tasks[task_id]['status'] = 'completed'
-                download_tasks[task_id]['end_time'] = datetime.now()
-                
+
+                _set_task_status(task_id, 'completed', end_time=datetime.now())
+
                 socketio.emit('download_completed', {
                     'task_id': task_id,
                     'message': f'点赞作者作品下载完成，共处理 {completed} 个作者'
                 })
             except Exception as e:
                 logger.error(f"Download liked authors error: {e}")
-                download_tasks[task_id]['status'] = 'failed'
+                _set_task_status(task_id, 'failed')
                 socketio.emit('download_failed', {'task_id': task_id, 'message': f'任务出错: {str(e)}'})
 
         loop = get_or_create_loop()
@@ -6036,7 +6063,7 @@ def get_tasks():
     """获取下载任务列表"""
     _prune_download_tasks()
     normalized_tasks = {}
-    for task_id, task in download_tasks.items():
+    for task_id, task in _list_download_tasks():
         normalized = dict(task)
         if 'start_time' in normalized and isinstance(normalized['start_time'], datetime):
             normalized['start_time'] = int(normalized['start_time'].timestamp() * 1000)
