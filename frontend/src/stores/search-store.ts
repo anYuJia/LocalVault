@@ -234,10 +234,10 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
       if (requestId !== latestSearchRequestId) return;
 
       if (result.need_login) {
-        const message = result.message || "搜索需要登录";
-        window.dispatchEvent(new CustomEvent("dy-cookie-invalid", { detail: { message } }));
+        const message = result.message || "搜索用户需要登录";
         set({ searching: false, error: message, pendingVerifySearch: null });
         addLog(message, "warning");
+        toast(message, "warning", "需要登录");
         return;
       }
 
@@ -381,9 +381,9 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
 
       if (detail.need_login) {
         const message = detail.message || "获取用户详情需要登录";
-        window.dispatchEvent(new CustomEvent("dy-cookie-invalid", { detail: { message } }));
         set({ loadingUser: false, error: message, currentUser: user });
         addLog(message, "warning");
+        toast(message, "warning", "需要登录");
         return;
       }
 
@@ -471,9 +471,9 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
 
       if (result.need_login) {
         const message = result.message || "获取作品列表需要登录";
-        window.dispatchEvent(new CustomEvent("dy-cookie-invalid", { detail: { message } }));
         set({ loadingVideos: false, error: message });
         addLog(message, "warning");
+        toast(message, "warning", "需要登录");
         return;
       }
 
@@ -546,7 +546,6 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
 
       if (result.need_login) {
         const message = result.message || "加载更多作品需要登录";
-        window.dispatchEvent(new CustomEvent("dy-cookie-invalid", { detail: { message } }));
         set({ loadingMore: false, error: message });
         addLog(message, "warning");
         return;
