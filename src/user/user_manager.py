@@ -8,6 +8,7 @@ from src.api.api import DouyinAPI
 from src.config.config import Config
 from src.downloader.downloader import DouyinDownloader, build_download_name
 from src.user import media_selectors
+from src.user import post_formatters
 from src.user import user_stats
 
 # 移除增强下载器支持
@@ -213,51 +214,16 @@ class DouyinUserManager:
         return merged
 
     def _video_display_url(self, video_data: dict, media_urls: list[dict] | None = None) -> str:
-        selected_url = self._select_video_url(video_data or {})
-        if selected_url:
-            return selected_url
-
-        for item in media_urls or []:
-            if not isinstance(item, dict):
-                continue
-            url = self._first_url(item.get('url') or item.get('play_addr') or item.get('download_addr'))
-            if url and str(item.get('type') or '').lower() == 'video':
-                return self._clean_video_download_url(url)
-
-        for item in media_urls or []:
-            if not isinstance(item, dict):
-                continue
-            url = self._first_url(item.get('url') or item.get('play_addr') or item.get('download_addr'))
-            if url:
-                return self._clean_video_download_url(url)
-
-        return ''
+        return post_formatters.video_display_url(video_data, media_urls)
 
     def _normalize_duration_seconds(self, value) -> int:
-        try:
-            duration = float(value or 0)
-        except (TypeError, ValueError):
-            return 0
-        if duration > 1000:
-            return int(round(duration / 1000))
-        return int(round(duration))
+        return post_formatters.normalize_duration_seconds(value)
 
     def _raw_duration_value(self, value) -> int:
-        try:
-            duration = float(value or 0)
-        except (TypeError, ValueError):
-            return 0
-        return int(round(duration)) if duration > 0 else 0
+        return post_formatters.raw_duration_value(value)
 
     def _extract_post_status(self, post: dict) -> dict:
-        status = post.get('status') or {}
-        return {
-            'is_delete': bool(status.get('is_delete', False)),
-            'private_status': int(status.get('private_status') or 0),
-            'review_status': int(status.get('review_status') or 0),
-            'with_goods': bool(status.get('with_goods', False)),
-            'is_prohibited': bool(status.get('is_prohibited', False)),
-        }
+        return post_formatters.extract_post_status(post)
         
     async def get_user_videos(self, user_id: str, offset: int = 0, limit: int = 1000, on_batch=None) -> Union[List[dict], Dict]:
         """获取用户视频列表
@@ -471,7 +437,7 @@ class DouyinUserManager:
 
     def _is_image_post(self, post: dict) -> bool:
         """判断是否为图片作品"""
-        return post.get("images") is not None and len(post.get("images", [])) > 0
+        return post_formatters.is_image_post(post)
 
     def get_media_info(self, post: dict) -> Tuple[str, List[Dict[str, str]]]:
         """从帖子数据中提取媒体信息 (URL, 类型)
@@ -529,27 +495,7 @@ class DouyinUserManager:
 
     def _extract_bgm_url(self, post: dict) -> Optional[str]:
         """提取作品背景音乐地址。"""
-        bgm_url = None
-
-        if post.get('music'):
-            music_data = post['music']
-            if isinstance(music_data.get('play_url'), dict):
-                play_urls = music_data['play_url'].get('url_list', [])
-                bgm_url = play_urls[0] if play_urls else None
-            elif isinstance(music_data.get('play_url'), str):
-                bgm_url = music_data['play_url']
-
-            if not bgm_url:
-                bgm_url = music_data.get('h5_url', '') or music_data.get('web_url', '')
-
-            if not bgm_url and music_data.get('music_file'):
-                if isinstance(music_data['music_file'], dict):
-                    file_urls = music_data['music_file'].get('url_list', [])
-                    bgm_url = file_urls[0] if file_urls else None
-                elif isinstance(music_data['music_file'], str):
-                    bgm_url = music_data['music_file']
-
-        return bgm_url
+        return post_formatters.extract_bgm_url(post)
 
     async def get_video_detail(self, aweme_id: str) -> Optional[dict]:
         """根据作品ID获取视频详情
@@ -747,16 +693,7 @@ class DouyinUserManager:
         return self.get_media_info(post)
 
     def _media_type_label(self, media_type: str, media_urls: list[dict]) -> str:
-        if media_type == 'mixed':
-            live_count = sum(1 for item in media_urls if item.get('type') == 'live_photo')
-            img_count = sum(1 for item in media_urls if item.get('type') == 'image')
-            return f'图片({img_count}张)+Live图({live_count}张)'
-        return {
-            'video': '视频',
-            'image': f'图片({len(media_urls)}张)',
-            'live_photo': f'Live图({len(media_urls)}张)',
-            'unknown': '未知'
-        }.get(media_type, '未知')
+        return post_formatters.media_type_label(media_type, media_urls)
 
     async def download_user_videos(self, user_info: dict, auto_confirm: bool = False,web_socket: bool = False):
         """下载用户视频
