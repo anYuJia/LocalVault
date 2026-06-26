@@ -5,7 +5,6 @@
 """
 from __future__ import annotations
 
-import concurrent.futures
 from typing import Callable
 
 from flask import Blueprint, jsonify
@@ -53,34 +52,26 @@ def _save_accounts_config() -> None:
     )
 
 
+def _public_account_payload(account: dict) -> dict:
+    """Return non-sensitive account fields safe for API responses."""
+    return {
+        'sec_uid': account.get('sec_uid', ''),
+        'nickname': account.get('nickname', ''),
+        'avatar_thumb': account.get('avatar_thumb', ''),
+    }
+
+
 @accounts_bp.route('/api/accounts', methods=['GET'])
 def get_accounts():
     """获取所有账号信息"""
     accounts = getattr(_Config, 'ACCOUNTS', [])
     current_sec_uid = getattr(_Config, 'CURRENT_SEC_UID', '')
 
-    verified_accounts = []
-    if accounts:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(accounts))) as executor:
-            futures = {executor.submit(_verify_native_cookie_login, acc.get('cookie', '')): acc for acc in accounts}
-            for future in concurrent.futures.as_completed(futures):
-                acc = futures[future]
-                try:
-                    res = future.result()
-                    is_valid = res.get('success', False)
-                except Exception:
-                    is_valid = False
-                verified_accounts.append({
-                    **acc,
-                    'is_valid': is_valid
-                })
-        verified_accounts.sort(key=lambda x: next((i for i, a in enumerate(accounts) if a.get('sec_uid') == x.get('sec_uid')), 0))
-    else:
-        verified_accounts = []
+    public_accounts = [_public_account_payload(acc) for acc in accounts]
 
     return jsonify({
         'success': True,
-        'accounts': verified_accounts,
+        'accounts': public_accounts,
         'current_sec_uid': current_sec_uid,
     })
 
