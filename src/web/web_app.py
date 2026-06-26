@@ -204,10 +204,6 @@ updater.setup_updater(
 )
 
 active_tasks = {} # 用于存储活跃的 asyncio.Future 和 asyncio.Event
-_im_message_ws = None
-_im_message_thread = None
-_im_message_stop_event = threading.Event()
-_im_message_lock = threading.Lock()
 # download_tasks / active_tasks 同时被 Flask 路由线程和 asyncio 协程（run_coroutine_threadsafe 提交到独立事件循环线程）访问，
 # 需要锁保护迭代与读-改-写场景，避免 'dictionary changed size during iteration' 和 KeyError。
 _download_tasks_lock = threading.Lock()
@@ -1577,261 +1573,18 @@ from src.web.user_queries import user_queries_bp, setup_user_queries
 app.register_blueprint(user_queries_bp)
 
 
-def _sanitize_sec_user_ids(values):
-    if not isinstance(values, list):
-        return []
-    result = []
-    seen = set()
-    for item in values:
-        value = str(item or '').strip()
-        if not value or not value.startswith('MS4w') or value in seen:
-            continue
-        seen.add(value)
-        result.append(value)
-    return result
-
-def _collect_sec_uid_records(value):
-    records = []
-    seen = set()
-
-    def visit(item):
-        if isinstance(item, list):
-            for child in item:
-                visit(child)
-            return
-        if not isinstance(item, dict):
-            return
-        sec_uid = str(item.get('sec_uid') or item.get('sec_user_id') or '').strip()
-        if sec_uid and sec_uid not in seen:
-            seen.add(sec_uid)
-            records.append(item)
-        for child in item.values():
-            if isinstance(child, (dict, list)):
-                visit(child)
-
-    visit(value)
-    return records
-
-def _save_im_friend_cache(sec_user_ids=None):
-    if sec_user_ids is not None:
-        Config.IM_FRIEND_SEC_USER_IDS = Config.normalize_sec_user_ids(sec_user_ids)
-    Config.save_config(
-        Config.COOKIE,
-        Config.BASE_DIR,
-        Config.HISTORY_DIRS,
-        download_quality=Config.DOWNLOAD_QUALITY,
-        max_concurrent=Config.MAX_CONCURRENT,
-        filename_template=Config.FILENAME_TEMPLATE,
-        folder_name_template=Config.FOLDER_NAME_TEMPLATE,
-        auto_create_folder=Config.AUTO_CREATE_FOLDER,
-        im_friend_sec_user_ids=Config.IM_FRIEND_SEC_USER_IDS,
-        im_friend_include_all_users=Config.IM_FRIEND_INCLUDE_ALL_USERS,
-        im_friend_refresh_interval_seconds=Config.IM_FRIEND_REFRESH_INTERVAL_SECONDS,
-    )
-
-
-def _im_cookie_dict(cookie: str) -> dict:
-    result = {}
-    for item in str(cookie or '').split(';'):
-        if '=' in item:
-            key, value = item.strip().split('=', 1)
-            if key:
-                result[key] = value
-    return result
-
-
-def _extract_text_message(message: dict) -> str:
-    content = str((message or {}).get('content') or '')
-    if not content:
-        return ''
-    try:
-        parsed = json.loads(content)
-        if isinstance(parsed, dict):
-            if 'command_type' in parsed or parsed.get('command_type') == 6:
-                ext_data = parsed.get('ext_data') or []
-                found_spark = False
-                text = ""
-                for ext_item in ext_data:
-                    if isinstance(ext_item, dict) and ext_item.get('key') == 'a:consecutive_chat_data':
-                        text = "🔥 连续聊天火花已亮起"
-                        found_spark = True
-                        val_str = ext_item.get('value') or '{}'
-                        try:
-                            val_json = json.loads(val_str)
-                            count_info = val_json.get('consecutive_count_info') or {}
-                            count = count_info.get('consecutive_count') or 1
-                            text = f"🔥 连续聊天火花已亮起（第 {count} 天）"
-                        except Exception:
-                            pass
-                if found_spark:
-                    return text
-                else:
-                    return '__FILTERED_CONTROL_MESSAGE__'
-            return str(parsed.get('text') or parsed.get('tips') or parsed.get('hint_text') or '')
-    except Exception:
-        pass
-    return content
-
-
-def _emit_im_message(response: dict) -> None:
-    sent = douyin_im_proto.sent_message(response)
-    if not sent:
-        return
-    try:
-        content = _extract_text_message({'content': sent.content})
-        if content == '__FILTERED_CONTROL_MESSAGE__' or not content:
-            return
-        payload = {
-            'conversation_id': sent.conversation_id,
-            'conversation_short_id': sent.conversation_short_id,
-            'conversation_type': sent.conversation_type,
-            'server_message_id': sent.server_message_id,
-            'index_in_conversation': sent.index_in_conversation,
-            'sender_uid': str(sent.sender or ''),
-            'content': content,
-            'raw_content': sent.content,
-            'created_at': int(time.time() * 1000),
-        }
-        logger.info(
-            'Douyin IM websocket message: conversation=%s sender=%s message_id=%s text_len=%s',
-            payload['conversation_id'],
-            payload['sender_uid'],
-            payload['server_message_id'],
-            len(content),
-        )
-        socketio.emit('im_message', payload)
-    except Exception as error:
-        logger.warning('解析 IM WebSocket 消息失败: %s', error)
-
-
-def _stop_im_message_listener() -> None:
-    global _im_message_ws
-    _im_message_stop_event.set()
-    ws = _im_message_ws
-    _im_message_ws = None
-    if ws is not None:
-        try:
-            ws.close()
-        except Exception:
-            pass
-
-
-_im_message_start_timer = None
-
-
-def _ensure_im_message_listener() -> None:
-    global _im_message_thread, _im_message_start_timer
-    if not api or not Config.COOKIE:
-        return
-    with _im_message_lock:
-        if _im_message_thread and _im_message_thread.is_alive():
-            return
-        if _im_message_start_timer is not None:
-            return  # Timer already scheduled
-
-        def _delayed_start():
-            global _im_message_thread, _im_message_start_timer
-            with _im_message_lock:
-                _im_message_start_timer = None
-                if _im_message_thread and _im_message_thread.is_alive():
-                    return
-                _im_message_stop_event.clear()
-                _im_message_thread = threading.Thread(
-                    target=_run_im_message_listener, daemon=True
-                )
-                _im_message_thread.start()
-
-        _im_message_start_timer = threading.Timer(30.0, _delayed_start)
-        _im_message_start_timer.daemon = True
-        _im_message_start_timer.start()
-
-
-def _run_im_message_listener() -> None:
-    global _im_message_ws
-    try:
-        try:
-            import websocket
-        except Exception:
-            logger.warning('未安装 websocket-client，无法接收 IM 消息')
-            socketio.emit('im_status', {'connected': False, 'message': '缺少 websocket-client，无法接收私信'})
-            return
-        import ssl
-
-        cookie_dict = _im_cookie_dict(Config.COOKIE)
-        sessionid = cookie_dict.get('sessionid') or cookie_dict.get('sessionid_ss') or ''
-        if not sessionid:
-            logger.info('IM WebSocket 未启动：Cookie 缺少 sessionid')
-            return
-
-        device_id, success, response = run_async(api.get_im_device_id(), timeout=30)
-        if not success or not device_id:
-            logger.warning('IM WebSocket 获取 device_id 失败: %s', _api_message(response, '未知错误') if isinstance(response, dict) else response)
-            return
-
-        app_key = 'e1bd35ec9db7b8d846de66ed140b1ad9'
-        fp_id = '9'
-        access_key = hashlib.md5(f'{fp_id}{app_key}{device_id}f8a69f1719916z'.encode('utf-8')).hexdigest()
-        params = urlencode({
-            'aid': '6383',
-            'device_platform': 'douyin_pc',
-            'fpid': fp_id,
-            'device_id': device_id,
-            'token': sessionid,
-            'access_key': access_key,
-        })
-        url = f'wss://frontier-im.douyin.com/ws/v2?{params}'
-
-        def on_open(ws):
-            logger.info('Douyin IM WebSocket 已连接')
-            socketio.emit('im_status', {'connected': True, 'message': '私信接收已连接'})
-
-        def on_message(ws, message):
-            try:
-                data = message if isinstance(message, bytes) else bytes(message or b'')
-                frame = douyin_im_proto.parse_push_frame(data)
-                response_data = frame.get('response')
-                if isinstance(response_data, dict):
-                    _emit_im_message(response_data)
-                elif frame.get('payload_type') == 'text/json':
-                    logger.debug('Douyin IM WebSocket JSON: %s', frame.get('payload'))
-            except Exception as error:
-                logger.warning('处理 IM WebSocket 消息失败: %s', error)
-
-        def on_error(ws, error):
-            logger.warning('Douyin IM WebSocket 错误: %s', error)
-            socketio.emit('im_status', {'connected': False, 'message': f'私信接收连接错误: {error}'})
-
-        def on_close(ws, close_status_code, close_msg):
-            logger.info('Douyin IM WebSocket 已关闭: status=%s msg=%s', close_status_code, close_msg)
-            socketio.emit('im_status', {'connected': False, 'message': '私信接收已断开'})
-
-        _im_message_ws = websocket.WebSocketApp(
-            url,
-            header={
-                'Pragma': 'no-cache',
-                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-                'User-Agent': getattr(api, 'common_headers', {}).get('User-Agent', ''),
-                'Cache-Control': 'no-cache',
-                'Sec-WebSocket-Protocol': 'binary, base64, pbbp2',
-                'Sec-WebSocket-Extensions': 'permessage-deflate; client_max_window_bits',
-            },
-            cookie=Config.COOKIE,
-            on_open=on_open,
-            on_message=on_message,
-            on_error=on_error,
-            on_close=on_close,
-        )
-        _im_message_ws.run_forever(
-            origin='https://www.douyin.com',
-            sslopt={'cert_reqs': ssl.CERT_NONE, 'check_hostname': False},
-        )
-    except Exception as error:
-        logger.warning('IM WebSocket 监听线程退出: %s', error)
-    finally:
-        _im_message_ws = None
 
 # 好友 IM 私信路由已抽离到 src/web/friend_im.py
 from src.web.friend_im import friend_im_bp, setup_friend_im
+from src.web import im_listener
+
+im_listener.setup_im_listener(
+    logger=logger,
+    Config=Config,
+    socketio=socketio,
+    run_async=run_async,
+    api_message=_api_message,
+)
 
 setup_friend_im(
     logger=logger,
@@ -1840,10 +1593,10 @@ setup_friend_im(
     coerce_int=_coerce_int,
     run_async=run_async,
     api_message=_api_message,
-    ensure_im_message_listener=_ensure_im_message_listener,
-    sanitize_sec_user_ids=_sanitize_sec_user_ids,
-    save_im_friend_cache=_save_im_friend_cache,
-    collect_sec_uid_records=_collect_sec_uid_records,
+    ensure_im_message_listener=im_listener.ensure_im_message_listener,
+    sanitize_sec_user_ids=im_listener.sanitize_sec_user_ids,
+    save_im_friend_cache=im_listener.save_im_friend_cache,
+    collect_sec_uid_records=im_listener.collect_sec_uid_records,
 )
 app.register_blueprint(friend_im_bp)
 
@@ -1971,7 +1724,7 @@ def get_tasks():
 def handle_connect():
     """客户端连接"""
     logger.debug("客户端已连接")
-    _ensure_im_message_listener()
+    im_listener.ensure_im_message_listener()
     emit('connected', {'message': '连接成功'})
 
 @socketio.on('disconnect')
@@ -2007,8 +1760,8 @@ setup_cookie_login(
     DouyinAPI=DouyinAPI,
     run_async=run_async,
     init_app=init_app,
-    stop_im_message_listener=_stop_im_message_listener,
-    ensure_im_message_listener=_ensure_im_message_listener,
+    stop_im_message_listener=im_listener.stop_im_message_listener,
+    ensure_im_message_listener=im_listener.ensure_im_message_listener,
     api_message=_api_message,
     avatar_url=_avatar_url,
     request_json=_request_json,
