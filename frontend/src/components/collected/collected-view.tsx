@@ -144,6 +144,14 @@ function CollectedVideosPanel() {
       const result = await getCollectedVideos(reset ? 0 : cursor, PAGE_SIZE);
       if (!result.success) {
         const message = result.message || "获取收藏视频失败";
+        if (result.need_login) {
+          window.dispatchEvent(new CustomEvent("dy-cookie-invalid", { detail: { message } }));
+          setError(message);
+          setInitialized(true);
+          setHasMore(false);
+          addLog(message, "warning");
+          return;
+        }
         if (result.need_verify) {
           requestVerifyRecovery({
             verifyUrl: result.verify_url,

@@ -3804,9 +3804,13 @@ def get_liked_videos_api():
             return jsonify({'success': False, 'message': '请先设置Cookie'}), 400
         result = run_async(user_manager.get_liked_videos(count, cursor, include_pagination=True))
         if isinstance(result, dict):
-            if result.get('_need_verify'):
-                return jsonify(_verify_error_response_without_login_check(result, '获取点赞视频失败，请完成验证后重试'))
             if result.get('_need_login'):
+                return jsonify({
+                    'success': False,
+                    'need_login': True,
+                    'message': '获取点赞视频需要登录，请先在设置中登录抖音账号',
+                })
+            if result.get('_need_verify'):
                 return jsonify(_verify_error_response_without_login_check(result, '获取点赞视频失败，请完成验证后重试'))
             if 'data' in result:
                 videos = result.get('data') or []
@@ -3899,9 +3903,13 @@ def get_collected_videos_api():
 
         result = run_async(user_manager.get_collected_videos(count, cursor))
         if isinstance(result, dict):
-            if result.get('_need_verify'):
-                return jsonify(_verify_error_response_without_login_check(result, '获取收藏视频失败，请完成验证后重试'))
             if result.get('_need_login'):
+                return jsonify({
+                    'success': False,
+                    'need_login': True,
+                    'message': '获取收藏视频需要登录，请先在设置中登录抖音账号',
+                })
+            if result.get('_need_verify'):
                 return jsonify(_verify_error_response_without_login_check(result, '获取收藏视频失败，请完成验证后重试'))
             if 'data' in result:
                 videos = result.get('data') or []
@@ -3932,9 +3940,13 @@ def get_collected_mixes_api():
 
         result = run_async(user_manager.get_collected_mixes(count, cursor))
         if isinstance(result, dict):
-            if result.get('_need_verify'):
-                return jsonify(_verify_error_response_without_login_check(result, '获取收藏合集失败，请完成验证后重试'))
             if result.get('_need_login'):
+                return jsonify({
+                    'success': False,
+                    'need_login': True,
+                    'message': '获取收藏合集需要登录，请先在设置中登录抖音账号',
+                })
+            if result.get('_need_verify'):
                 return jsonify(_verify_error_response_without_login_check(result, '获取收藏合集失败，请完成验证后重试'))
             if 'data' in result:
                 mixes = result.get('data') or []
@@ -6713,14 +6725,8 @@ def get_recommended_feed():
         if feed_type not in ('featured', 'recommended'):
             feed_type = 'featured'
 
-        # 获取当前配置的 cookie
+        # 获取当前配置的 cookie（推荐流可以不带 cookie 获取通用推荐）
         cookie = Config.COOKIE if Config.COOKIE else ''
-
-        if not cookie:
-            return jsonify({
-                'success': False,
-                'message': '请先登录抖音账号'
-            })
 
         if not api:
             return jsonify({

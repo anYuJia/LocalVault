@@ -87,6 +87,17 @@ export const useLikedStore = create<LikedStoreState>((set, get) => ({
 
       if (!result.success) {
         const message = result.message || "获取点赞视频失败";
+        if (result.need_login) {
+          window.dispatchEvent(new CustomEvent("dy-cookie-invalid", { detail: { message } }));
+          set({
+            loadingVideos: false,
+            videosLoaded: true,
+            videosHasMore: false,
+            videosError: message,
+          });
+          addLog(message, "warning");
+          return;
+        }
         if (result.need_verify) {
           requestVerifyRecovery({
             verifyUrl: result.verify_url,
@@ -171,6 +182,12 @@ export const useLikedStore = create<LikedStoreState>((set, get) => ({
 
       if (!result.success) {
         const message = result.message || "加载更多点赞视频失败";
+        if (result.need_login) {
+          window.dispatchEvent(new CustomEvent("dy-cookie-invalid", { detail: { message } }));
+          set({ loadingMoreVideos: false, videosError: message });
+          addLog(message, "warning");
+          return;
+        }
         if (result.need_verify) {
           requestVerifyRecovery({
             verifyUrl: result.verify_url,

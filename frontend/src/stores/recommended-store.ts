@@ -178,6 +178,9 @@ export const useRecommendedStore = create<RecommendedStoreState>((set, get) => (
 
       if (!result.success) {
         const message = result.message || "加载推荐视频失败";
+        if (result.need_login) {
+          window.dispatchEvent(new CustomEvent("dy-cookie-invalid", { detail: { message } }));
+        }
         if (result.need_verify) {
           requestVerifyRecovery({
             verifyUrl: result.verify_url,

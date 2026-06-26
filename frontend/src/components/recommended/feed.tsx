@@ -140,7 +140,7 @@ export function RecommendedFeed() {
             <Sparkles className="w-7 h-7 text-accent" />
           </div>
           <p className="text-[0.9rem] text-text-secondary mb-1">暂无推荐内容</p>
-          <p className="text-[0.8rem] text-text-muted">需要配置 Cookie 后才能获取推荐视频</p>
+          <p className="text-[0.8rem] text-text-muted">请先在设置中登录抖音账号以获取个性化推荐</p>
         </motion.div>
       ) : (
         <>
