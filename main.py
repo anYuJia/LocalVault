@@ -163,6 +163,10 @@ if __name__ == '__main__':
                 native_window.setTitlebarSeparatorStyle_(AppKit.NSTitlebarSeparatorStyleNone)
             content_view = native_window.contentView()
             if content_view is not None:
+                content_view.setFrame_(native_window.contentLayoutRect())
+                content_view.setAutoresizingMask_(
+                    AppKit.NSViewWidthSizable | AppKit.NSViewHeightSizable
+                )
                 content_view.setWantsLayer_(True)
                 layer = content_view.layer()
                 if layer is not None:
