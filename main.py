@@ -27,7 +27,7 @@ if __name__ == '__main__':
     # macOS 上跳过 gevent patch，避免与 Cocoa 运行循环冲突
     os.environ['USE_PYWEBVIEW'] = '1'
 
-    from src.web.web_app import start_server, socketio
+    from flask_server import run_flask_process
 
     def find_free_port(start=5001, end=5010):
         """查找可用端口"""
@@ -55,7 +55,7 @@ if __name__ == '__main__':
     def on_closing():
         """窗口关闭回调"""
         try:
-            socketio.stop()
+            flask_proc.terminate()
         except Exception:
             pass
         os._exit(0)
@@ -63,29 +63,35 @@ if __name__ == '__main__':
     class WindowAPI:
         """Expose native pywebview window controls to the React shell."""
 
-        def __init__(self):
-            self.window = None
-            self._maximized = False
+        _maximized = False
 
-        def bind(self, target_window):
-            self.window = target_window
+        def _get_window(self):
+            """动态获取 window，不存储引用（避免 pywebview WinForms 无限递归）"""
+            try:
+                import webview as _wv
+                return _wv.windows[0] if _wv.windows else None
+            except Exception:
+                return None
 
         def minimize(self):
-            if self.window:
-                self.window.minimize()
+            w = self._get_window()
+            if w:
+                w.minimize()
 
         def toggle_maximize(self):
-            if not self.window:
+            w = self._get_window()
+            if not w:
                 return
-            if self._maximized:
-                self.window.restore()
+            if WindowAPI._maximized:
+                w.restore()
             else:
-                self.window.maximize()
-            self._maximized = not self._maximized
+                w.maximize()
+            WindowAPI._maximized = not WindowAPI._maximized
 
         def close(self):
-            if self.window:
-                self.window.destroy()
+            w = self._get_window()
+            if w:
+                w.destroy()
 
         def open_external_url(self, url):
             target = str(url or '').strip()
@@ -95,11 +101,12 @@ if __name__ == '__main__':
     # 查找可用端口
     port = find_free_port()
 
-    # 在后台线程启动Flask服务
-    server_thread = threading.Thread(
-        target=start_server, kwargs={'port': port}, daemon=True
+    # 在独立子进程启动Flask服务（避免与 WebView2 的 GIL 竞争）
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    flask_proc = multiprocessing.Process(
+        target=run_flask_process, args=(port, project_root), daemon=True
     )
-    server_thread.start()
+    flask_proc.start()
 
     # 等待服务就绪
     if not wait_for_server(port):
@@ -178,7 +185,7 @@ if __name__ == '__main__':
 
     window_api = WindowAPI()
     window_options = {}
-    if sys.platform == 'darwin':
+    if sys.platform in ('darwin', 'win32'):
         window_options['frameless'] = True
 
     # 创建pywebview窗口
@@ -194,7 +201,6 @@ if __name__ == '__main__':
         easy_drag=False,
         **window_options,
     )
-    window_api.bind(window)
     window.events.closing += on_closing
 
     if sys.platform == 'darwin':

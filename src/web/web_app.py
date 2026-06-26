@@ -2626,18 +2626,14 @@ def check_update():
     current_version = _get_current_app_version()
 
     try:
-        metadata = run_async(asyncio.to_thread(_fetch_updater_metadata))
-        
-        def fetch_release_if_needed():
-            if metadata:
-                return None
+        metadata = _fetch_updater_metadata()
+
+        release = None
+        if not metadata:
             try:
-                return _fetch_latest_release()
+                release = _fetch_latest_release()
             except Exception as exc:
                 logger.debug(f"Fetch latest release failed: {exc}")
-                return None
-                
-        release = run_async(asyncio.to_thread(fetch_release_if_needed))
 
         latest_version = _normalize_version_text(
             (metadata or {}).get('version') or
@@ -2676,18 +2672,14 @@ def check_update():
 def download_update():
     """在应用内下载对应平台的发布资源，并打开安装包或所在目录。"""
     try:
-        metadata = run_async(asyncio.to_thread(_fetch_updater_metadata))
-        
-        def fetch_release_if_needed():
-            if metadata:
-                return None
+        metadata = _fetch_updater_metadata()
+
+        release = None
+        if not metadata:
             try:
-                return _fetch_latest_release()
+                release = _fetch_latest_release()
             except Exception as exc:
                 logger.debug(f"Fetch latest release failed: {exc}")
-                return None
-                
-        release = run_async(asyncio.to_thread(fetch_release_if_needed))
 
         current_version = _get_current_app_version()
         latest_version = _normalize_version_text(
@@ -3616,11 +3608,13 @@ def open_verify_browser():
         target_url = (data.get('target_url') or '').strip() or 'https://www.douyin.com/'
 
         if not is_native_cookie_login_available():
+            import webbrowser
+            webbrowser.open(target_url)
             return jsonify({
-                'success': False,
-                'message': '当前不是桌面 pywebview 模式，无法打开带 Cookie 的应用内验证窗口。请通过发行版或 python main.py 启动后重试。',
+                'success': True,
+                'message': '已在系统浏览器中打开验证页面，请完成验证',
                 'open_url': target_url,
-            }), 400
+            })
 
         if _native_verify_window and not _native_verify_window.events.closed.is_set():
             try:
@@ -4123,16 +4117,34 @@ def _stop_im_message_listener() -> None:
             pass
 
 
+_im_message_start_timer = None
+
+
 def _ensure_im_message_listener() -> None:
-    global _im_message_thread
+    global _im_message_thread, _im_message_start_timer
     if not api or not Config.COOKIE:
         return
     with _im_message_lock:
         if _im_message_thread and _im_message_thread.is_alive():
             return
-        _im_message_stop_event.clear()
-        _im_message_thread = threading.Thread(target=_run_im_message_listener, daemon=True)
-        _im_message_thread.start()
+        if _im_message_start_timer is not None:
+            return  # Timer already scheduled
+
+        def _delayed_start():
+            global _im_message_thread, _im_message_start_timer
+            with _im_message_lock:
+                _im_message_start_timer = None
+                if _im_message_thread and _im_message_thread.is_alive():
+                    return
+                _im_message_stop_event.clear()
+                _im_message_thread = threading.Thread(
+                    target=_run_im_message_listener, daemon=True
+                )
+                _im_message_thread.start()
+
+        _im_message_start_timer = threading.Timer(30.0, _delayed_start)
+        _im_message_start_timer.daemon = True
+        _im_message_start_timer.start()
 
 
 def _run_im_message_listener() -> None:

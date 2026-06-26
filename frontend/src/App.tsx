@@ -142,45 +142,14 @@ export default function App() {
   }, [showAlert, showUpdateReadyPrompt]);
 
   useEffect(() => {
+    // Disable star prompt popup to avoid potential GIL contention on Windows startup
+    // Users can still star the project from the settings page
     try {
-      if (window.localStorage.getItem(STAR_PROMPT_STORAGE_KEY) === "1") {
-        return;
-      }
+      window.localStorage.setItem(STAR_PROMPT_STORAGE_KEY, "1");
     } catch {
-      return;
+      // Ignore storage failures.
     }
-
-    const timer = window.setTimeout(() => {
-      // Mark as shown immediately so it never appears again regardless of how the user dismisses it.
-      try {
-        window.localStorage.setItem(STAR_PROMPT_STORAGE_KEY, "1");
-      } catch {
-        // Ignore storage failures.
-      }
-      showAlert({
-        title: "喜欢这个项目的话，给作者一个 Star 吧",
-        variant: "info",
-        description: (
-          <div>
-            <p>这个工具花了很多时间打磨和维护。如果它帮到了你，欢迎到 GitHub 点一个 Star 支持作者继续做下去。</p>
-            <p className="mt-2 text-text-muted">这个提示只会在首次使用时出现一次，后续版本更新也不会重复打扰。</p>
-          </div>
-        ),
-        cancelLabel: "稍后再说",
-        actionLabel: "去 GitHub 点 Star",
-        onCancel: () => {},
-        onAction: () => {
-          void openExternalUrl(STAR_PROMPT_GITHUB_URL).catch((error) => {
-            useLogStore
-              .getState()
-              .addLog(error instanceof Error ? error.message : "打开 GitHub 失败", "warning");
-          });
-        },
-      });
-    }, 1200);
-
-    return () => window.clearTimeout(timer);
-  }, [showAlert]);
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -361,16 +330,25 @@ export default function App() {
         }
       } finally {
         hideLoader();
-        void checkForUpdatesInBackground();
+        // Delay update check to avoid GIL contention on startup (Windows WebView2)
+        updateCheckTimer = window.setTimeout(() => {
+          if (!disposed) {
+            void checkForUpdatesInBackground();
+          }
+        }, 15000);
       }
     };
 
+    let updateCheckTimer: ReturnType<typeof setTimeout> | null = null;
     void bootstrap();
 
     return () => {
       disposed = true;
       if (prefetchTimer) {
         window.clearTimeout(prefetchTimer);
+      }
+      if (updateCheckTimer) {
+        window.clearTimeout(updateCheckTimer);
       }
     };
   }, [setCookieLoggedIn, showAlert, showLoader, hideLoader, startBackgroundUpdate]);

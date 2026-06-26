@@ -1667,7 +1667,7 @@ export async function openExternalUrl(url: string): Promise<void> {
   }
 
   if (window.pywebview?.api?.open_external_url) {
-    await window.pywebview.api.open_external_url(target);
+    void window.pywebview.api.open_external_url(target);
     return;
   }
 
