@@ -21,7 +21,9 @@ class DouyinUserManager:
         self.downloader = downloader
         self.socketio = socketio  # 添加WebSocket支持
         self.cookie = cookie
+        # 用户详情缓存：{sec_user_id: (detail_dict, cached_at_monotonic)}
         self._user_detail_cache = {}
+        self._user_detail_cache_ttl = 1800  # 30 分钟过期
         # 检查是否启用调试模式
         self.debug_mode = os.environ.get('DEBUG_MODE', '').lower() in ('true', '1', 'yes')
         if self.debug_mode:
@@ -798,8 +800,15 @@ class DouyinUserManager:
 
     async def get_user_detail(self, user_id: str, force_refresh: bool = False) -> dict:
         """获取用户详情"""
-        if not force_refresh and user_id in self._user_detail_cache:
-            return dict(self._user_detail_cache[user_id])
+        import time
+        if not force_refresh:
+            cached = self._user_detail_cache.get(user_id)
+            if cached is not None:
+                detail, cached_at = cached
+                if time.monotonic() - cached_at < self._user_detail_cache_ttl:
+                    return dict(detail)
+                else:
+                    del self._user_detail_cache[user_id]
 
         params = {
             "sec_user_id": user_id,
@@ -824,7 +833,7 @@ class DouyinUserManager:
             # is_follow 字段可能不存在，用 follow_status 补全
             if not result.get('is_follow') and result.get('follow_status', 0):
                 result['is_follow'] = True
-            self._user_detail_cache[user_id] = dict(result)
+            self._user_detail_cache[user_id] = (dict(result), time.monotonic())
         return result
 
     async def search_user(self, keyword: str) -> Optional[dict]:
