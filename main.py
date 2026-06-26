@@ -163,23 +163,57 @@ if __name__ == '__main__':
                 native_window.setToolbarStyle_(AppKit.NSWindowToolbarStyleUnifiedCompact)
             if hasattr(native_window, 'setTitlebarSeparatorStyle_') and hasattr(AppKit, 'NSTitlebarSeparatorStyleNone'):
                 native_window.setTitlebarSeparatorStyle_(AppKit.NSTitlebarSeparatorStyleNone)
+            def clear_view_background(view, force=False):
+                if view is None:
+                    return
+                class_name = ''
+                try:
+                    class_name = str(view.className())
+                except Exception:
+                    pass
+                should_clear = force or any(
+                    token in class_name
+                    for token in ('Titlebar', 'Toolbar', 'ThemeFrame', 'FrameView', 'Container')
+                )
+                try:
+                    if should_clear:
+                        view.setWantsLayer_(True)
+                        layer = view.layer()
+                        if layer is not None:
+                            layer.setBackgroundColor_(AppKit.NSColor.clearColor().CGColor())
+                            layer.setOpaque_(False)
+                            layer.setMasksToBounds_(False)
+                except Exception:
+                    pass
+                try:
+                    if should_clear and hasattr(view, 'setDrawsBackground_'):
+                        view.setDrawsBackground_(False)
+                except Exception:
+                    pass
+                try:
+                    for child in view.subviews():
+                        clear_view_background(child)
+                except Exception:
+                    pass
+
             content_view = native_window.contentView()
-            if content_view is not None:
+            frame_host = content_view.superview() if content_view is not None else None
+            if frame_host is not None:
                 window_frame = native_window.frame()
                 full_bounds = AppKit.NSMakeRect(0, 0, window_frame.size.width, window_frame.size.height)
-                content_view.setFrame_(full_bounds)
-                content_view.setAutoresizingMask_(
+                frame_host.setFrame_(full_bounds)
+                frame_host.setAutoresizingMask_(
                     AppKit.NSViewWidthSizable | AppKit.NSViewHeightSizable
                 )
-                content_view.setWantsLayer_(True)
-                layer = content_view.layer()
-                if layer is not None:
-                    layer.setMasksToBounds_(False)
-                for subview in content_view.subviews():
-                    subview.setFrame_(content_view.bounds())
-                    subview.setAutoresizingMask_(
+                clear_view_background(frame_host, force=True)
+
+                if content_view is not None:
+                    content_view.removeFromSuperview()
+                    content_view.setFrame_(frame_host.bounds())
+                    content_view.setAutoresizingMask_(
                         AppKit.NSViewWidthSizable | AppKit.NSViewHeightSizable
                     )
+                    frame_host.addSubview_positioned_relativeTo_(content_view, AppKit.NSWindowBelow, None)
             for button_kind in (
                 AppKit.NSWindowCloseButton,
                 AppKit.NSWindowMiniaturizeButton,
