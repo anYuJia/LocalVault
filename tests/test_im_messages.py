@@ -4,12 +4,12 @@ from src.api.api import DouyinAPI
 from src.api.im_messages import IMMessages
 
 
-def test_im_media_uri_legacy_entrypoint_matches_messages_service():
+def test_im_media_uri_client_entrypoint_matches_messages_service():
     api = DouyinAPI("")
     url = "https://example.com/aweme/img/example/path.webp~tplv-dy"
 
-    assert api._media_uri_from_url(url) == IMMessages.media_uri_from_url(url)
-    assert api._media_uri_from_url(url) == "example/path"
+    assert api.im._media_uri_from_url(url) == IMMessages.media_uri_from_url(url)
+    assert api.im._media_uri_from_url(url) == "example/path"
 
 
 def test_im_text_message_delegates_to_messages_service(monkeypatch):
@@ -44,7 +44,7 @@ def test_im_content_message_delegates_to_messages_service(monkeypatch):
     monkeypatch.setattr(api.im.messages, "send_content_message", fake_send_content)
 
     result, success = asyncio.run(
-        api._send_im_content_message(
+        api.im._send_im_content_message(
             123,
             '{"text":"你好"}',
             message_type=8,

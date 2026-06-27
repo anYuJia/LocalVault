@@ -3,7 +3,7 @@
 覆盖两处历史回归点：
 1. IMClient._get_im_image_upload_config 必须是绑定实例方法（不能残留 @staticmethod），
    否则 send_im_image_message 执行时会 TypeError。
-2. DouyinAPI 上保留的旧 AWS helper 兼容入口必须可调用，委托到 im_uploads 模块。
+2. AWS helper 已迁移到 im_uploads 模块，模块入口必须可调用。
 """
 
 import asyncio
@@ -40,24 +40,17 @@ def test_im_image_upload_config_is_bound_method(monkeypatch):
     assert result == {"message": "fake"}
 
 
-def test_douyin_api_legacy_aws_helpers_callable():
-    """DouyinAPI 旧 AWS helper 兼容入口委托到 im_uploads，可正常调用。"""
-    api = DouyinAPI("")
+def test_im_uploads_aws_helpers_callable():
+    """AWS helper 迁移到 im_uploads 后仍可正常调用。"""
+    assert im_uploads._aws_quote("a b/c") == "a%20b%2Fc"
 
-    # _aws_quote：纯函数，委托 im_uploads._aws_quote
-    assert api._aws_quote("a b/c") == im_uploads._aws_quote("a b/c")
-
-    # _aws_canonical_query：纯函数
     params = {"b": "2", "a": "1"}
-    assert api._aws_canonical_query(params) == im_uploads._aws_canonical_query(params)
+    assert im_uploads._aws_canonical_query(params) == "a=1&b=2"
 
-    # _aws_signing_key：纯函数
-    key1 = api._aws_signing_key("secret", "20260101")
-    key2 = im_uploads._aws_signing_key("secret", "20260101")
-    assert key1 == key2 and isinstance(key1, bytes)
+    signing_key = im_uploads._aws_signing_key("secret", "20260101")
+    assert isinstance(signing_key, bytes)
 
-    # _aws_vod_auth_headers：实例方法，委托 im_uploads._aws_vod_auth_headers（不触网）
-    signed_headers, headers = api._aws_vod_auth_headers(
+    signed_headers, headers = im_uploads._aws_vod_auth_headers(
         method="GET",
         query_params={"a": "1"},
         access_key_id="AKID",

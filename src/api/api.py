@@ -24,7 +24,6 @@ from src.api.im_formatters import (
 )
 from src.api import temp_cookie
 from src.api.im_client import IMClient
-from src.api import im_uploads
 from src.api.comment_client import CommentClient
 from src.api.api_errors import ApiErrors
 from src.api.ticket_guard import TicketGuard
@@ -561,12 +560,6 @@ class DouyinAPI:
 
     # ---------- IM 薄代理（委托给 im_client.IMClient） ----------
 
-    def _im_common_headers(self, path: str) -> dict:
-        return self.im._im_common_headers(path)
-
-    async def _request_im(self, uri: str, endpoint_params: dict | None = None, body_params: dict | None = None, method: str = 'GET') -> tuple[dict, bool]:
-        return await self.im._request_im(uri, endpoint_params, body_params, method)
-
     async def get_im_spotlight_relation_sec_user_ids(self, limit: int = 500, include_all_users: bool = False) -> tuple[list[str], bool, dict]:
         return await self.im.get_im_spotlight_relation_sec_user_ids(limit, include_all_users)
 
@@ -585,53 +578,8 @@ class DouyinAPI:
     async def get_im_device_id(self) -> tuple[str, bool, dict]:
         return await self.im.get_im_device_id()
 
-    def _im_proto_signer(self) -> dict | None:
-        return self.im._im_proto_signer()
-
-    def _ecdsa_request_sign(self, value: str, private_key: str) -> tuple[str, str | None]:
-        return self.im._ecdsa_request_sign(value, private_key)
-
-    def _build_im_request_common_headers(self, signer: dict, extra_headers: dict[str, str] | None = None) -> dict[str, str]:
-        return self.im._build_im_request_common_headers(signer, extra_headers)
-
-    def _build_im_proto_request(
-        self,
-        *,
-        cmd: int,
-        body: bytes,
-        request_sign: str,
-        signer: dict,
-        sdk_version: str = "1.1.3",
-        build_number: str = "5fa6ff1:Detached: 5fa6ff1111fd53aafc4c753505d3c93daad74d27",
-        extra_headers: dict[str, str] | None = None,
-    ) -> bytes:
-        return self.im._build_im_proto_request(
-            cmd=cmd, body=body, request_sign=request_sign, signer=signer,
-            sdk_version=sdk_version, build_number=build_number, extra_headers=extra_headers,
-        )
-
-    def _build_im_pc_proto_request(
-        self,
-        *,
-        cmd: int,
-        body: bytes,
-        signer: dict,
-        request_sign: str = '',
-        extra_headers: dict[str, str] | None = None,
-    ) -> bytes:
-        return self.im._build_im_pc_proto_request(
-            cmd=cmd, body=body, signer=signer, request_sign=request_sign, extra_headers=extra_headers,
-        )
-
-    @staticmethod
-    def _media_uri_from_url(url: str) -> str:
-        return IMClient._media_uri_from_url(url)
-
     async def get_im_identity_security_token(self) -> tuple[dict, bool]:
         return await self.im.get_im_identity_security_token()
-
-    async def _post_im_proto(self, url: str, payload: bytes, with_signed_query: bool = False) -> tuple[dict, bool]:
-        return await self.im._post_im_proto(url, payload, with_signed_query)
 
     async def create_im_conversation(self, to_user_id: str | int) -> tuple[dict, bool]:
         return await self.im.create_im_conversation(to_user_id)
@@ -641,50 +589,6 @@ class DouyinAPI:
 
     async def send_im_video_share_message(self, to_user_id: str | int, video: dict) -> tuple[dict, bool]:
         return await self.im.send_im_video_share_message(to_user_id, video)
-
-    @staticmethod
-    def _aws_quote(value) -> str:
-        return im_uploads._aws_quote(value)
-
-    @classmethod
-    def _aws_canonical_query(cls, params: dict) -> str:
-        return im_uploads._aws_canonical_query(params)
-
-    @staticmethod
-    def _aws_signing_key(secret_access_key: str, date_stamp: str, region: str = 'cn-north-1', service: str = 'vod') -> bytes:
-        return im_uploads._aws_signing_key(secret_access_key, date_stamp, region, service)
-
-    def _aws_vod_auth_headers(
-        self,
-        method: str,
-        query_params: dict,
-        access_key_id: str,
-        secret_access_key: str,
-        session_token: str,
-        payload_hash: str,
-        extra_signed_headers: dict | None = None,
-    ) -> tuple[str, dict]:
-        return im_uploads._aws_vod_auth_headers(
-            method, query_params, access_key_id, secret_access_key,
-            session_token, payload_hash, extra_signed_headers,
-        )
-
-    async def _get_im_image_upload_config(self) -> tuple[dict, bool]:
-        return await self.im._get_im_image_upload_config()
-
-    async def _apply_im_image_upload(self, config: dict, file_size: int) -> tuple[dict, bool]:
-        return await self.im._apply_im_image_upload(config, file_size)
-
-    async def _upload_im_image_bytes(
-        self,
-        upload_address: dict,
-        image_bytes: bytes,
-        crc32_hex: str,
-    ) -> tuple[dict, bool]:
-        return await self.im._upload_im_image_bytes(upload_address, image_bytes, crc32_hex)
-
-    async def _commit_im_image_upload(self, config: dict, session_key: str) -> tuple[dict, bool]:
-        return await self.im._commit_im_image_upload(config, session_key)
 
     async def send_im_image_message(
         self,
@@ -698,22 +602,6 @@ class DouyinAPI:
         return await self.im.send_im_image_message(
             to_user_id, image_data_url, width, height, file_name, mime_type,
         )
-
-    async def _send_im_content_message(
-        self,
-        to_user_id: str | int,
-        msg_content: str,
-        message_type: int = 7,
-        extra_headers: dict[str, str] | None = None,
-    ) -> tuple[dict, bool]:
-        return await self.im._send_im_content_message(to_user_id, msg_content, message_type, extra_headers)
-
-    @staticmethod
-    def _normalize_im_messages(messages: list[dict]) -> list[dict]:
-        return IMClient._normalize_im_messages(messages)
-
-    async def _get_im_recent_user_messages(self, cursor: int = 0) -> tuple[dict, bool]:
-        return await self.im._get_im_recent_user_messages(cursor)
 
     async def get_im_history_messages(
         self,
