@@ -1,27 +1,12 @@
 """图片/视频媒体下载实现。
 
-从 DouyinDownloader 中拆出的媒体下载主流程：媒体组下载、
-图片/Live Photo 下载，以及直接 URL 下载。MediaDownloads 持有
-DouyinDownloader 实例引用，共享 download_dir、debug_mode、file_paths、
-progress、records 等状态。原方法保留为薄代理，确保外部调用兼容。
-
-视频下载已拆分到 video_downloads.py。
+从 DouyinDownloader 中拆出的媒体下载主流程代理层。
+MediaDownloads 持有 DouyinDownloader 实例引用，
+转发调用到各子模块：VideoDownloads、ImageDownloads、MediaGroupDownloads。
 """
 
-import os
-import time
-from datetime import datetime
 from typing import List, Optional
 
-from src.config.config import Config
-from src.utils.download_history_index import (
-    remove_download_history_entries,
-    upsert_download_history_entries,
-)
-from src.downloader.downloader import (
-    _get_session,
-    _is_dash_video_only_url,
-)
 from src.downloader.video_downloads import VideoDownloads
 from src.downloader.image_downloads import ImageDownloads
 from src.downloader.media_group_downloads import MediaGroupDownloads
