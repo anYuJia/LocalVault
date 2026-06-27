@@ -23,6 +23,7 @@ from src.downloader.downloader import (
     _is_dash_video_only_url,
 )
 from src.downloader.video_downloads import VideoDownloads
+from src.downloader.image_downloads import ImageDownloads
 
 
 class MediaDownloads:
@@ -31,6 +32,7 @@ class MediaDownloads:
     def __init__(self, dl):
         self._dl = dl
         self._video = VideoDownloads(dl)
+        self._image = ImageDownloads(dl)
 
     @property
     def api(self):
@@ -380,131 +382,13 @@ class MediaDownloads:
         return self._video.download_video(url, name, aweme_id, cancel_event=cancel_event, socketio=socketio, task_id=task_id, progress_callback=progress_callback, pause_event=pause_event, check_existing=check_existing, fallback_urls=fallback_urls)
 
     def download_image(self, url: str, name: str, aweme_id: str, is_live: bool = False, check_existing: bool = True) -> bool:
-        """下载图片或Live Photo
-        Returns:
-            bool: 下载是否成功
-        """
-        response = None
-        try:
-            # 分离用户名和文件名
-            user_dir, filename = self._split_download_name(name)
-
-            # 检查是否已下载
-            if check_existing and self._is_aweme_downloaded(aweme_id, user_dir):
-                if self.debug_mode:
-                    print(f"\033[93m[Downloader] 作品已在下载记录中: {aweme_id}\033[0m")
-                print(f"\033[93m作品已下载，跳过：{user_dir}/{filename}\033[0m")
-                return True  # 已下载视为成功
-
-            headers = self._get_download_headers()
-            response = _get_session().get(url, headers=headers, stream=True, timeout=(10, 120))
-            response.raise_for_status()
-
-            user_path = os.path.join(self.download_dir, user_dir)
-            os.makedirs(user_path, exist_ok=True)
-
-            file_type_key = 'live_photo' if is_live else 'image'
-            extension = self._extension_for_media(file_type_key, url, response)
-            filepath = self._unique_filepath(user_path, filename, extension)
-
-            if self.debug_mode:
-                file_type = "Live Photo" if is_live else "图片"
-                print(f"\033[93m[Downloader] 开始下载{file_type}: {filepath}\033[0m")
-
-            with open(filepath, "wb") as f:
-                total_size = 0
-                for chunk in response.iter_content(chunk_size=Config.CHUNK_SIZE):
-                    if chunk:
-                        f.write(chunk)
-                        total_size += len(chunk)
-                        if self.debug_mode and total_size % (Config.CHUNK_SIZE * 10) == 0:
-                            print(f"\033[93m[Downloader] 已下载: {total_size/1024:.2f} KB\033[0m")
-
-            if self.debug_mode:
-                file_size = os.path.getsize(filepath)
-                file_type = "Live Photo" if is_live else "图片"
-                print(f"\033[92m[Downloader] {file_type}下载完成: {filepath}, 大小: {file_size/1024:.2f} KB\033[0m")
-
-            file_type = "Live Photo" if is_live else "图片"
-            upsert_download_history_entries([filepath])
-            print(f"\033[93m下载{file_type}成功：{user_dir}/{os.path.basename(filepath)}\033[0m")
-
-            # 保存下载记录
-            self._save_download_record(user_dir, aweme_id)
-            return True
-
-        except Exception as e:
-            if self.debug_mode:
-                file_type = "Live Photo" if is_live else "图片"
-                print(f"\033[91m[Downloader] 下载{file_type}失败: {str(e)}\033[0m")
-            print(f"\033[91m下载失败：{str(e)}\033[0m")
-            return False
-        finally:
-            if response is not None:
-                response.close()
+        """下载图片或Live Photo（代理到 ImageDownloads）"""
+        return self._image.download_image(url, name, aweme_id, is_live=is_live, check_existing=check_existing)
 
     def download_video_direct(self, url: str, filename: str) -> bool:
         """直接通过URL下载视频文件（代理到 VideoDownloads）"""
         return self._video.download_video_direct(url, filename)
 
     def download_image_direct(self, url: str, filename: str) -> bool:
-        """直接通过URL下载图片文件"""
-        response = None
-        try:
-            if self.debug_mode:
-                print(f"\033[93m[Downloader] 开始直接下载图片: {filename}\033[0m")
-                print(f"\033[93m[Downloader] 图片URL: {url}\033[0m")
-
-            headers = self._get_download_headers()
-
-            if self.debug_mode:
-                print(f"\033[93m[Downloader] 开始发送图片下载请求\033[0m")
-
-            response = _get_session().get(url, headers=headers, stream=True, timeout=(10, 120))
-            response.raise_for_status()
-
-            if self.debug_mode:
-                print(f"\033[93m[Downloader] 请求状态码: {response.status_code}\033[0m")
-                print(f"\033[93m[Downloader] 响应内容类型: {response.headers.get('Content-Type', '未知')}\033[0m")
-                if 'Content-Length' in response.headers:
-                    print(f"\033[93m[Downloader] 文件大小: {int(response.headers['Content-Length'])/1024:.2f} KB\033[0m")
-
-            # 创建下载目录
-            download_path = os.path.join(self.download_dir, "direct_downloads")
-            os.makedirs(download_path, exist_ok=True)
-            filename = self._sanitize_filename(os.path.basename(str(filename)))
-            filepath = self._unique_filepath(
-                download_path,
-                os.path.splitext(filename)[0],
-                os.path.splitext(filename)[1].lstrip('.') or self._extension_for_media('image', url, response),
-            )
-
-            if self.debug_mode:
-                print(f"\033[93m[Downloader] 保存文件路径: {filepath}\033[0m")
-
-            with open(filepath, "wb") as f:
-                total_size = 0
-                for chunk in response.iter_content(chunk_size=Config.CHUNK_SIZE):
-                    if chunk:
-                        f.write(chunk)
-                        total_size += len(chunk)
-                        if self.debug_mode and total_size % (Config.CHUNK_SIZE * 10) == 0:
-                            print(f"\033[93m[Downloader] 已下载: {total_size/1024:.2f} KB\033[0m")
-
-            if self.debug_mode:
-                file_size = os.path.getsize(filepath)
-                print(f"\033[92m[Downloader] 图片下载完成: {filepath}\033[0m")
-                print(f"\033[92m[Downloader] 文件大小: {file_size/1024:.2f} KB\033[0m")
-
-            print(f"\033[93m直接下载图片成功：{filename}\033[0m")
-            return True
-
-        except Exception as e:
-            if self.debug_mode:
-                print(f"\033[91m[Downloader] 直接下载图片失败: {str(e)}\033[0m")
-                print(f"\033[91m[Downloader] 图片URL: {url}\033[0m")
-            print(f"\033[91m直接下载图片失败：{str(e)}\033[0m")
-            return False
-        finally:
-            if response is not None:
-                response.close()
+        """直接通过URL下载图片文件（代理到 ImageDownloads）"""
+        return self._image.download_image_direct(url, filename)
