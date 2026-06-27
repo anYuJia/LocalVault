@@ -38,7 +38,7 @@ class DouyinUserManager:
     @property
     def favorites(self) -> FavoritesService:
         """获取点赞/收藏/合集服务实例（懒加载）。"""
-        if self._favorites is None:
+        if getattr(self, '_favorites', None) is None:
             self._favorites = FavoritesService(self)
         return self._favorites
 
