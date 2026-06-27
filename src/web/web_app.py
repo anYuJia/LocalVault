@@ -387,6 +387,8 @@ setup_downloads_routes(
 from src.web import download_events  # noqa: E402,F401
 # 批量下载路由（点赞视频/点赞作者/aweme_id 下载）注册到同一个 downloads_bp
 from src.web import batch_download_routes  # noqa: E402,F401
+# 下载任务创建路由（单个作品/用户全部作品）注册到同一个 downloads_bp
+from src.web import download_tasks  # noqa: E402,F401
 
 app.register_blueprint(downloads_bp)
 
