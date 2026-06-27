@@ -8,6 +8,7 @@ import logging
 
 from src.config.config import Config
 from src.downloader.filename_builder import build_download_name
+from src.user.mix_service import MixService
 
 logger = logging.getLogger('user.favorites')
 
@@ -21,6 +22,15 @@ class FavoritesService:
             manager: UserManager 实例，用于共享 api、downloader 等。
         """
         self._mgr = manager
+        # 合集视频服务（延迟初始化）
+        self._mix: MixService | None = None
+
+    @property
+    def mix(self) -> MixService:
+        """获取合集视频服务实例（懒加载）。"""
+        if self._mix is None:
+            self._mix = MixService(self)
+        return self._mix
 
     # ---------- 基础属性/方法委托 ----------
 
@@ -437,108 +447,10 @@ class FavoritesService:
             return {'_error': True, 'message': f'获取收藏视频失败: {e}'}
 
     async def get_collected_mixes(self, count=20, cursor=0):
-        """获取收藏合集列表"""
-        try:
-            params = {
-                'count': count,
-                'cursor': cursor,
-            }
-            headers = {
-                'Referer': 'https://www.douyin.com/user/self?from_tab_name=main&showTab=favorite_collection',
-            }
-            resp, succ = await self.api.common_request(
-                '/aweme/v1/web/mix/listcollection/',
-                params,
-                headers,
-            )
-            if isinstance(resp, dict) and (resp.get('_need_verify') or resp.get('_need_login')):
-                return resp
-            if not succ:
-                return {
-                    '_error': True,
-                    'message': (resp or {}).get('message') or (resp or {}).get('status_msg') or '获取收藏合集失败，请检查 Cookie 或稍后重试',
-                }
-
-            mixes = []
-            for item in resp.get('mix_infos', []) or []:
-                mix_id = item.get('mix_id')
-                if not mix_id:
-                    continue
-                author = item.get('author', {}) or {}
-                statis = item.get('statis', {}) or {}
-                cover_url = ''
-                if item.get('cover_url'):
-                    cover_url = item['cover_url'].get('url_list', [''])[0]
-                mixes.append({
-                    'mix_id': mix_id,
-                    'mix_name': item.get('mix_name', ''),
-                    'desc': item.get('desc', ''),
-                    'cover_url': cover_url,
-                    'author': {
-                        'nickname': author.get('nickname', ''),
-                        'sec_uid': author.get('sec_uid', ''),
-                        'avatar_thumb': author.get('avatar_thumb', {}).get('url_list', [''])[0] if author.get('avatar_thumb') else '',
-                    },
-                    'statis': {
-                        'collect_vv': statis.get('collect_vv', 0),
-                        'play_vv': statis.get('play_vv', 0),
-                        'updated_to_episode': statis.get('updated_to_episode', 0),
-                    },
-                    'create_time': item.get('create_time', 0),
-                    'update_time': item.get('update_time', 0),
-                    'mix_type': item.get('mix_type', 0),
-                })
-
-            return {
-                'data': mixes,
-                'cursor': self._response_cursor(resp),
-                'has_more': self._response_has_more(resp),
-            }
-        except Exception as e:
-            if self.debug_mode:
-                print(f"\033[91m[UserManager] 获取收藏合集时出错: {e}\033[0m")
-            if self._looks_like_login_error(e):
-                return self._login_required_message('收藏合集')
-            return {'_error': True, 'message': f'获取收藏合集失败: {e}'}
+        return await self.mix.get_collected_mixes(count, cursor)
 
     async def get_mix_videos(self, series_id, count=20, cursor=0):
-        """获取收藏合集内的视频列表"""
-        try:
-            params = {
-                'series_id': series_id,
-                'pull_type': 2,
-                'cursor': cursor,
-                'count': count,
-            }
-            headers = {
-                'Referer': 'https://www.douyin.com/user/self?from_tab_name=main&showTab=favorite_collection',
-            }
-            resp, succ = await self.api.common_request(
-                '/aweme/v1/web/series/aweme/',
-                params,
-                headers,
-            )
-            if isinstance(resp, dict) and (resp.get('_need_verify') or resp.get('_need_login')):
-                return resp
-            if not succ:
-                return {
-                    '_error': True,
-                    'message': (resp or {}).get('message') or (resp or {}).get('status_msg') or '获取合集视频失败，请检查 Cookie 或稍后重试',
-                }
-
-            videos = [
-                item for item in (self._build_collection_video_item(post) for post in (resp.get('aweme_list') or []))
-                if item
-            ]
-            return {
-                'data': videos,
-                'cursor': self._response_cursor(resp),
-                'has_more': self._response_has_more(resp),
-            }
-        except Exception as e:
-            if self.debug_mode:
-                print(f"\033[91m[UserManager] 获取合集视频时出错: {e}\033[0m")
-            return {'_error': True, 'message': f'获取合集视频失败: {e}'}
+        return await self.mix.get_mix_videos(series_id, count, cursor)
 
     # ---------- 下载点赞视频/作者 ----------
 
