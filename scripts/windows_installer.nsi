@@ -1,3 +1,4 @@
+﻿Unicode true
 !include "MUI2.nsh"
 
 ; 定义版本号（由 CI 自动更新）
