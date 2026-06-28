@@ -29,6 +29,12 @@ _avatar_url: Callable[..., str] | None = None
 _request_json: Callable[[], dict] | None = None
 _coerce_int: Callable[..., int] | None = None
 
+_gui_queue = None
+
+def set_gui_queue(queue):
+    global _gui_queue
+    _gui_queue = queue
+
 
 def setup_cookie_login(
     *,
@@ -469,14 +475,18 @@ def cookie_browser_login():
     """启动登录窗口让用户登录抖音，自动提取 Cookie"""
     global _native_cookie_login_session
 
-    if _native_cookie_login_session and _native_cookie_login_session.is_active():
-        _native_cookie_login_session.close()
-        _native_cookie_login_session = None
-
     data = _request_json()
     timeout = _coerce_int(data.get('timeout'), 300, 30, 900)
     _ = data.get('browser', 'chrome')
     old_cookie = data.get('cookie')
+
+    if _gui_queue is not None:
+        _gui_queue.put(('start_login', {'timeout': timeout, 'old_cookie': old_cookie}))
+        return jsonify({'success': True, 'message': '登录窗口已启动，请在弹出的窗口中登录抖音'})
+
+    if _native_cookie_login_session and _native_cookie_login_session.is_active():
+        _native_cookie_login_session.close()
+        _native_cookie_login_session = None
 
     started, reason = _start_native_cookie_login(timeout, old_cookie)
     if started:
@@ -494,6 +504,10 @@ def cookie_browser_login_cancel():
     """取消正在进行的原生登录窗口"""
     global _native_cookie_login_session
 
+    if _gui_queue is not None:
+        _gui_queue.put(('cancel_login', {}))
+        return jsonify({'success': True, 'message': '已取消登录'})
+
     if _native_cookie_login_session and _native_cookie_login_session.is_active():
         _native_cookie_login_session.close()
         _native_cookie_login_session.last_event = 'cancelled'
@@ -502,6 +516,30 @@ def cookie_browser_login_cancel():
         return jsonify({'success': True, 'message': '已取消登录'})
 
     return jsonify({'success': False, 'message': '没有正在进行的登录窗口'})
+
+
+@cookie_login_bp.route('/api/cookie/browser_login/status_sync', methods=['POST'])
+def cookie_browser_login_status_sync():
+    """接收主进程中原生登录窗口的状态和 Cookie 同步"""
+    data = request.json or {}
+    event = data.get('event')
+    message = data.get('message')
+    cookie_set = data.get('cookie_set', False)
+
+    if event == 'success':
+        cookie = data.get('cookie')
+        nickname = data.get('nickname', '')
+        relation_signer = data.get('relation_signer')
+        current_user_profile = data.get('current_user_profile')
+        _save_cookie_login_success(
+            cookie=cookie,
+            nickname=nickname,
+            relation_signer=relation_signer,
+            current_user_profile=current_user_profile,
+        )
+
+    _emit_cookie_login_status(event, message, cookie_set=cookie_set)
+    return jsonify({'success': True})
 
 
 @cookie_login_bp.route('/api/cookie/generate_temp', methods=['POST'])

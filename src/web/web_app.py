@@ -175,6 +175,15 @@ def set_main_process_exit_event(event) -> None:
     _main_process_exit_event = event
     updater.set_main_process_exit_event(event)
 
+
+_gui_queue = None
+
+def set_gui_queue(queue):
+    global _gui_queue
+    _gui_queue = queue
+    from src.web import cookie_login
+    cookie_login.set_gui_queue(queue)
+
 updater.setup_updater(
     logger=logger,
     Config=Config,

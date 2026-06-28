@@ -47,6 +47,10 @@ def is_native_cookie_login_available() -> bool:
     if os.environ.get('USE_PYWEBVIEW') != '1':
         return False
 
+    import sys
+    if sys.platform == 'win32':
+        return True
+
     try:
         import webview
     except Exception:

@@ -136,8 +136,9 @@ if __name__ == '__main__':
         import multiprocessing
         project_root = os.path.dirname(os.path.abspath(__file__))
         _flask_exit_event = multiprocessing.Event()
+        gui_queue = multiprocessing.Queue()
         flask_proc = multiprocessing.Process(
-            target=run_flask_process, args=(port, project_root, _flask_exit_event), daemon=True
+            target=run_flask_process, args=(port, project_root, _flask_exit_event, gui_queue), daemon=True
         )
         flask_proc.start()
 
@@ -146,6 +147,157 @@ if __name__ == '__main__':
             os._exit(0)
         _exit_watcher = threading.Thread(target=_watch_flask_exit, daemon=True)
         _exit_watcher.start()
+
+        def _watch_gui_queue(p, q):
+            import time
+            import threading
+            import requests
+
+            time.sleep(2)
+
+            session_info = {
+                'window': None,
+                'cancel_event': threading.Event(),
+                'finished_event': threading.Event(),
+            }
+
+            def status_sync(event, message, cookie_set=False, extra=None):
+                payload = {
+                    'event': event,
+                    'message': message,
+                    'cookie_set': cookie_set,
+                }
+                if extra:
+                    payload.update(extra)
+                try:
+                    requests.post(f"http://127.0.0.1:{p}/api/cookie/browser_login/status_sync", json=payload, timeout=2)
+                except Exception:
+                    pass
+
+            while True:
+                try:
+                    msg = q.get()
+                    if not msg:
+                        continue
+                    action, args = msg
+                    if action == 'start_login':
+                        timeout = args.get('timeout', 300)
+                        old_cookie = args.get('old_cookie')
+
+                        if session_info['window'] is not None:
+                            try:
+                                session_info['window'].destroy()
+                            except Exception:
+                                pass
+
+                        session_info['cancel_event'].clear()
+                        session_info['finished_event'].clear()
+
+                        from src.api.native_cookie_login import (
+                            create_login_window,
+                            apply_cookie_to_window,
+                            normalize_cookie_entries,
+                            has_login_cookie,
+                            serialize_cookie_entries,
+                            extract_relation_signer_entries,
+                            extract_current_user_profile_entries,
+                        )
+
+                        try:
+                            login_window = create_login_window()
+                            session_info['window'] = login_window
+                        except Exception as e:
+                            status_sync('error', f'创建登录窗口失败: {e}')
+                            continue
+
+                        if old_cookie:
+                            apply_cookie_to_window(login_window, old_cookie, reload_after_apply=True, force=True, post_load_delay=0.5)
+
+                        def poll(win, cancel_ev, finished_ev, t_out):
+                            poll_interval = 0.5
+                            try:
+                                status_sync('pending', '登录窗口已打开，请在窗口中完成登录')
+
+                                if not win.events.loaded.wait(45):
+                                    if not cancel_ev.is_set():
+                                        try: win.destroy()
+                                        except Exception: pass
+                                        status_sync('error', '登录窗口加载超时，请重试')
+                                    finished_ev.set()
+                                    return
+
+                                start_time = time.monotonic()
+                                while True:
+                                    if cancel_ev.is_set():
+                                        try: win.destroy()
+                                        except Exception: pass
+                                        status_sync('cancelled', '登录已取消')
+                                        finished_ev.set()
+                                        return
+
+                                    if win.events.closed.is_set():
+                                        status_sync('cancelled', '登录窗口已关闭')
+                                        finished_ev.set()
+                                        return
+
+                                    if time.monotonic() - start_time >= t_out:
+                                        try: win.destroy()
+                                        except Exception: pass
+                                        status_sync('timeout', '登录超时，请重试')
+                                        finished_ev.set()
+                                        return
+
+                                    try:
+                                        raw_cookies = win.get_cookies() or []
+                                    except Exception:
+                                        time.sleep(poll_interval)
+                                        continue
+
+                                    entries = normalize_cookie_entries(raw_cookies)
+                                    if not has_login_cookie(entries):
+                                        time.sleep(poll_interval)
+                                        continue
+
+                                    cookie_string = serialize_cookie_entries(entries)
+                                    relation_signer = extract_relation_signer_entries(entries)
+                                    current_user_profile = extract_current_user_profile_entries(entries)
+                                    nickname = current_user_profile.get('nickname', '') if current_user_profile else ''
+
+                                    status_sync('success', '登录成功', cookie_set=True, extra={
+                                        'cookie': cookie_string,
+                                        'nickname': nickname,
+                                        'relation_signer': relation_signer,
+                                        'current_user_profile': current_user_profile,
+                                    })
+
+                                    try: win.destroy()
+                                    except Exception: pass
+                                    finished_ev.set()
+                                    return
+                            except Exception as ex:
+                                status_sync('error', f'登录异常: {ex}')
+                                finished_ev.set()
+
+                        threading.Thread(
+                            target=poll,
+                            args=(login_window, session_info['cancel_event'], session_info['finished_event'], timeout),
+                            daemon=True
+                        ).start()
+
+                    elif action == 'cancel_login':
+                        session_info['cancel_event'].set()
+                        if session_info['window'] is not None:
+                            try:
+                                session_info['window'].destroy()
+                            except Exception:
+                                pass
+                            session_info['window'] = None
+
+                except Exception:
+                    time.sleep(0.5)
+
+        _gui_watcher = threading.Thread(target=_watch_gui_queue, args=(port, gui_queue), daemon=True)
+        _gui_watcher.start()
     else:
         # Mac/Linux: 线程（不引入 multiprocessing，避免创建子进程在 Dock 显示多余图标）
         from src.web.web_app import start_server as _flask_start_server
