@@ -69,16 +69,16 @@ def _format_recommended_video(aweme: dict) -> dict | None:
         _logger.debug(f"跳过视频 {aweme.get('aweme_id')}: 缺少视频信息")
         return None
 
-    play_addr = _media_url_utils._media_first_url(video_data.get('play_addr'))
-    selected_video_url = _media_url_utils._select_recommended_video_url(video_data, play_addr)
-    dash_video_url = _media_url_utils._select_dash_video_url(video_data)
-    dash_audio_url = _media_url_utils._select_dash_audio_url(video_data)
+    play_addr = _media_url_utils.media_first_url(video_data.get('play_addr'))
+    selected_video_url = _media_url_utils.select_recommended_video_url(video_data, play_addr)
+    dash_video_url = _media_url_utils.select_dash_video_url(video_data)
+    dash_audio_url = _media_url_utils.select_dash_audio_url(video_data)
 
     if not selected_video_url:
         _logger.debug(f"跳过视频 {aweme.get('aweme_id')}: 无播放地址")
         return None
 
-    cover = _media_url_utils._media_first_url(video_data.get('cover'))
+    cover = _media_url_utils.media_first_url(video_data.get('cover'))
     if not cover:
         _logger.debug(f"跳过视频 {aweme.get('aweme_id')}: 无封面")
         return None
@@ -95,12 +95,12 @@ def _format_recommended_video(aweme: dict) -> dict | None:
         _logger.debug(f"跳过视频 {aweme.get('aweme_id')}: 缺少作品或作者信息")
         return None
 
-    dynamic_cover = _media_url_utils._media_first_url(video_data.get('dynamic_cover'))
-    origin_cover = _media_url_utils._media_first_url(video_data.get('origin_cover')) or cover
-    play_addr_h264 = _media_url_utils._media_first_url(video_data.get('play_addr_h264'))
-    play_addr_lowbr = _media_url_utils._media_first_url(video_data.get('play_addr_lowbr'))
-    download_addr = _media_url_utils._media_first_url(video_data.get('download_addr'))
-    avatar_thumb = _media_url_utils._media_first_url(author_data.get('avatar_thumb'))
+    dynamic_cover = _media_url_utils.media_first_url(video_data.get('dynamic_cover'))
+    origin_cover = _media_url_utils.media_first_url(video_data.get('origin_cover')) or cover
+    play_addr_h264 = _media_url_utils.media_first_url(video_data.get('play_addr_h264'))
+    play_addr_lowbr = _media_url_utils.media_first_url(video_data.get('play_addr_lowbr'))
+    download_addr = _media_url_utils.media_first_url(video_data.get('download_addr'))
+    avatar_thumb = _media_url_utils.media_first_url(author_data.get('avatar_thumb'))
     music_info = _audio_helpers.extract_music_info(aweme.get('music') or {})
 
     return {
@@ -133,7 +133,7 @@ def _format_recommended_video(aweme: dict) -> dict | None:
             'play_addr': selected_video_url,
             'dash_addr': dash_video_url,
             'audio_addr': dash_audio_url,
-            'preview_addr': _media_url_utils._media_first_url(video_data.get('preview_addr')) or selected_video_url,
+            'preview_addr': _media_url_utils.media_first_url(video_data.get('preview_addr')) or selected_video_url,
             'play_addr_h264': play_addr_h264,
             'play_addr_lowbr': play_addr_lowbr,
             'download_addr': download_addr,
@@ -146,7 +146,7 @@ def _format_recommended_video(aweme: dict) -> dict | None:
         },
         'music': {
             **music_info,
-            'cover': _media_url_utils._media_first_url((aweme.get('music') or {}).get('cover_large')),
+            'cover': _media_url_utils.media_first_url((aweme.get('music') or {}).get('cover_large')),
         },
     }
 
