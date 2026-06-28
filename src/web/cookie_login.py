@@ -521,24 +521,92 @@ def cookie_browser_login_cancel():
 @cookie_login_bp.route('/api/cookie/browser_login/status_sync', methods=['POST'])
 def cookie_browser_login_status_sync():
     """接收主进程中原生登录窗口的状态和 Cookie 同步"""
+    global _native_cookie_login_session
     data = request.json or {}
     event = data.get('event')
     message = data.get('message')
-    cookie_set = data.get('cookie_set', False)
 
-    if event == 'success':
-        cookie = data.get('cookie')
-        nickname = data.get('nickname', '')
-        relation_signer = data.get('relation_signer')
-        current_user_profile = data.get('current_user_profile')
+    from src.api.native_cookie_login import (
+        normalize_cookie_entries,
+        has_login_cookie,
+        extract_relation_signer_entries,
+        extract_current_user_profile_entries,
+        serialize_cookie_entries,
+        relation_signer_ready_for_uid,
+        relation_signer_has_ticket_guard,
+    )
+
+    if event == 'cookies_polled':
+        raw_cookies = data.get('cookies') or []
+        entries = normalize_cookie_entries(raw_cookies)
+        if not has_login_cookie(entries):
+            return jsonify({'success': True})
+
+        cookie_string = serialize_cookie_entries(entries)
+        if not cookie_string:
+            return jsonify({'success': True})
+
+        relation_signer = extract_relation_signer_entries(entries)
+        current_user_profile = extract_current_user_profile_entries(entries)
+
+        # 校验登录状态并获取账号详细资料 (sec_uid, nickname 等)
+        verify_result = _verify_native_cookie_login(cookie_string)
+        if not verify_result.get('success'):
+            _logger.info('原生登录窗口候选 Cookie 校验未通过: %s', verify_result.get('message', 'unknown'))
+            return jsonify({'success': True})
+
+        user_id = str(verify_result.get('user_id') or '').strip()
+        if user_id:
+            if isinstance(relation_signer, dict):
+                relation_signer['uid'] = user_id
+
+        if not relation_signer_ready_for_uid(relation_signer, user_id):
+            previous_signer = _Config.RELATION_SIGNER if isinstance(_Config.RELATION_SIGNER, dict) else None
+            if relation_signer_ready_for_uid(previous_signer, user_id):
+                relation_signer = previous_signer
+            elif not relation_signer_has_ticket_guard(relation_signer, user_id):
+                relation_signer = None
+
+        if isinstance(current_user_profile, dict):
+            current_user_profile = {
+                **current_user_profile,
+                "uid": current_user_profile.get("uid") or verify_result.get("user_id") or "",
+                "sec_uid": current_user_profile.get("sec_uid") or verify_result.get("sec_uid") or "",
+                "nickname": current_user_profile.get("nickname") or verify_result.get("nickname") or "",
+            }
+        else:
+            current_user_profile = {
+                "uid": verify_result.get("user_id") or "",
+                "sec_uid": verify_result.get("sec_uid") or "",
+                "nickname": verify_result.get("nickname") or "",
+            }
+
+        nickname = current_user_profile.get('nickname', '')
         _save_cookie_login_success(
-            cookie=cookie,
+            cookie=cookie_string,
             nickname=nickname,
             relation_signer=relation_signer,
             current_user_profile=current_user_profile,
         )
 
-    _emit_cookie_login_status(event, message, cookie_set=cookie_set)
+        # 成功登录，通知主进程关闭登录窗口
+        if _gui_queue is not None:
+            _gui_queue.put(('close_window', {}))
+
+        return jsonify({'success': True, 'logged_in': True})
+
+    elif event == 'window_closed':
+        _emit_cookie_login_status('cancelled', '登录窗口已关闭')
+        return jsonify({'success': True})
+
+    elif event == 'timeout':
+        _emit_cookie_login_status('timeout', '登录超时，请重试')
+        return jsonify({'success': True})
+
+    elif event == 'error':
+        _emit_cookie_login_status('error', message)
+        return jsonify({'success': True})
+
     return jsonify({'success': True})
 
 

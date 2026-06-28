@@ -161,14 +161,14 @@ if __name__ == '__main__':
                 'finished_event': threading.Event(),
             }
 
-            def status_sync(event, message, cookie_set=False, extra=None):
+            def status_sync(event, message=None, cookies=None):
                 payload = {
                     'event': event,
-                    'message': message,
-                    'cookie_set': cookie_set,
                 }
-                if extra:
-                    payload.update(extra)
+                if message:
+                    payload['message'] = message
+                if cookies is not None:
+                    payload['cookies'] = cookies
                 try:
                     requests.post(f"http://127.0.0.1:{p}/api/cookie/browser_login/status_sync", json=payload, timeout=2)
                 except Exception:
@@ -196,18 +196,14 @@ if __name__ == '__main__':
                         from src.api.native_cookie_login import (
                             create_login_window,
                             apply_cookie_to_window,
-                            normalize_cookie_entries,
-                            has_login_cookie,
-                            serialize_cookie_entries,
-                            extract_relation_signer_entries,
-                            extract_current_user_profile_entries,
+                            inject_relation_signer_probe,
                         )
 
                         try:
                             login_window = create_login_window()
                             session_info['window'] = login_window
                         except Exception as e:
-                            status_sync('error', f'创建登录窗口失败: {e}')
+                            status_sync('error', message=f'创建登录窗口失败: {e}')
                             continue
 
                         if old_cookie:
@@ -215,37 +211,41 @@ if __name__ == '__main__':
 
                         def poll(win, cancel_ev, finished_ev, t_out):
                             poll_interval = 0.5
+                            relation_signer_interval = 0.75
                             try:
-                                status_sync('pending', '登录窗口已打开，请在窗口中完成登录')
-
                                 if not win.events.loaded.wait(45):
                                     if not cancel_ev.is_set():
                                         try: win.destroy()
                                         except Exception: pass
-                                        status_sync('error', '登录窗口加载超时，请重试')
+                                        status_sync('error', message='登录窗口加载超时，请重试')
                                     finished_ev.set()
                                     return
 
                                 start_time = time.monotonic()
+                                last_probe_time = 0
                                 while True:
                                     if cancel_ev.is_set():
                                         try: win.destroy()
                                         except Exception: pass
-                                        status_sync('cancelled', '登录已取消')
                                         finished_ev.set()
                                         return
 
                                     if win.events.closed.is_set():
-                                        status_sync('cancelled', '登录窗口已关闭')
+                                        status_sync('window_closed')
                                         finished_ev.set()
                                         return
 
                                     if time.monotonic() - start_time >= t_out:
                                         try: win.destroy()
                                         except Exception: pass
-                                        status_sync('timeout', '登录超时，请重试')
+                                        status_sync('timeout')
                                         finished_ev.set()
                                         return
+
+                                    now = time.monotonic()
+                                    if now - last_probe_time >= relation_signer_interval:
+                                        inject_relation_signer_probe(win)
+                                        last_probe_time = now
 
                                     try:
                                         raw_cookies = win.get_cookies() or []
@@ -253,29 +253,11 @@ if __name__ == '__main__':
                                         time.sleep(poll_interval)
                                         continue
 
-                                    entries = normalize_cookie_entries(raw_cookies)
-                                    if not has_login_cookie(entries):
-                                        time.sleep(poll_interval)
-                                        continue
+                                    status_sync('cookies_polled', cookies=raw_cookies)
+                                    time.sleep(poll_interval)
 
-                                    cookie_string = serialize_cookie_entries(entries)
-                                    relation_signer = extract_relation_signer_entries(entries)
-                                    current_user_profile = extract_current_user_profile_entries(entries)
-                                    nickname = current_user_profile.get('nickname', '') if current_user_profile else ''
-
-                                    status_sync('success', '登录成功', cookie_set=True, extra={
-                                        'cookie': cookie_string,
-                                        'nickname': nickname,
-                                        'relation_signer': relation_signer,
-                                        'current_user_profile': current_user_profile,
-                                    })
-
-                                    try: win.destroy()
-                                    except Exception: pass
-                                    finished_ev.set()
-                                    return
                             except Exception as ex:
-                                status_sync('error', f'登录异常: {ex}')
+                                status_sync('error', message=f'登录异常: {ex}')
                                 finished_ev.set()
 
                         threading.Thread(
@@ -284,7 +266,7 @@ if __name__ == '__main__':
                             daemon=True
                         ).start()
 
-                    elif action == 'cancel_login':
+                    elif action == 'cancel_login' or action == 'close_window':
                         session_info['cancel_event'].set()
                         if session_info['window'] is not None:
                             try:
