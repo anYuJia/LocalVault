@@ -86,6 +86,7 @@ function renderView(view: string) {
         </motion.div>
       );
     case "search":
+    case "link":
       return (
         <motion.div key="search" {...variants} transition={transition} className="p-6">
           <SearchView />
@@ -96,12 +97,6 @@ function renderView(view: string) {
         <motion.div key="user" {...variants} transition={transition} className="p-6">
           <UserDetail />
           <VideoGrid />
-        </motion.div>
-      );
-    case "link":
-      return (
-        <motion.div key="link" {...variants} transition={transition} className="p-6">
-          <LinkView />
         </motion.div>
       );
     case "recommended":
