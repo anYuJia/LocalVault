@@ -260,34 +260,33 @@ export function Sidebar() {
               {collapsed && <SidebarHint>{activeAccount.nickname}</SidebarHint>}
               <div
                 className={cn(
-                  "flex min-w-0 flex-col items-start overflow-hidden transition-opacity duration-100",
+                  "flex min-w-0 items-center gap-1.5 overflow-hidden transition-opacity duration-100",
                   collapsed ? "w-0 opacity-0" : "flex-1 opacity-100"
                 )}
               >
-                <span className="text-[0.72rem] font-semibold text-text truncate w-full">
+                <span className="text-[0.72rem] font-semibold text-text truncate max-w-[100px]">
                   {activeAccount.nickname}
                 </span>
-                <span className="text-[0.62rem] font-medium text-success">
-                  已登录
-                </span>
+                <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" title="已登录" />
               </div>
             </>
           ) : (
             <>
-              <Circle className={cn(
-                "w-2.5 h-2.5 shrink-0",
-                !collapsed && "ml-1",
-                cookieLoggedIn ? "fill-success text-success" : "fill-warning text-warning"
-              )} />
-              {collapsed && <SidebarHint>{cookieLoggedIn ? "已登录" : "需要登录 Cookie"}</SidebarHint>}
-              <span
+              <div className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center border border-white/10 bg-white/5 shrink-0">
+                <UserRound className="w-4 h-4 text-text-muted" />
+              </div>
+              {collapsed && <SidebarHint>需要登录 Cookie</SidebarHint>}
+              <div
                 className={cn(
-                  "overflow-hidden whitespace-nowrap text-[0.72rem] font-medium text-text-muted transition-opacity duration-100",
+                  "flex min-w-0 items-center gap-1.5 overflow-hidden transition-opacity duration-100",
                   collapsed ? "w-0 opacity-0" : "flex-1 opacity-100"
                 )}
               >
-                {cookieLoggedIn ? "已登录" : "需要登录 Cookie"}
-              </span>
+                <span className="text-[0.72rem] font-medium text-text-muted truncate max-w-[100px]">
+                  未登录
+                </span>
+                <span className="w-1.5 h-1.5 rounded-full bg-warning shrink-0" title="未登录" />
+              </div>
             </>
           )}
         </button>
