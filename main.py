@@ -152,7 +152,18 @@ if __name__ == '__main__':
             import time
             import threading
             import requests
+            import os
+            from src.config.config import Config
 
+            def debug_log(msg):
+                try:
+                    log_file = os.path.join(Config.USER_DATA_DIR, "debug_ipc.log")
+                    with open(log_file, "a", encoding="utf-8") as f:
+                        f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [MAIN] {msg}\n")
+                except Exception as ex:
+                    print(f"Failed to write debug_log: {ex}", flush=True)
+
+            debug_log("GUI queue watcher thread started.")
             time.sleep(2)
 
             session_info = {
@@ -169,10 +180,12 @@ if __name__ == '__main__':
                     payload['message'] = message
                 if cookies is not None:
                     payload['cookies'] = cookies
+                debug_log(f"Sending status_sync event: {event}, cookies count: {len(cookies) if cookies else 0}")
                 try:
-                    requests.post(f"http://127.0.0.1:{p}/api/cookie/browser_login/status_sync", json=payload, timeout=2)
+                    res = requests.post(f"http://127.0.0.1:{p}/api/cookie/browser_login/status_sync", json=payload, timeout=2)
+                    debug_log(f"status_sync response: {res.status_code}, {res.text}")
                 except Exception as e:
-                    print(f"[ERROR] GUI status sync failed: {e}", flush=True)
+                    debug_log(f"status_sync failed: {e}")
 
             while True:
                 try:
@@ -180,15 +193,17 @@ if __name__ == '__main__':
                     if not msg:
                         continue
                     action, args = msg
+                    debug_log(f"Received msg from queue: action={action}, args={args}")
                     if action == 'start_login':
                         timeout = args.get('timeout', 300)
                         old_cookie = args.get('old_cookie')
 
                         if session_info['window'] is not None:
                             try:
+                                debug_log("Destroying existing login window before creating a new one")
                                 session_info['window'].destroy()
-                            except Exception:
-                                pass
+                            except Exception as ex:
+                                debug_log(f"Failed to destroy existing window: {ex}")
 
                         session_info['cancel_event'].clear()
                         session_info['finished_event'].clear()
@@ -201,39 +216,48 @@ if __name__ == '__main__':
                         )
 
                         try:
+                            debug_log("Creating login window")
                             login_window = create_login_window()
                             session_info['window'] = login_window
                         except Exception as e:
+                            debug_log(f"Failed to create login window: {e}")
                             status_sync('error', message=f'创建登录窗口失败: {e}')
                             continue
 
                         if old_cookie:
+                            debug_log("Applying old cookie to window")
                             apply_cookie_to_window(login_window, old_cookie, reload_after_apply=True, force=True, post_load_delay=0.5)
 
                         def poll(win, cancel_ev, finished_ev, t_out):
                             poll_interval = 0.5
                             relation_signer_interval = 0.75
                             try:
+                                debug_log("Starting poll thread")
                                 status_sync('pending', message='登录窗口已打开，请在窗口中完成登录')
 
+                                debug_log("Waiting for window events.loaded")
                                 if not win.events.loaded.wait(45):
                                     if not cancel_ev.is_set():
                                         try: win.destroy()
                                         except Exception: pass
+                                        debug_log("Window loaded event timed out (45s)")
                                         status_sync('error', message='登录窗口加载超时，请重试')
                                     finished_ev.set()
                                     return
 
+                                debug_log("Window loaded. Starting cookie polling loop")
                                 start_time = time.monotonic()
                                 last_probe_time = 0
                                 while True:
                                     if cancel_ev.is_set():
                                         try: win.destroy()
                                         except Exception: pass
+                                        debug_log("Login cancelled by event")
                                         finished_ev.set()
                                         return
 
                                     if win.events.closed.is_set():
+                                        debug_log("Window closed by user")
                                         status_sync('window_closed')
                                         finished_ev.set()
                                         return
@@ -241,6 +265,7 @@ if __name__ == '__main__':
                                     if time.monotonic() - start_time >= t_out:
                                         try: win.destroy()
                                         except Exception: pass
+                                        debug_log("Login session timed out")
                                         status_sync('timeout')
                                         finished_ev.set()
                                         return
@@ -250,8 +275,6 @@ if __name__ == '__main__':
                                         inject_relation_signer_probe(win)
                                         last_probe_time = now
 
-                                    # Run get_cookies in a thread with timeout to avoid blocking
-                                    # the WebView2 GUI loop on Windows
                                     cookie_result = [None]
                                     cookie_error = [None]
                                     def _fetch_cookies():
@@ -262,16 +285,26 @@ if __name__ == '__main__':
                                     t = threading.Thread(target=_fetch_cookies, daemon=True)
                                     t.start()
                                     t.join(timeout=2.0)
-                                    if t.is_alive() or cookie_error[0]:
+                                    if t.is_alive():
+                                        debug_log("win.get_cookies() timed out (hung)")
+                                        time.sleep(poll_interval)
+                                        continue
+                                    if cookie_error[0]:
+                                        debug_log(f"win.get_cookies() error: {cookie_error[0]}")
                                         time.sleep(poll_interval)
                                         continue
                                     raw_cookies = cookie_result[0]
                                     normalized = normalize_cookie_entries(raw_cookies)
 
+                                    # Only log cookies when normalized contains entries to prevent spam
+                                    if normalized:
+                                        debug_log(f"Polled raw cookies: {len(raw_cookies)}, normalized entries: {len(normalized)}")
+                                        
                                     status_sync('cookies_polled', cookies=normalized)
                                     time.sleep(poll_interval)
 
                             except Exception as ex:
+                                debug_log(f"Exception in poll thread: {ex}")
                                 status_sync('error', message=f'登录异常: {ex}')
                                 finished_ev.set()
 
@@ -282,12 +315,14 @@ if __name__ == '__main__':
                         ).start()
 
                     elif action == 'cancel_login' or action == 'close_window':
+                        debug_log(f"Handling cancel/close action: {action}")
                         session_info['cancel_event'].set()
                         if session_info['window'] is not None:
                             try:
                                 session_info['window'].destroy()
-                            except Exception:
-                                pass
+                                debug_log("Window destroyed successfully")
+                            except Exception as ex:
+                                debug_log(f"Failed to destroy window during cancel: {ex}")
                             session_info['window'] = None
 
                 except Exception:

@@ -522,9 +522,23 @@ def cookie_browser_login_cancel():
 def cookie_browser_login_status_sync():
     """接收主进程中原生登录窗口的状态和 Cookie 同步"""
     global _native_cookie_login_session
+    import os
+    import time
+    from src.config.config import Config
+
+    def debug_log(msg):
+        try:
+            log_file = os.path.join(Config.USER_DATA_DIR, "debug_ipc.log")
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [FLASK] {msg}\n")
+        except Exception:
+            pass
+
     data = request.json or {}
     event = data.get('event')
     message = data.get('message')
+
+    debug_log(f"Received status_sync from main process: event={event}, message={message}")
 
     from src.api.native_cookie_login import (
         normalize_cookie_entries,
@@ -538,28 +552,29 @@ def cookie_browser_login_status_sync():
 
     if event == 'cookies_polled':
         raw_cookies = data.get('cookies') or []
-        _logger.info('[IPC] cookies_polled received: %d raw cookies', len(raw_cookies))
+        debug_log(f"cookies_polled event: {len(raw_cookies)} raw cookies received")
         entries = normalize_cookie_entries(raw_cookies)
-        _logger.info('[IPC] normalized entries: %d', len(entries))
+        debug_log(f"normalized entries count: {len(entries)}")
+        
         if not has_login_cookie(entries):
             return jsonify({'success': True})
 
+        debug_log("has_login_cookie returned True! Serializing...")
         cookie_string = serialize_cookie_entries(entries)
-        _logger.info('[IPC] cookie_string length: %d', len(cookie_string))
+        debug_log(f"serialized cookie string length: {len(cookie_string)}")
         if not cookie_string:
             return jsonify({'success': True})
 
         relation_signer = extract_relation_signer_entries(entries)
         current_user_profile = extract_current_user_profile_entries(entries)
-        _logger.info('[IPC] current_user_profile from cookie: %s', current_user_profile)
+        debug_log(f"extracted profile: {current_user_profile}")
 
         # 校验登录状态并获取账号详细资料 (sec_uid, nickname 等)
         _emit_cookie_login_status('pending', '已检测到登录 Cookie，正在校验登录状态')
+        debug_log("Calling _verify_native_cookie_login...")
         verify_result = _verify_native_cookie_login(cookie_string)
-        _logger.info('[IPC] verify_result: success=%s sec_uid=%s nickname=%s',
-                     verify_result.get('success'),
-                     verify_result.get('sec_uid', ''),
-                     verify_result.get('nickname', ''))
+        debug_log(f"verify_result: success={verify_result.get('success')}, message={verify_result.get('message')}, user_id={verify_result.get('user_id')}, sec_uid={verify_result.get('sec_uid')}")
+        
         if not verify_result.get('success'):
             _logger.info('原生登录窗口候选 Cookie 校验未通过: %s', verify_result.get('message', 'unknown'))
             return jsonify({'success': True})
@@ -596,9 +611,7 @@ def cookie_browser_login_status_sync():
             if avatar_val and not current_user_profile.get(avatar_key):
                 current_user_profile[avatar_key] = avatar_val
 
-        _logger.info('[IPC] final current_user_profile: sec_uid=%s nickname=%s',
-                     current_user_profile.get('sec_uid', ''),
-                     current_user_profile.get('nickname', ''))
+        debug_log(f"saving cookie success: nickname={current_user_profile.get('nickname')}, sec_uid={current_user_profile.get('sec_uid')}")
 
         nickname = current_user_profile.get('nickname', '')
         _save_cookie_login_success(
@@ -608,9 +621,7 @@ def cookie_browser_login_status_sync():
             current_user_profile=current_user_profile,
         )
 
-        _logger.info('[IPC] _save_cookie_login_success completed. ACCOUNTS=%d CURRENT_SEC_UID=%s',
-                     len(getattr(_Config, 'ACCOUNTS', [])),
-                     getattr(_Config, 'CURRENT_SEC_UID', ''))
+        debug_log(f"_save_cookie_login_success completed. current_sec_uid in Config={getattr(_Config, 'CURRENT_SEC_UID')}, accounts count={len(getattr(_Config, 'ACCOUNTS', []))}")
 
         # 成功登录，通知主进程关闭登录窗口
         if _gui_queue is not None:
