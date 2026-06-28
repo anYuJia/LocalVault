@@ -154,7 +154,7 @@ export function LinkView() {
               {user && <Badge variant="info">解析到用户</Badge>}
             </div>
             {videos.length > 0 && (
-              <Button variant="outline" size="sm" onClick={() => void downloadBatch(videos)}>
+              <Button variant="outline" size="sm" onClick={() => void downloadBatch(videos, user?.nickname || "链接解析")}>
                 <Download className="h-3.5 w-3.5" />
                 下载全部
               </Button>

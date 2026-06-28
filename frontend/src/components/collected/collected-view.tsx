@@ -226,7 +226,7 @@ function CollectedVideosPanel() {
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             刷新
           </Button>
-          <Button variant="default" size="sm" onClick={() => void downloadBatch(videos)} disabled={videos.length === 0}>
+          <Button variant="default" size="sm" onClick={() => void downloadBatch(videos, "收藏视频")} disabled={videos.length === 0}>
             <Download className="h-3.5 w-3.5" />
             下载当前列表
           </Button>
@@ -550,7 +550,7 @@ function MixVideosPanel({ mix, onBack }: { mix: CollectedMixItem; onBack: () => 
           <h4 className="truncate text-[0.88rem] font-semibold text-text">{mix.mix_name || "收藏合集"}</h4>
           <Badge variant="secondary">{videos.length} 个视频</Badge>
         </div>
-        <Button variant="default" size="sm" onClick={() => void downloadBatch(videos)} disabled={videos.length === 0}>
+        <Button variant="default" size="sm" onClick={() => void downloadBatch(videos, mix.mix_name || "收藏合集")} disabled={videos.length === 0}>
           <Download className="h-3.5 w-3.5" />
           下载当前合集
         </Button>

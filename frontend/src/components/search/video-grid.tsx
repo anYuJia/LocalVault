@@ -139,7 +139,7 @@ export function VideoGrid() {
             <Button
               variant={selectedVideos.length > 0 ? "success-outline" : "default"}
               size="sm"
-              onClick={() => void downloadBatch(selectedVideos.length > 0 ? selectedVideos : videos)}
+              onClick={() => void downloadBatch(selectedVideos.length > 0 ? selectedVideos : videos, currentUser?.nickname || "搜索作品")}
               disabled={videos.length === 0}
             >
               <Download className="w-3.5 h-3.5" />

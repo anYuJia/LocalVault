@@ -137,7 +137,7 @@ export function LikedView() {
             onDownload={(video) => downloadVideo(video)}
             onAuthor={handleGoToAuthor}
             authorLoadingId={authorLoadingId}
-            onDownloadAll={() => void downloadBatch(videos)}
+            onDownloadAll={() => void downloadBatch(videos, "点赞视频")}
           />
         ) : (
           <LikedAuthorsPanel

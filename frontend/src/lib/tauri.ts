@@ -969,6 +969,20 @@ export async function downloadUserVideos(
   });
 }
 
+export async function downloadVideos(
+  videos: VideoInfo[],
+  name: string
+): Promise<ApiResponse & { task_id?: string; total_videos?: number; nickname?: string }> {
+  const payloads = videos.map(getDownloadPayload);
+  if (shouldUseBrowserBridge()) {
+    return requestJson("/api/download_videos", {
+      method: "POST",
+      body: JSON.stringify({ videos: payloads, name }),
+    });
+  }
+  return invoke("download_videos", { videos: payloads, name });
+}
+
 export async function downloadLikedVideos(count: number): Promise<{ success: boolean; message: string }> {
   if (shouldUseBrowserBridge()) {
     return requestJson("/api/download_liked", {

@@ -6,6 +6,7 @@ import {
   addDownloadTask,
   cancelDownloadTask,
   downloadVideo,
+  downloadVideos,
   getDownloadTasks,
   openDownloadDirectory,
   openFileLocation,
@@ -71,33 +72,35 @@ export function useDownloads() {
   );
 
   const downloadBatch = useCallback(
-    async (videos: VideoInfo[]) => {
+    async (videos: VideoInfo[], name: string = "批量下载") => {
       const logMsg = `批量下载 ${videos.length} 个作品`;
       addLog(logMsg, "info");
       toast(logMsg, "info");
 
-      for (const video of videos) {
-        try {
-          const taskId = await addDownloadTask(video);
+      try {
+        const result = await downloadVideos(videos, name);
+        if (result.success && result.task_id) {
+          const totalVideos = result.total_videos ?? videos.length;
           updateTask({
-            id: taskId || video.aweme_id,
-            awemeId: video.aweme_id,
-            filename: `${video.author.nickname}_${video.aweme_id}`,
+            id: result.task_id,
+            filename: name ? `${name} 全部作品` : "批量下载",
             progress: 0,
-            status: "pending",
+            status: "downloading",
+            isBatch: true,
+            mediaCount: totalVideos,
+            fileTotal: totalVideos,
+            fileIndex: 0,
             startTime: Date.now(),
+            speed: 0,
           });
-          if (taskId) {
-            await startDownload(taskId);
-          }
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : "添加下载任务失败";
-          addLog(msg, "error");
+        } else {
+          throw new Error(result.message || "批量下载启动失败");
         }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "批量下载启动失败";
+        addLog(msg, "error");
+        toast(msg, "error");
       }
-
-      addLog("批量下载已提交", "success");
-      toast("已添加至下载队列", "success", "批量下载");
     },
     [updateTask, addLog, toast]
   );
