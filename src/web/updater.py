@@ -68,6 +68,11 @@ def setup_updater(
     _main_process_exit_event = main_process_exit_event
 
 
+def set_main_process_exit_event(event) -> None:
+    global _main_process_exit_event
+    _main_process_exit_event = event
+
+
 def normalize_version_text(version: str) -> str:
     return update_checker.normalize_version_text(version)
 
