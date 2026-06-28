@@ -213,6 +213,8 @@ if __name__ == '__main__':
                             poll_interval = 0.5
                             relation_signer_interval = 0.75
                             try:
+                                status_sync('pending', message='登录窗口已打开，请在窗口中完成登录')
+
                                 if not win.events.loaded.wait(45):
                                     if not cancel_ev.is_set():
                                         try: win.destroy()
@@ -247,11 +249,22 @@ if __name__ == '__main__':
                                         inject_relation_signer_probe(win)
                                         last_probe_time = now
 
-                                    try:
-                                        raw_cookies = win.get_cookies() or []
-                                    except Exception:
+                                    # Run get_cookies in a thread with timeout to avoid blocking
+                                    # the WebView2 GUI loop on Windows
+                                    cookie_result = [None]
+                                    cookie_error = [None]
+                                    def _fetch_cookies():
+                                        try:
+                                            cookie_result[0] = win.get_cookies() or []
+                                        except Exception as e:
+                                            cookie_error[0] = e
+                                    t = threading.Thread(target=_fetch_cookies, daemon=True)
+                                    t.start()
+                                    t.join(timeout=2.0)
+                                    if t.is_alive() or cookie_error[0]:
                                         time.sleep(poll_interval)
                                         continue
+                                    raw_cookies = cookie_result[0]
 
                                     status_sync('cookies_polled', cookies=raw_cookies)
                                     time.sleep(poll_interval)

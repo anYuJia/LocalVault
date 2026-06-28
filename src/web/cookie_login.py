@@ -595,6 +595,10 @@ def cookie_browser_login_status_sync():
 
         return jsonify({'success': True, 'logged_in': True})
 
+    elif event == 'pending':
+        _emit_cookie_login_status('pending', message or '已检测到登录 Cookie，正在校验登录状态')
+        return jsonify({'success': True})
+
     elif event == 'window_closed':
         _emit_cookie_login_status('cancelled', '登录窗口已关闭')
         return jsonify({'success': True})
