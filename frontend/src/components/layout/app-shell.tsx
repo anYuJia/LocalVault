@@ -39,7 +39,7 @@ export function AppShell() {
       <Sidebar />
 
       {/* Main Content Area */}
-      <main className={cn("flex-1 flex flex-col min-w-0 relative pb-4 pr-4", needsTopInset ? "pt-9" : "pt-4")}>
+      <main className={cn("relative flex flex-col min-w-0 flex-1", needsTopInset ? "pt-9" : "pt-4")}>
         {isPyWebView && (
           <div
             className="pywebview-drag-region absolute left-0 top-0 z-30 h-8 pointer-events-auto"
@@ -50,7 +50,7 @@ export function AppShell() {
             } as React.CSSProperties & { WebkitAppRegion: string }}
           />
         )}
-        <div ref={scrollRef} className="relative flex-1 overflow-x-hidden overflow-y-auto pb-16 pt-2">
+        <div ref={scrollRef} className="relative flex-1 overflow-x-hidden overflow-y-auto pb-16 pt-2 rounded-t-[24px]">
           <AnimatePresence initial={false} mode="popLayout">
             {renderView(currentView)}
           </AnimatePresence>
