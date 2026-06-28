@@ -4,7 +4,7 @@
 
 # better-douyin
 
-A local Douyin downloader and archive manager for searching creators, parsing links, downloading media, previewing feeds, and managing saved works.
+A local Douyin downloader, previewer, and archive manager built with Python and React. It is suitable for source-level customization, desktop usage, and browser / headless workflows.
 
 <p>
   <a href="README.md">简体中文</a> | <a href="README_EN.md">English</a>
@@ -12,37 +12,36 @@ A local Douyin downloader and archive manager for searching creators, parsing li
 
 <p>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
-  <a href="https://github.com/anYuJia/better-douyin/releases/latest"><img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-555?style=flat-square" alt="Platform"></a>
+  <a href="https://github.com/anYuJia/better-douyin/releases/latest"><img src="https://img.shields.io/github/v/release/anYuJia/better-douyin?style=flat-square" alt="Release"></a>
+  <a href="https://github.com/anYuJia/better-douyin/releases"><img src="https://img.shields.io/github/downloads/anYuJia/better-douyin/total?style=flat-square" alt="Downloads"></a>
+  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-555?style=flat-square" alt="Platform">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2ea44f?style=flat-square" alt="License"></a>
 </p>
 
-[Download](../../releases/latest) · [Screenshots](#screenshots) · [Quick Start](#quick-start) · [FAQ](#faq)
+[Download](#download) · [Features](#features) · [Screenshots](#screenshots) · [Run From Source](#run-from-source) · [FAQ](#faq)
 
 </div>
 
 ---
 
-## Which Version Should I Use?
+## Project Positioning
 
-There are two related projects:
+better-douyin is the Python edition of the Douyin desktop toolkit. It keeps the local Flask service, browser access mode, and Python source structure easy to inspect and extend.
 
-| Version | Best for |
-|:---|:---|
-| **Python version** | Easier source-level customization and Python-based workflows |
-| **Rust / Tauri version** | Recommended for daily desktop use, smaller builds, and smoother local playback |
-
-Rust version: [better-douyin-R](https://github.com/anYuJia/better-douyin-R).
+For daily desktop use, the Rust / Tauri edition is recommended: [better-douyin-R](https://github.com/anYuJia/better-douyin-R).
 
 ## Features
 
-- Search Douyin creators and open creator profiles
-- Parse a shared link and download a single work
-- Batch download videos, image posts, and some Live Photo assets
-- Preview recommended feeds and download from the player
-- Manage local downloads in file mode or work mode
-- Search, play, locate, and delete saved files
-- Skip works that have already been downloaded
-- Configure Cookie through built-in login, browser import, or manual paste
+- Search Douyin creators and browse profile works, collected works, and liked works
+- Parse shared links and download individual works
+- Download videos, image posts, and some Live Photo assets
+- Batch download creator works, search results, recommended feeds, collected lists, and liked lists
+- Name batch tasks by creator, mix, or list context for easier local archiving
+- Preview recommended feeds with immersive playback and one-click download
+- Player support for multi-media navigation, progress control, volume, auto-play next work, and retry states
+- Download original audio / BGM and keep it visible in download tasks and history
+- Manage local downloads in task, file, and work views
+- Run as a desktop app or as a browser / headless service
 - Keep Cookie, settings, history, and downloaded files on your own machine
 
 ## Screenshots
@@ -77,29 +76,37 @@ Rust version: [better-douyin-R](https://github.com/anYuJia/better-douyin-R).
   <strong>Immersive player</strong>
 </p>
 
-## Quick Start
+## Download
 
-### Option 1: Download a release build
-
-Download the package for your platform from [Releases](../../releases/latest), extract it, and run the application.
-
-Common choices:
+Download the package for your platform from [Releases](https://github.com/anYuJia/better-douyin/releases/latest), then install or extract it.
 
 | Platform | Recommended file |
 |:---|:---|
-| Windows | `.exe` installer or portable `.zip` |
-| macOS | `.dmg` or `.app` |
-| Linux | `.tar.gz` |
+| Windows installer | `better-douyin-v*-windows-x64-installer.exe` |
+| Windows portable | `better-douyin-v*-windows-x64-portable.zip` |
+| macOS Apple Silicon | `better-douyin-v*-macos-arm64.dmg` |
+| macOS Intel | `better-douyin-v*-macos-x64.dmg` |
+| Linux Debian / Ubuntu | `better-douyin-v*-linux-x64.deb` |
+| Linux Fedora / openSUSE / RHEL | `better-douyin-v*-linux-x64.rpm` |
+| Linux portable | `better-douyin-v*-linux-x64.tar.gz` |
 
-Release builds start the local service and open the desktop window automatically.
+`.sig`, `latest.json`, `windows.json`, `darwin.json`, and `linux.json` are mainly used for update metadata and signature checks. Most users do not need to download them manually.
 
-If macOS reports that the developer cannot be verified, run:
+If macOS says the developer cannot be verified:
 
 ```bash
 sudo xattr -rd com.apple.quarantine /path/to/better-douyin.app
 ```
 
-### Option 2: Run from source
+## First Use
+
+1. Open Settings and configure Cookie and download directory.
+2. Set Cookie through built-in login, browser Cookie import, or manual paste.
+3. Search a creator, parse a shared link, or open recommended / collected / liked lists.
+4. Download a single work or start a batch download from a list.
+5. Monitor progress in the bottom task panel and manage saved files in "My Downloads".
+
+## Run From Source
 
 ```bash
 git clone https://github.com/anYuJia/better-douyin.git
@@ -109,16 +116,8 @@ python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt
-
-cd frontend
-npm install
-npm run build
-cd ..
-```
-
-Desktop mode:
-
-```bash
+npm --prefix frontend install
+npm --prefix frontend run build
 python main.py
 ```
 
@@ -128,21 +127,19 @@ Browser / headless mode:
 python -m src.web.web_app
 ```
 
-## First Use
+Frontend development:
 
-1. Open the app and configure Cookie and download directory in Settings.
-2. Set Cookie through built-in login, browser Cookie import, or manual paste.
-3. Search a creator or parse a shared link.
-4. Download a single work, or batch download from creator, collected, or liked lists.
-5. Monitor progress in the bottom task panel and manage saved files in "My Downloads".
+```bash
+npm --prefix frontend run dev
+```
 
 ## Cookie, Data, and Privacy
 
 - Cookie is only used for local requests to Douyin-related APIs
 - Cookie, settings, history, cache, and downloaded files stay on your machine
-- Download directory can be changed in Settings
-- Recommended feed, collected works, liked works, and some batch features require a valid Cookie
-- If an API suddenly stops working, check whether Cookie has expired, the account needs verification, or the network can access Douyin domains
+- Recommended feed, collected works, liked works, comments, and some batch features require a valid Cookie
+- If browser / headless mode is exposed remotely, configure your own access control and reverse proxy security
+- If APIs suddenly stop working, check Cookie validity, account verification, network access, and target content permissions
 
 ## FAQ
 
@@ -152,21 +149,17 @@ Refresh Cookie and confirm that the account can access the target content in a n
 
 ### What if downloads are slow or fail?
 
-Speed depends on network conditions, resource availability, and platform responses. Try another network, reduce concurrency, refresh Cookie, or retry later.
-
-### Why does changing quality sometimes produce a similar file size?
-
-Some works only expose one downloadable media URL, or different transcoded URLs are close in size. Available quality depends on what the platform returns.
+Speed depends on network conditions, resource availability, platform responses, and Cookie state. Try reducing concurrency, refreshing Cookie, switching network, or retrying later.
 
 ### Why are already-downloaded works skipped?
 
-The app records downloaded works and checks local files to avoid duplicate downloads. If you moved files or changed directories manually, verify the active directory in "My Downloads".
+The app records downloaded works and checks local files to avoid duplicate downloads. If you moved files manually, verify the active directory in "My Downloads".
 
 ### Can it run on a Linux server?
 
 Yes. Browser / headless mode is more suitable than desktop mode. If you expose it remotely, handle access control, reverse proxying, and Cookie exposure risks yourself.
 
-## Development
+## Development Stack
 
 | Area | Technology |
 |:---|:---|
