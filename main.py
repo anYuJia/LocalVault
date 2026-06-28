@@ -171,8 +171,8 @@ if __name__ == '__main__':
                     payload['cookies'] = cookies
                 try:
                     requests.post(f"http://127.0.0.1:{p}/api/cookie/browser_login/status_sync", json=payload, timeout=2)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"[ERROR] GUI status sync failed: {e}", flush=True)
 
             while True:
                 try:
@@ -197,6 +197,7 @@ if __name__ == '__main__':
                             create_login_window,
                             apply_cookie_to_window,
                             inject_relation_signer_probe,
+                            normalize_cookie_entries,
                         )
 
                         try:
@@ -265,8 +266,9 @@ if __name__ == '__main__':
                                         time.sleep(poll_interval)
                                         continue
                                     raw_cookies = cookie_result[0]
+                                    normalized = normalize_cookie_entries(raw_cookies)
 
-                                    status_sync('cookies_polled', cookies=raw_cookies)
+                                    status_sync('cookies_polled', cookies=normalized)
                                     time.sleep(poll_interval)
 
                             except Exception as ex:
