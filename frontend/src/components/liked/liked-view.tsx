@@ -265,9 +265,9 @@ function LikedVideosPanel({
         <>
           <motion.div
             className={ORIGINAL_VIDEO_GRID_CLASS}
-            initial={false}
-            animate="show"
-            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.2 }}
           >
             {videos.map((video, index) => (
               <VideoCard

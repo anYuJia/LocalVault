@@ -5,15 +5,15 @@ export const AmbientBackground = memo(function AmbientBackground() {
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
       {/* Mesh gradient orbs */}
       <div
-        className="absolute -top-[10%] -right-[5%] w-[500px] h-[500px] rounded-full opacity-[0.08] blur-[100px] animate-[orb-drift_20s_ease-in-out_infinite]"
+        className="absolute -top-[10%] -right-[5%] w-[400px] h-[400px] rounded-full opacity-[0.06] blur-[80px]"
         style={{ background: "var(--color-accent)" }}
       />
       <div
-        className="absolute -bottom-[15%] -left-[5%] w-[400px] h-[400px] rounded-full opacity-[0.06] blur-[80px] animate-[orb-drift_25s_ease-in-out_infinite_reverse]"
+        className="absolute -bottom-[15%] -left-[5%] w-[320px] h-[320px] rounded-full opacity-[0.05] blur-[60px]"
         style={{ background: "var(--color-info)" }}
       />
       <div
-        className="absolute top-[20%] left-[10%] w-[300px] h-[300px] rounded-full opacity-[0.04] blur-[60px] animate-[orb-drift_18s_ease-in-out_infinite_2s]"
+        className="absolute top-[20%] left-[10%] w-[240px] h-[240px] rounded-full opacity-[0.03] blur-[50px]"
         style={{ background: "var(--color-success)" }}
       />
 

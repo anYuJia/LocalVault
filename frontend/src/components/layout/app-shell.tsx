@@ -50,8 +50,8 @@ export function AppShell() {
             } as React.CSSProperties & { WebkitAppRegion: string }}
           />
         )}
-        <div ref={scrollRef} className={cn("flex-1 overflow-x-hidden overflow-y-auto pb-16", needsTopInset && "pt-9")}>
-          <AnimatePresence initial={false} mode="wait">
+        <div ref={scrollRef} className={cn("relative flex-1 overflow-x-hidden overflow-y-auto pb-16", needsTopInset && "pt-9")}>
+          <AnimatePresence initial={false} mode="popLayout">
             {renderView(currentView)}
           </AnimatePresence>
         </div>
@@ -68,15 +68,14 @@ export function AppShell() {
 
 function renderView(view: string) {
   const variants = {
-    initial: { opacity: 0, y: 8, scale: 0.985 },
-    animate: { opacity: 1, y: 0, scale: 1 },
-    exit: { opacity: 0, y: -4, scale: 0.99 },
+    initial: { opacity: 0, y: 6 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -6 },
   };
 
   const transition = {
-    duration: 0.22,
-    ease: easeConfig,
-    opacity: { duration: 0.15 },
+    duration: 0.16,
+    ease: "easeOut" as const,
   };
 
   switch (view) {

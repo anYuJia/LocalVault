@@ -24,7 +24,7 @@ export function MixCard({ mix, onOpen }: { mix: CollectedMixItem; onOpen: () => 
       initial={false}
       animate={{ opacity: 1, y: 0 }}
       onClick={onOpen}
-      className="group overflow-hidden rounded-[var(--radius-lg)] border border-border bg-surface-solid/80 text-left transition-[background-color,border-color,box-shadow,transform] duration-200 hover:border-border-strong hover:bg-surface-raised hover:shadow-md active:scale-[0.99]"
+      className="group overflow-hidden rounded-[var(--radius-lg)] border border-border bg-surface-solid/80 text-left transition-[background-color,border-color,box-shadow,transform] duration-200 hover:border-border-strong hover:bg-surface-raised hover:shadow-md active:scale-[0.99] h-[265px]"
     >
       <div className="relative h-[150px] bg-surface">
         {cover ? (

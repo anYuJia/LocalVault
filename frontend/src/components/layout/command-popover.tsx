@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useAppStore, useLogStore } from "@/stores/app-store";
-import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
   Link2,
@@ -29,29 +29,21 @@ const exampleLinks = [
   "https://www.douyin.com/video/734...",
 ];
 
-const commandPanelLayoutTransition = {
-  type: "spring",
-  duration: 0.32,
-  bounce: 0,
-} as const;
-
-const commandContentTransition = {
-  type: "spring",
-  duration: 0.3,
-  bounce: 0,
-} as const;
-
 const contentVariants = {
-  initial: { opacity: 0, y: 6, filter: "blur(4px)" },
-  animate: { opacity: 1, y: 0, filter: "blur(0px)" },
-  exit: { opacity: 0, y: -4, filter: "blur(4px)" },
+  initial: { opacity: 0, y: 4 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -4 },
+};
+
+const contentTransition = {
+  duration: 0.15,
+  ease: "easeOut" as const,
 };
 
 const iconSwitchTransition = {
-  type: "spring",
-  duration: 0.3,
-  bounce: 0,
-} as const;
+  duration: 0.15,
+  ease: "easeOut" as const,
+};
 
 export function CommandPopover() {
   const setCommandOpen = useAppStore((s) => s.setCommandOpen);
@@ -60,9 +52,7 @@ export function CommandPopover() {
   const addLog = useLogStore((s) => s.addLog);
   const [value, setValue] = useState("");
   const [recents, setRecents] = useState<RecentSearch[]>([]);
-  const [contentHeight, setContentHeight] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const contentMeasureRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setRecents(loadRecentSearches());
@@ -117,25 +107,6 @@ export function CommandPopover() {
   const isSearch = commandMode === "search";
   const Icon = isSearch ? Search : Link2;
 
-  const updateContentHeight = useCallback(() => {
-    const node = contentMeasureRef.current;
-    if (!node) return;
-    const nextHeight = Math.ceil(node.getBoundingClientRect().height);
-    setContentHeight((current) => (current === nextHeight ? current : nextHeight));
-  }, []);
-
-  useLayoutEffect(() => {
-    updateContentHeight();
-
-    const node = contentMeasureRef.current;
-    if (!node || typeof ResizeObserver === "undefined") return undefined;
-
-    const observer = new ResizeObserver(() => updateContentHeight());
-    observer.observe(node);
-
-    return () => observer.disconnect();
-  }, [updateContentHeight, isSearch, value, recents.length]);
-
   return (
     <>
       {/* Backdrop */}
@@ -150,16 +121,10 @@ export function CommandPopover() {
 
       {/* Command Panel — centered on screen */}
       <motion.div
-        layout
-        initial={{ opacity: 0, y: -16, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -8, scale: 0.97 }}
-        transition={{
-          opacity: { duration: 0.15 },
-          scale: { type: "spring", duration: 0.3, bounce: 0 },
-          y: { type: "spring", duration: 0.3, bounce: 0 },
-          layout: commandPanelLayoutTransition,
-        }}
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ duration: 0.16, ease: "easeOut" }}
         className={cn(
           "fixed z-[1090] flex flex-col overflow-hidden",
           "inset-0 m-auto w-fit h-fit",
@@ -171,51 +136,46 @@ export function CommandPopover() {
       >
         {/* Header with mode tabs */}
         <div className="flex items-center gap-2 px-5 pt-4 pb-3">
-          <LayoutGroup id="command-mode-tabs">
-            <div className="flex items-center gap-1 p-1 rounded-[12px] bg-white/[0.04]">
-              {(
-                [
-                  { mode: "search" as const, icon: Search, label: "搜索用户" },
-                  { mode: "link" as const, icon: Link2, label: "解析链接" },
-                ] as const
-              ).map(({ mode, icon: TabIcon, label }) => (
-                <motion.button
-                  key={mode}
-                  layout
-                  whileTap={{ scale: 0.96 }}
-                  onClick={() => {
-                    if (mode === "search") {
-                      setView("search");
-                      setCommandOpen(false);
-                      return;
-                    }
-                    setView("link");
+          <div className="flex items-center gap-1 p-1 rounded-[12px] bg-white/[0.04]">
+            {(
+              [
+                { mode: "search" as const, icon: Search, label: "搜索用户" },
+                { mode: "link" as const, icon: Link2, label: "解析链接" },
+              ] as const
+            ).map(({ mode, icon: TabIcon, label }) => (
+              <button
+                key={mode}
+                onClick={() => {
+                  if (mode === "search") {
+                    setView("search");
                     setCommandOpen(false);
-                  }}
-                  className={cn(
-                    "relative flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[0.78rem] font-semibold cursor-pointer transition-[color,background-color,box-shadow] duration-200",
-                    commandMode === mode
-                      ? "text-text"
-                      : "text-text-muted hover:text-text-secondary"
-                  )}
-                >
-                  {commandMode === mode && (
-                    <motion.div
-                      layoutId="command-tab-bg"
-                      className="absolute inset-0 rounded-[10px] bg-accent/[0.12] shadow-[0_0_12px_rgba(254,44,85,0.08)]"
-                      transition={{
-                        type: "spring",
-                        duration: 0.3,
-                        bounce: 0,
-                      }}
-                    />
-                  )}
-                  <TabIcon className="relative w-3.5 h-3.5" />
-                  <span className="relative">{label}</span>
-                </motion.button>
-              ))}
-            </div>
-          </LayoutGroup>
+                    return;
+                  }
+                  setView("link");
+                  setCommandOpen(false);
+                }}
+                className={cn(
+                  "relative flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[0.78rem] font-semibold cursor-pointer transition-[color,background-color,box-shadow] duration-200",
+                  commandMode === mode
+                    ? "text-text"
+                    : "text-text-muted hover:text-text-secondary"
+                )}
+              >
+                {commandMode === mode && (
+                  <motion.div
+                    layoutId="command-tab-bg"
+                    className="absolute inset-0 rounded-[10px] bg-accent/[0.12] shadow-[0_0_12px_rgba(254,44,85,0.08)]"
+                    transition={{
+                      duration: 0.16,
+                      ease: "easeOut" as const,
+                    }}
+                  />
+                )}
+                <TabIcon className="relative w-3.5 h-3.5" />
+                <span className="relative">{label}</span>
+              </button>
+            ))}
+          </div>
 
           <div className="ml-auto flex items-center gap-2">
             <button
@@ -301,29 +261,18 @@ export function CommandPopover() {
         <div className="h-px bg-white/[0.06] mx-5" />
 
         {/* Content Area */}
-        <motion.div
-          layout
-          transition={{ layout: commandPanelLayoutTransition }}
-          className="px-5 py-4 max-h-[320px] overflow-y-auto"
-        >
-          <motion.div
-            animate={contentHeight === null ? undefined : { height: contentHeight }}
-            transition={commandContentTransition}
-            className="overflow-hidden"
-          >
-            <div ref={contentMeasureRef}>
-              <AnimatePresence mode="wait" initial={false}>
-                {/* Search mode: recent searches */}
-                {isSearch && !value && (
-                  <motion.div
-                    layout
-                    key="search-empty"
-                    variants={contentVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={commandContentTransition}
-                  >
+        <div className="h-[min(280px,calc(100vh-220px))] min-h-[180px] overflow-y-auto px-5 py-4">
+          <AnimatePresence mode="wait" initial={false}>
+            {/* Search mode: recent searches */}
+            {isSearch && !value && (
+              <motion.div
+                key="search-empty"
+                variants={contentVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={contentTransition}
+              >
                 {recents.length > 0 ? (
                   <div className="mb-4">
                     <div className="flex items-center justify-between px-1 mb-2.5">
@@ -392,20 +341,19 @@ export function CommandPopover() {
                     支持搜索抖音昵称、抖音号、UID
                   </span>
                 </div>
-                  </motion.div>
-                )}
+              </motion.div>
+            )}
 
-                {/* Link mode: empty state */}
-                {!isSearch && !value && (
-                  <motion.div
-                    layout
-                    key="link-empty"
-                    variants={contentVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={commandContentTransition}
-                  >
+            {/* Link mode: empty state */}
+            {!isSearch && !value && (
+              <motion.div
+                key="link-empty"
+                variants={contentVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={contentTransition}
+              >
                 <div className="flex flex-col items-center py-4 mb-4">
                   <div className="w-14 h-14 rounded-[16px] bg-gradient-to-br from-info/15 to-info/5 flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(124,92,252,0.1)]">
                     <Globe className="w-7 h-7 text-info" />
@@ -449,20 +397,19 @@ export function CommandPopover() {
                     也可以直接从抖音 App 复制分享链接
                   </span>
                 </div>
-                  </motion.div>
-                )}
+              </motion.div>
+            )}
 
-                {/* Input active: action preview */}
-                {value && (
-                  <motion.div
-                    layout
-                    key="action"
-                    variants={contentVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={commandContentTransition}
-                  >
+            {/* Input active: action preview */}
+            {value && (
+              <motion.div
+                key="action"
+                variants={contentVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={contentTransition}
+              >
                 <button
                   onClick={handleSubmit}
                   className="flex items-center gap-4 w-full px-4 py-4 rounded-[14px] text-left bg-accent/[0.07] hover:bg-accent/[0.11] cursor-pointer transition-colors group"
@@ -484,12 +431,10 @@ export function CommandPopover() {
                     </kbd>
                   </div>
                 </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </motion.div>
-        </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* Footer keyboard hints */}
         <div className="flex items-center justify-between px-5 py-3 bg-white/[0.02]">
