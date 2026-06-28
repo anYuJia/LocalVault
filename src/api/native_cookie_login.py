@@ -145,6 +145,23 @@ def normalize_cookie_entries(raw_cookies: list[Any] | None) -> list[dict[str, st
     seen: set[tuple[str, str]] = set()
 
     for raw_cookie in raw_cookies or []:
+        if isinstance(raw_cookie, dict) and 'name' in raw_cookie and 'value' in raw_cookie:
+            name = str(raw_cookie['name']).strip()
+            value = str(raw_cookie['value']).strip()
+            if not name or not value:
+                continue
+            key = (name, value)
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append({
+                'name': name,
+                'value': value,
+                'domain': str(raw_cookie.get('domain') or '').strip(),
+                'path': str(raw_cookie.get('path') or '/').strip(),
+            })
+            continue
+
         if isinstance(raw_cookie, str):
             simple_cookie = SimpleCookie()
             simple_cookie.load(raw_cookie)
