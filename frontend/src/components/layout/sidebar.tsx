@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAppStore, useDownloadStore } from "@/stores/app-store";
 import type { ViewType } from "@/types";
 import { Badge } from "@/components/ui/badge";
-import { getAccounts, type AccountInfo } from "@/lib/tauri";
+import { getAccounts, switchAccount, deleteAccount, type AccountInfo } from "@/lib/tauri";
 import { ThemeLogo } from "@/components/common/theme-logo";
 import {
   Home,
@@ -19,7 +19,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -64,12 +64,17 @@ export function Sidebar() {
   const friendUnreadCount = useAppStore((s) => s.friendUnreadCount);
   const activeCount = useDownloadStore((s) => s.activeCount);
   const [activeAccount, setActiveAccount] = useState<AccountInfo | null>(null);
+  const [allAccounts, setAllAccounts] = useState<AccountInfo[]>([]);
+  const [currentSecUid, setCurrentSecUid] = useState("");
   const [collapsed, setCollapsed] = useState(readSidebarCollapsed);
+  const [showPopover, setShowPopover] = useState(false);
 
   const fetchActiveAccount = useCallback(async () => {
     try {
       const res = await getAccounts();
       if (res.success) {
+        setAllAccounts(res.accounts || []);
+        setCurrentSecUid(res.current_sec_uid || "");
         if (res.current_sec_uid) {
           const activeAcc = res.accounts?.find((a) => a.sec_uid === res.current_sec_uid);
           setActiveAccount(activeAcc || null);
@@ -86,6 +91,28 @@ export function Sidebar() {
       console.error("加载边栏头像失败", e);
     }
   }, []);
+
+  const handleSwitchAccount = async (secUid: string) => {
+    try {
+      const res = await switchAccount(secUid);
+      if (res.success) {
+        await fetchActiveAccount();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleLogout = async (secUid: string) => {
+    try {
+      const res = await deleteAccount(secUid);
+      if (res.success) {
+        await fetchActiveAccount();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useEffect(() => {
     void fetchActiveAccount();
@@ -236,7 +263,86 @@ export function Sidebar() {
       </nav>
 
       {/* Status — pinned to bottom */}
-      <div className={cn("relative px-[14px] py-3", collapsed && "flex justify-center")}>
+      <div 
+        onMouseEnter={() => setShowPopover(true)}
+        onMouseLeave={() => setShowPopover(false)}
+        className={cn("relative px-[14px] py-3", collapsed && "flex justify-center")}
+      >
+        <AnimatePresence>
+          {showPopover && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className={cn(
+                "absolute bottom-[calc(100%-4px)] left-[14px] z-50 rounded-2xl border border-white/[0.08] bg-surface-solid/95 p-3.5 shadow-[0_12px_36px_rgba(0,0,0,0.3)] backdrop-blur-xl text-left flex flex-col gap-3",
+                collapsed ? "w-[220px]" : "w-[172px]"
+              )}
+            >
+              {cookieLoggedIn && activeAccount ? (
+                <div className="flex items-center gap-2.5 pb-2.5 border-b border-white/[0.06]">
+                  <img src={activeAccount.avatar_thumb} className="w-9 h-9 rounded-full object-cover border border-accent/20" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[0.78rem] font-bold text-text truncate">{activeAccount.nickname}</div>
+                    <div className="text-[0.62rem] text-success font-semibold flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full bg-success animate-pulse" /> 已登录
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5 pb-2.5 border-b border-white/[0.06]">
+                  <div className="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                    <UserRound className="w-4 h-4 text-text-muted" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[0.78rem] font-bold text-text-muted">未登录</div>
+                    <div className="text-[0.62rem] text-text-muted">需要登录 Cookie</div>
+                  </div>
+                </div>
+              )}
+
+              {allAccounts.length > 1 && (
+                <div className="flex flex-col gap-1 max-h-[120px] overflow-y-auto pr-1">
+                  <span className="text-[0.58rem] font-bold text-text-muted uppercase tracking-wider mb-1">切换账号</span>
+                  {allAccounts.map((acc) => {
+                    if (acc.sec_uid === currentSecUid) return null;
+                    return (
+                      <button
+                        key={acc.sec_uid}
+                        onClick={() => handleSwitchAccount(acc.sec_uid)}
+                        className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-white/5 text-left transition-colors cursor-pointer"
+                      >
+                        <img src={acc.avatar_thumb} className="w-6 h-6 rounded-full object-cover" />
+                        <span className="text-[0.7rem] font-semibold text-text truncate flex-1">{acc.nickname}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-0.5">
+                <button
+                  onClick={() => { setView("settings"); setShowPopover(false); }}
+                  className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-white/5 text-[0.7rem] font-semibold text-text transition-colors cursor-pointer"
+                >
+                  <Settings className="w-3.5 h-3.5 text-text-muted" />
+                  <span>账号与设置</span>
+                </button>
+                {cookieLoggedIn && activeAccount && (
+                  <button
+                    onClick={() => { handleLogout(activeAccount.sec_uid); setShowPopover(false); }}
+                    className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-red-500/10 hover:text-red-400 text-[0.7rem] font-semibold text-red-400/80 transition-colors cursor-pointer"
+                  >
+                    <UserRound className="w-3.5 h-3.5" />
+                    <span>退出当前账号</span>
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <button
           onClick={() => setView("settings")}
           className={cn(
