@@ -93,7 +93,7 @@ export function ContextMenu() {
       description: (
         <div className="text-sm space-y-1">
           <p className="font-semibold">本地媒体工作台</p>
-          <p className="text-text-muted text-xs">Version 1.0.30</p>
+          <p className="text-text-muted text-xs">Version 1.0.31</p>
           <p className="text-text-muted text-xs">基于 React, TailwindCSS & pywebview 构建的优质短视频工作台。</p>
         </div>
       ),
