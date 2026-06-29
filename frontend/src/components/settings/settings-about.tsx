@@ -78,11 +78,11 @@ export function SettingsAboutTab({ appVersion, updateStatus, updateMessage, upda
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Sponsor Card */}
             <div className="flex flex-col items-center text-center p-4 rounded-xl bg-white/[0.02] border border-white/[0.04] backdrop-blur-xl">
-              <div className="w-[180px] h-[180px] rounded-lg bg-white p-1.5 flex items-center justify-center shrink-0 shadow-md border border-white/10 hover:scale-[1.03] transition-transform duration-200">
+              <div className="w-[250px] h-[250px] flex items-center justify-center shrink-0 hover:scale-[1.03] transition-transform duration-200">
                 <img
-                  src="/wechat-pay.jpg"
+                  src="/wechat-pay.png"
                   alt="微信支付赞赏码"
-                  className="w-full h-full object-contain rounded-md"
+                  className="w-full h-full object-contain rounded-lg"
                 />
               </div>
               <div className="mt-3 min-w-0">
@@ -95,11 +95,11 @@ export function SettingsAboutTab({ appVersion, updateStatus, updateMessage, upda
 
             {/* QQ Group Card */}
             <div className="flex flex-col items-center text-center p-4 rounded-xl bg-white/[0.02] border border-white/[0.04] backdrop-blur-xl">
-              <div className="w-[180px] h-[180px] rounded-lg bg-white p-1.5 flex items-center justify-center shrink-0 shadow-md border border-white/10 hover:scale-[1.03] transition-transform duration-200">
+              <div className="w-[250px] h-[250px] flex items-center justify-center shrink-0 hover:scale-[1.03] transition-transform duration-200">
                 <img
                   src="/qq-group.jpg"
                   alt="QQ群二维码"
-                  className="w-full h-full object-contain rounded-md"
+                  className="w-full h-full object-contain rounded-lg"
                 />
               </div>
               <div className="mt-3 min-w-0">
