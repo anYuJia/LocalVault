@@ -79,7 +79,7 @@ def setup_download_history(
 
 def _write_text_to_clipboard(text: str) -> None:
     if _IS_WINDOWS:
-        subprocess.run(['clip'], input=text, text=True, check=True, timeout=5)
+        subprocess.run(['clip'], input=text, text=True, check=True, timeout=5, creationflags=0x08000000)
         return
 
     if sys.platform == 'darwin':
@@ -203,10 +203,10 @@ def open_download_history_location():
 
         if _IS_WINDOWS:
             if file_path.is_dir():
-                subprocess.Popen(['explorer.exe', os.path.normpath(str(open_dir))])
+                subprocess.Popen(['explorer.exe', os.path.normpath(str(open_dir))], creationflags=0x08000000)
             else:
                 normalized_path = os.path.normpath(str(file_path))
-                subprocess.Popen(['explorer.exe', '/select,', normalized_path])
+                subprocess.Popen(['explorer.exe', '/select,', normalized_path], creationflags=0x08000000)
         elif sys.platform == 'darwin':
             if file_path.is_dir():
                 subprocess.Popen(['open', str(open_dir)])
@@ -356,3 +356,27 @@ def move_selected_download_history_files():
     except Exception as e:
         _logger.error(f"迁移选中文件失败: {str(e)}")
         return jsonify({'success': False, 'message': f'迁移选中文件失败: {str(e)}'}), 500
+
+
+@download_history_bp.route('/api/check_files_exist', methods=['POST'])
+def check_files_exist():
+    """检查给定的文件路径列表在磁盘上是否存在。"""
+    try:
+        data = _request_json()
+        paths = data.get('paths') or []
+        if not isinstance(paths, list):
+            return jsonify({'success': False, 'message': '参数格式错误，需为列表'}), 400
+
+        exists_result = []
+        for path_str in paths:
+            try:
+                file_path = _safe_history_path(str(path_str))
+                exists_result.append(file_path.exists())
+            except Exception:
+                exists_result.append(False)
+
+        return jsonify({'success': True, 'exists': exists_result})
+    except Exception as e:
+        _logger.error(f"检查文件是否存在失败: {str(e)}")
+        return jsonify({'success': False, 'message': f'检查文件是否存在失败: {str(e)}'}), 500
+

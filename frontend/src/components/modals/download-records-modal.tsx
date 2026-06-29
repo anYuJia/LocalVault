@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Calendar, Video, Image, Headphones, HardDrive, FolderOpen, FileText } from "lucide-react";
 import { formatBytes } from "@/lib/utils";
-import { openFileLocation, type HistoryItem } from "@/lib/tauri";
+import { openFileLocation, checkFilesExist, type HistoryItem } from "@/lib/tauri";
 
 interface DownloadRecordsModalProps {
   isOpen: boolean;
@@ -22,8 +22,9 @@ interface DownloadRecordBatch {
 
 export function DownloadRecordsModal({ isOpen, onClose, historyItems }: DownloadRecordsModalProps) {
   const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
+  const [existMap, setExistMap] = useState<Record<string, boolean>>({});
 
-  // Group history items into batches (downloads in same 60s window for same author count as 1 batch)
+  // Group history items into batches (downloads in same 30 mins window for same author count as 1 batch)
   const batches = useMemo(() => {
     const sorted = [...historyItems].sort((a, b) => b.timestamp - a.timestamp);
     const result: DownloadRecordBatch[] = [];
@@ -40,7 +41,7 @@ export function DownloadRecordsModal({ isOpen, onClose, historyItems }: Download
     for (const item of sorted) {
       const itemAuthor = item.author || "解析下载";
       const itemAuthorId = item.author_id || "";
-      const timeThreshold = 60; // 60s
+      const timeThreshold = 1800; // 30 minutes (handles interruption/resume)
 
       const matched = result.find((b) => {
         const sameAuthor = b.author === itemAuthor && b.authorId === itemAuthorId;
@@ -73,6 +74,28 @@ export function DownloadRecordsModal({ isOpen, onClose, historyItems }: Download
 
     return result;
   }, [historyItems]);
+
+  // Check file existence status when modal opens or history items change
+  useEffect(() => {
+    if (!isOpen || historyItems.length === 0) return;
+
+    const paths = historyItems.map((item) => item.path || item.file_path || "").filter(Boolean);
+    if (paths.length === 0) return;
+
+    const checkAll = async () => {
+      try {
+        const exists = await checkFilesExist(paths);
+        const newMap: Record<string, boolean> = {};
+        paths.forEach((path, idx) => {
+          newMap[path] = exists[idx];
+        });
+        setExistMap(newMap);
+      } catch (e) {
+        console.error("检查文件是否存在失败", e);
+      }
+    };
+    checkAll();
+  }, [isOpen, historyItems]);
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
@@ -140,7 +163,6 @@ export function DownloadRecordsModal({ isOpen, onClose, historyItems }: Download
               ) : (
                 batches.map((batch) => {
                   const isExpanded = expandedBatchId === batch.id;
-                  const firstItem = batch.items[0];
 
                   return (
                     <div
@@ -203,25 +225,43 @@ export function DownloadRecordsModal({ isOpen, onClose, historyItems }: Download
                           <span className="text-[0.58rem] font-bold text-text-muted uppercase tracking-wider block mb-1">
                             包含文件 ({batch.items.length})
                           </span>
-                          {batch.items.map((item, idx) => (
-                            <div
-                              key={`${item.aweme_id || idx}_${item.path}`}
-                              className="flex items-center justify-between gap-3 text-[0.7rem] hover:bg-white/5 p-1.5 rounded-lg transition-colors group"
-                            >
-                              <span className="text-text-secondary truncate flex-1 group-hover:text-text transition-colors">
-                                {item.filename || item.title || "未命名"}
-                              </span>
-                              {item.path && (
-                                <button
-                                  onClick={() => handleLocateFile(item.path!)}
-                                  className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 hover:bg-accent/15 hover:text-accent text-[0.62rem] text-text-muted font-bold transition-colors cursor-pointer"
-                                >
-                                  <FolderOpen className="w-3 h-3" />
-                                  定位
-                                </button>
-                              )}
-                            </div>
-                          ))}
+                          {batch.items.map((item, idx) => {
+                            const path = item.path || item.file_path || "";
+                            const fileExists = path ? existMap[path] !== false : false;
+
+                            return (
+                              <div
+                                key={`${item.aweme_id || idx}_${path}`}
+                                className="flex items-center justify-between gap-3 text-[0.7rem] hover:bg-white/5 p-1.5 rounded-lg transition-colors group"
+                              >
+                                <div className="flex items-center gap-2 truncate flex-1">
+                                  <span
+                                    className={`truncate transition-colors ${
+                                      fileExists
+                                        ? "text-text-secondary group-hover:text-text"
+                                        : "text-text-muted/50 line-through"
+                                    }`}
+                                  >
+                                    {item.filename || item.title || "未命名"}
+                                  </span>
+                                  {!fileExists && (
+                                    <span className="shrink-0 text-[0.58rem] font-semibold px-1 rounded bg-danger/10 text-danger border border-danger/25 scale-90">
+                                      已删除
+                                    </span>
+                                  )}
+                                </div>
+                                {path && fileExists && (
+                                  <button
+                                    onClick={() => handleLocateFile(path)}
+                                    className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 hover:bg-accent/15 hover:text-accent text-[0.62rem] text-text-muted font-bold transition-colors cursor-pointer"
+                                  >
+                                    <FolderOpen className="w-3 h-3" />
+                                    定位
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

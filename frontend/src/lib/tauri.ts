@@ -1749,3 +1749,15 @@ export async function deleteFile(path: string): Promise<void> {
   }
   return invoke("delete_file", { path });
 }
+
+export async function checkFilesExist(paths: string[]): Promise<boolean[]> {
+  if (shouldUseBrowserBridge()) {
+    const result = await requestJson<{ success: boolean; exists?: boolean[] }>("/api/check_files_exist", {
+      method: "POST",
+      body: JSON.stringify({ paths }),
+    });
+    return result.exists || paths.map(() => false);
+  }
+  return invoke<boolean[]>("check_files_exist", { paths });
+}
+
