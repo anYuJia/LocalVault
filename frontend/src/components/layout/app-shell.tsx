@@ -55,7 +55,7 @@ export function AppShell() {
           className={cn(
             "relative flex-1 overflow-x-hidden rounded-t-[24px]",
             currentView === "friends-status"
-              ? "flex flex-col overflow-y-hidden pb-0 pt-2"
+              ? "flex flex-col overflow-y-hidden pb-[58px] pt-2"
               : "overflow-y-auto pb-16 pt-2"
           )}
         >
