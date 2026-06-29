@@ -325,6 +325,14 @@ export function DownloadsView() {
     (t) => t.status === "completed" && !t.filePath && !t.savePath
   );
 
+  const clearTransientTasks = useCallback(() => {
+    const store = useDownloadStore.getState();
+    transientTasks.forEach((task) => {
+      store.removeTask(task.id);
+    });
+    addLog(`已清理 ${transientTasks.length} 条无路径旧任务`, "info");
+  }, [transientTasks, addLog]);
+
   const openDownloadPlayer = useCallback((items: HistoryItem[], initialItem?: HistoryItem) => {
     const playableItems = getPlayableDownloadItems(items);
     const video = buildDownloadPlayerVideo(playableItems);
@@ -610,7 +618,7 @@ export function DownloadsView() {
       )}
 
       {transientTasks.length > 0 && (
-        <div className="mt-4 rounded-[14px] border border-warning/20 bg-warning-soft/15 px-4 py-3">
+        <div className="mt-4 rounded-[14px] border border-warning/20 bg-warning-soft/15 px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-start gap-2 text-[0.78rem] text-text-secondary">
             <AlertCircle className="w-4 h-4 shrink-0 text-warning mt-0.5" />
             <div>
@@ -622,6 +630,12 @@ export function DownloadsView() {
               </div>
             </div>
           </div>
+          <button
+            onClick={clearTransientTasks}
+            className="shrink-0 px-3 py-1.5 rounded-[8px] bg-warning/10 hover:bg-warning/20 text-warning text-xs font-semibold transition-colors cursor-pointer"
+          >
+            清理记录
+          </button>
         </div>
       )}
 
