@@ -287,6 +287,7 @@ def download_videos():
         # 在全局 Loop 中运行异步下载协程
         async def do_download_task():
             try:
+                pause_control = ThreadPauseEvent(pause_event)
                 # 发送开始信号
                 dr._socketio.emit('download_started', {
                     'task_id': task_id,
@@ -396,9 +397,7 @@ def download_videos():
                             raise Exception("没有可用的媒体URL")
 
                         # 检查本地是否已下载
-                        from src.web.download_tasks import _check_local_exists
-                        local_files, file_size = _check_local_exists(user_manager, aweme_id)
-                        if local_files:
+                        if user_manager.downloader._is_aweme_downloaded(aweme_id):
                             total_skipped += 1
                             total_processed += 1
                             progress_pct = int((total_processed / total_videos) * 100)
