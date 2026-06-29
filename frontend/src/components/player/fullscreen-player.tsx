@@ -1373,6 +1373,14 @@ export function FullscreenPlayer({
     setCommentsOpen(false);
   }, [clearCommentsHoverCloseTimer]);
 
+  useEffect(() => {
+    if (openPanel) {
+      clearCommentsHoverCloseTimer();
+      commentsPanelStickyRef.current = false;
+      setCommentsOpen(false);
+    }
+  }, [openPanel, clearCommentsHoverCloseTimer]);
+
   const toggleMute = useCallback((event: ReactMouseEvent) => {
     event.stopPropagation();
     if (muted && volume === 0) {
