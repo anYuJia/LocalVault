@@ -29,6 +29,7 @@ from src.api.comment_client import CommentClient
 from src.api.api_errors import ApiErrors
 from src.api.ticket_guard import TicketGuard
 from src.api.feed_client import FeedClient
+from src.api.notice_client import NoticeClient
 
 logger = logging.getLogger('api')
 
@@ -107,6 +108,8 @@ class DouyinAPI:
         self._ticket_guard: TicketGuard | None = None
         # 推荐流接口服务（延迟初始化）
         self._feed_client: FeedClient | None = None
+        # 通知消息接口服务（延迟初始化）
+        self._notice_client: NoticeClient | None = None
 
     @property
     def im(self) -> IMClient:
@@ -142,6 +145,13 @@ class DouyinAPI:
         if self._feed_client is None:
             self._feed_client = FeedClient(self)
         return self._feed_client
+
+    @property
+    def notice(self) -> NoticeClient:
+        """获取通知消息接口服务实例（懒加载）。"""
+        if self._notice_client is None:
+            self._notice_client = NoticeClient(self)
+        return self._notice_client
 
     async def _get_webid(self, headers: dict, url: str = '') -> str:
         return await self.ticket_guard._get_webid(headers, url)

@@ -451,6 +451,21 @@ setup_recommended_feed(
 )
 app.register_blueprint(recommended_feed_bp)
 
+# 通知消息路由已抽离到 src/web/notices.py
+from src.web.notices import notices_bp, setup_notices
+
+setup_notices(
+    logger=logger,
+    request_json=request_json,
+    coerce_int=coerce_int,
+    run_async=run_async,
+    api_message=api_message,
+    verify_error_response=verify_error_response,
+    login_error_response=login_error_response,
+    get_api=_get_api_runtime,
+)
+app.register_blueprint(notices_bp)
+
 # 下载任务状态路由已抽离到 src/web/task_routes.py
 from src.web.task_routes import task_routes_bp, setup_task_routes
 
