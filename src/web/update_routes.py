@@ -269,6 +269,7 @@ def select_directory():
                 capture_output=True,
                 text=True,
                 timeout=120,
+                creationflags=0x08000000,
             )
             directory = result.stdout.strip()
 

@@ -5,6 +5,7 @@ updater.py 通过委托方式使用此模块，保持对外接口不变。
 """
 import os
 import re
+import sys
 import subprocess
 from pathlib import Path
 
@@ -37,12 +38,14 @@ def get_current_app_version(Config=None) -> str:
         return config_version
 
     try:
+        creationflags = 0x08000000 if sys.platform == 'win32' else 0
         result = subprocess.run(
             ['git', 'describe', '--tags', '--always', '--dirty'],
             capture_output=True,
             text=True,
             timeout=5,
             cwd=str(Path(__file__).resolve().parents[2]),
+            creationflags=creationflags,
         )
         if result.returncode == 0 and result.stdout.strip():
             return normalize_version_text(result.stdout.strip())

@@ -650,6 +650,7 @@ try {{
             str(script_path),
         ],
         close_fds=True,
+        creationflags=0x08000000,
     )
 
 
