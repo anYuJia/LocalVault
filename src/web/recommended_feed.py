@@ -110,7 +110,7 @@ def _format_recommended_video(aweme: dict) -> dict | None:
         'media_type': 'video',
         'raw_media_type': 'video',
         'media_urls': [{'type': 'video', 'url': selected_video_url}],
-        'bgm_url': dash_audio_url or music_info.get('play_url', ''),
+        'bgm_url': music_info.get('play_url', '') or dash_audio_url,
         'cover_url': cover,
         'author': {
             'uid': author_data.get('uid', ''),

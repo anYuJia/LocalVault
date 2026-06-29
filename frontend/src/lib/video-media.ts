@@ -207,11 +207,13 @@ export function getVideoBgmUrl(
 ): string {
   if (!video) return "";
   const source = video as VideoLikeSource;
+  const musicUrl = readUrl(video.music?.play_url || source.bgm_url);
+  if (musicUrl) return musicUrl;
   if (media && shouldUseSeparateBgmForVideo(media, video)) {
     const audioUrl = readUrl(source.video?.audio_addr);
     if (audioUrl) return audioUrl;
   }
-  return readUrl(video.music?.play_url || source.bgm_url);
+  return "";
 }
 
 export function getVideoDurationSeconds(video: VideoInfo | null | undefined): number {

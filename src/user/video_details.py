@@ -183,7 +183,7 @@ class VideoDetailsService:
                 if images:
                     detail['cover_url'] = self._first_url(images[0])
 
-            detail['bgm_url'] = dash_audio_url or self._extract_bgm_url(post)
+            detail['bgm_url'] = self._extract_bgm_url(post) or dash_audio_url
 
             return detail
 

@@ -195,13 +195,15 @@ def select_dash_audio_url(video_data):
 
 def infer_media_type_from_url(url, fallback_type='video'):
     """根据 URL 粗略推断媒体类型，用于兼容旧前端传入的字符串数组。"""
-    normalized_fallback = fallback_type if fallback_type in ('video', 'image', 'live_photo') else 'video'
+    normalized_fallback = fallback_type if fallback_type in ('video', 'image', 'live_photo', 'audio') else 'video'
     if not isinstance(url, str) or not url:
         return normalized_fallback
 
     clean_url = url.split('?', 1)[0].lower()
     if clean_url.endswith(('.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic', '.heif')):
         return 'image'
+    if clean_url.endswith(('.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg')):
+        return 'audio'
     if clean_url.endswith(('.mp4', '.mov', '.m4v', '.webm')):
         return 'video'
     return normalized_fallback
@@ -212,7 +214,7 @@ def normalize_media_urls(media_urls, raw_media_type='video'):
     if not isinstance(media_urls, list):
         raise ValueError(f"媒体URL格式错误: {type(media_urls)}")
 
-    fallback_type = raw_media_type if raw_media_type in ('video', 'image', 'live_photo') else 'video'
+    fallback_type = raw_media_type if raw_media_type in ('video', 'image', 'live_photo', 'audio') else 'video'
     normalized_urls = []
 
     for item in media_urls:

@@ -177,7 +177,7 @@ function normalizeMediaType(type: unknown, fallback = "video"): string {
   const normalized = String(type || fallback).trim().toLowerCase();
   if (normalized === "livephoto") return "live_photo";
   if (normalized === "live-photo") return "live_photo";
-  if (normalized === "image" || normalized === "live_photo" || normalized === "video") {
+  if (normalized === "image" || normalized === "live_photo" || normalized === "video" || normalized === "audio") {
     return normalized;
   }
   return fallback;
@@ -444,11 +444,11 @@ export function normalizeVideo(video: unknown): VideoInfo | null {
   const durationUnit = String(videoRecord.duration_unit || source.duration_unit || "").trim() || null;
   const musicSource = source.music && typeof source.music === "object" ? (source.music as Record<string, unknown>) : null;
   const musicPlayUrl = extractUrl(
-    source.bgm_url ||
+    musicSource?.play_url ||
       source.music_url ||
       source.music_play_url ||
       source.music_play_addr ||
-      musicSource?.play_url
+      source.bgm_url
   );
   const mediaType = String(source.media_type || source.raw_media_type || (imageUrls.length > 0 ? "image" : "video"));
   const isImage = Boolean(source.is_image || mediaType === "image" || mediaType === "mixed" || mediaType === "live_photo" || imageUrls.length > 0);

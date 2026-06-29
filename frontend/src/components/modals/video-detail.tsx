@@ -356,10 +356,10 @@ function buildAudioDownloadVideo(video: VideoInfo, audioUrl: string): VideoInfo 
     video: {
       ...video.video,
       audio_addr: audioUrl,
-      play_addr: audioUrl,
+      play_addr: "",
       play_addr_h264: null,
       play_addr_lowbr: null,
-      download_addr: audioUrl,
+      download_addr: null,
     },
   };
 }

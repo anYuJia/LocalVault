@@ -495,9 +495,6 @@ def get_user_videos():
             bgm_url = music_info['play_url']
             if video.get('music') and os.environ.get('DEBUG_MODE', '').lower() in ('true', '1', 'yes'):
                 _logger.debug(f"Music 数据结构：{json.dumps(video.get('music'), ensure_ascii=False)[:500]}")
-            if not bgm_url and video.get('video') and video['video'].get('play_addr'):
-                # 如果没有独立音乐，使用视频的播放地址作为 BGM
-                bgm_url = _safe_get_url(video['video']['play_addr'])
 
             video_list.append({
                 'aweme_id': aweme_id,

@@ -156,7 +156,7 @@ class FavoritesService:
             'raw_media_type': media_type,
             'status': self._extract_post_status(post),
             'media_urls': media_urls,
-            'bgm_url': dash_audio_url or self._extract_bgm_url(post),
+            'bgm_url': self._extract_bgm_url(post) or dash_audio_url,
             'statistics': {
                 'digg_count': post.get('statistics', {}).get('digg_count', 0),
                 'comment_count': post.get('statistics', {}).get('comment_count', 0),
@@ -255,7 +255,7 @@ class FavoritesService:
                     'raw_media_type': media_type,
                     'status': self._extract_post_status(post),
                     'media_urls': media_urls,
-                    'bgm_url': dash_audio_url or self._extract_bgm_url(post),
+                    'bgm_url': self._extract_bgm_url(post) or dash_audio_url,
                     'statistics': {
                         'digg_count': post.get('statistics', {}).get('digg_count', 0),
                         'comment_count': post.get('statistics', {}).get('comment_count', 0),
