@@ -110,6 +110,14 @@ class VideoDetailsService:
                                                          params,
                                                          {}, skip_sign=False)
 
+            # 对抗偶发风控/限流：再重试一次（带短退避）。
+            if (not succ or not (isinstance(resp, dict) and resp.get('aweme_detail'))) and not (isinstance(resp, dict) and (resp.get('_need_verify') or resp.get('_need_login'))):
+                import asyncio as _asyncio
+                await _asyncio.sleep(0.8)
+                resp, succ = await self.api.common_request('/aweme/v1/web/aweme/detail/',
+                                                         params,
+                                                         {}, skip_sign=False)
+
             if isinstance(resp, dict) and (resp.get('_need_verify') or resp.get('_need_login')):
                 return resp
 

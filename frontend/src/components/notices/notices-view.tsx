@@ -336,7 +336,7 @@ export function NoticesView() {
       try {
         const detail = await getVideoDetail(awemeId);
         if (!detail.video) {
-          setJumpError("视频不可用");
+          setJumpError(detail.message || "视频不可用，可能已被删除或抖音限流，请稍后重试");
           return;
         }
         setPlayerVideos([detail.video]);
@@ -361,7 +361,7 @@ export function NoticesView() {
         }
         setPlayerOpen(true);
       } catch (e) {
-        setJumpError(e instanceof Error ? e.message : "视频不可用");
+        setJumpError(e instanceof Error ? e.message : "视频不可用，可能已被删除或抖音限流，请稍后重试");
       } finally {
         setJumpingId("");
       }
