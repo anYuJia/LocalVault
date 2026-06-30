@@ -2278,7 +2278,12 @@ export function FullscreenPlayer({
   }, [mediaKey, stopVideoProgressLoop]);
 
   useEffect(() => {
-    if (!open || currentMedia?.type !== "image" || !playing) return;
+    // 单图作品且不自动播放下一个视频时，静止显示——不推进进度循环，
+    // 否则到 IMAGE_DURATION_SECONDS 会触发 reloadKey 自增导致图片重新加载
+    // 闪烁、进度条在 1/3↔2/3 间来回跳。
+    const isSingleStaticImage =
+      currentMedia?.type === "image" && mediaItems.length <= 1 && !(autoPlayNextVideo && videos.length > 1);
+    if (!open || currentMedia?.type !== "image" || !playing || isSingleStaticImage) return;
 
     let frame = 0;
     let last = performance.now();
@@ -2302,7 +2307,7 @@ export function FullscreenPlayer({
 
     frame = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(frame);
-  }, [currentMedia?.type, mediaKey, open, playing, requestAdvanceMediaSequence]);
+  }, [currentMedia?.type, mediaKey, open, playing, requestAdvanceMediaSequence, mediaItems.length, autoPlayNextVideo, videos.length]);
 
   useEffect(() => {
     if (!open) return;
