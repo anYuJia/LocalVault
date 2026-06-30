@@ -2,7 +2,6 @@ import { create } from "zustand";
 import {
   getUserDetail,
   getUserVideos,
-  openVerifyBrowser,
   searchUser,
   verifyCookie,
   type UserInfo,
@@ -154,12 +153,6 @@ function mergeDetailedUserIntoSearchState(
   return { users, currentUser };
 }
 
-function openVerifyWindow(verifyUrl: string | undefined, addLog: (message: string, type: "info" | "success" | "warning" | "error") => void) {
-  void openVerifyBrowser(verifyUrl)
-    .then((result) => addLog(result.message, result.success ? "info" : "warning"))
-    .catch(() => addLog("无法打开应用内验证窗口，请用桌面模式启动后重试", "warning"));
-}
-
 function uniqueVideos(existing: VideoInfo[], incoming: VideoInfo[]) {
   const seen = new Set(existing.map((video) => video.aweme_id).filter(Boolean));
   const next = [...existing];
@@ -241,7 +234,6 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
       }
 
       if (result.need_verify) {
-        openVerifyWindow(result.verify_url, addLog);
         const message = result.message || "需要完成抖音验证";
         set({
           searching: false,
@@ -253,9 +245,12 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
           },
         });
         addLog(message, "warning");
-        toast(message, "warning", "需要验证", {
-          label: "已完成验证",
-          onClick: () => void get().resumeVerifySearch(),
+        requestVerifyRecovery({
+          verifyUrl: result.verify_url,
+          message,
+          title: "需要验证",
+          actionLabel: "已完成验证",
+          onResume: () => void get().resumeVerifySearch(),
         });
         return;
       }

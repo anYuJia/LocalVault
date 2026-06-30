@@ -1,7 +1,7 @@
 from src.user.user_manager import DouyinUserManager
 
 
-def test_live_photo_does_not_add_static_cover_as_extra_media():
+def test_live_photo_keeps_static_image_url_with_live_video():
     manager = object.__new__(DouyinUserManager)
     post = {
         "images": [
@@ -21,10 +21,14 @@ def test_live_photo_does_not_add_static_cover_as_extra_media():
 
     media_type, media_urls = manager.get_media_info(post)
 
-    assert media_type == "live_photo"
+    assert media_type == "mixed"
     assert media_urls == [
         {
             "type": "live_photo",
             "url": "https://example.com/live-photo.mp4",
+        },
+        {
+            "type": "image",
+            "url": "https://example.com/image-large.jpeg",
         },
     ]

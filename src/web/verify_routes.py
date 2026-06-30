@@ -139,6 +139,17 @@ def _start_native_verify_cookie_sync(window):
     threading.Thread(target=poll_verify_window_cookies, daemon=True).start()
 
 
+def _schedule_verify_navigation(window, target_url: str, delay: float = 2.2) -> None:
+    def navigate() -> None:
+        try:
+            if window and not window.events.closed.is_set():
+                window.load_url(target_url)
+        except Exception as error:
+            _logger.debug('验证窗口跳转目标页面失败: %s', error)
+
+    threading.Timer(delay, navigate).start()
+
+
 @verify_routes_bp.route('/')
 def index():
     """主页"""
@@ -210,6 +221,7 @@ def open_verify_browser():
     try:
         data = _request_json()
         target_url = (data.get('target_url') or '').strip() or 'https://www.douyin.com/'
+        initial_url = 'https://www.douyin.com/' if 'douyin.com/jingxuan/search/' in target_url else target_url
 
         if not is_native_cookie_login_available():
             webbrowser.open(target_url)
@@ -221,22 +233,24 @@ def open_verify_browser():
 
         if _native_verify_window and not _native_verify_window.events.closed.is_set():
             try:
-                _native_verify_window.load_url(target_url)
+                _native_verify_window.load_url(initial_url)
                 if _Config.COOKIE:
                     apply_cookie_to_window(
                         _native_verify_window,
                         _Config.COOKIE,
                         reload_after_apply=True,
                         force=True,
-                        post_load_delay=0.8,
+                        post_load_delay=1.2,
                     )
+                if initial_url != target_url:
+                    _schedule_verify_navigation(_native_verify_window, target_url)
                 _start_native_verify_cookie_sync(_native_verify_window)
                 _native_verify_window.show()
                 return jsonify({'success': True, 'message': '验证窗口已打开，请完成验证', 'open_url': target_url})
             except Exception:
                 _native_verify_window = None
 
-        verify_window = create_native_douyin_window('抖音验证', target_url, width=1100, height=750)
+        verify_window = create_native_douyin_window('抖音验证', initial_url, width=1100, height=750)
         _native_verify_window = verify_window
         if _Config.COOKIE:
             apply_cookie_to_window(
@@ -244,8 +258,10 @@ def open_verify_browser():
                 _Config.COOKIE,
                 reload_after_apply=True,
                 force=True,
-                post_load_delay=0.2,
+                post_load_delay=1.2,
             )
+        if initial_url != target_url:
+            _schedule_verify_navigation(verify_window, target_url)
         _start_native_verify_cookie_sync(verify_window)
         return jsonify({'success': True, 'message': '已打开验证窗口，请完成验证', 'open_url': target_url})
 

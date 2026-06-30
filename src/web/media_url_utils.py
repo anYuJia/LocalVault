@@ -9,6 +9,8 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from flask import request
 
+from src.config.config import Config
+
 # 媒体代理允许的域名后缀
 ALLOWED_MEDIA_HOST_SUFFIXES = (
     'douyin.com',
@@ -243,6 +245,32 @@ def normalize_media_urls(media_urls, raw_media_type='video'):
     return normalized_urls
 
 
+def filter_live_photo_media_urls(media_urls):
+    """Apply live-photo video/image download preferences to normalized media URLs."""
+    if not isinstance(media_urls, list):
+        return []
+    has_live_photo = any(isinstance(item, dict) and item.get('type') == 'live_photo' for item in media_urls)
+    if not has_live_photo:
+        return media_urls
+
+    keep_video = bool(getattr(Config, 'DOWNLOAD_LIVE_PHOTO_VIDEO', True))
+    keep_image = bool(getattr(Config, 'DOWNLOAD_LIVE_PHOTO_IMAGE', True))
+    if not keep_video and not keep_image:
+        keep_video = True
+
+    filtered = []
+    for item in media_urls:
+        if not isinstance(item, dict):
+            continue
+        media_type = item.get('type')
+        if media_type == 'live_photo' and not keep_video:
+            continue
+        if media_type == 'image' and not keep_image:
+            continue
+        filtered.append(item)
+    return filtered
+
+
 def clean_video_download_url(url: str) -> str:
     return (
         str(url or '').strip()
@@ -285,7 +313,7 @@ def normalize_download_media_urls(media_urls, raw_media_type='video'):
         seen.add((media_type, url))
         cleaned_urls.append({'url': url, 'type': media_type})
 
-    return cleaned_urls
+    return filter_live_photo_media_urls(cleaned_urls)
 
 
 def is_allowed_media_url(url: str) -> bool:

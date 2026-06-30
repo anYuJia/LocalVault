@@ -7,6 +7,8 @@ export type SettingsField =
   | "font_size"
   | "download_path"
   | "download_quality"
+  | "download_live_photo_video"
+  | "download_live_photo_image"
   | "max_concurrent"
   | "filename_template"
   | "folder_name_template"

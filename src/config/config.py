@@ -82,6 +82,8 @@ class Config:
     DOWNLOAD_DIR = BASE_DIR
     HISTORY_DIRS = []
     DOWNLOAD_QUALITY = "auto"
+    DOWNLOAD_LIVE_PHOTO_VIDEO = True
+    DOWNLOAD_LIVE_PHOTO_IMAGE = True
     DOWNLOAD_QUALITY_VALUES = {"auto", "highest", "h264", "smallest", "480p", "720p", "1080p", "2k", "4k"}
     DOWNLOAD_QUALITY_ALIASES = {
         "p480": "480p",
@@ -209,6 +211,12 @@ class Config:
                     cls.DOWNLOAD_QUALITY = cls.normalize_download_quality(
                         config_data.get("download_quality", cls.DOWNLOAD_QUALITY)
                     )
+                    cls.DOWNLOAD_LIVE_PHOTO_VIDEO = bool(
+                        config_data.get("download_live_photo_video", cls.DOWNLOAD_LIVE_PHOTO_VIDEO)
+                    )
+                    cls.DOWNLOAD_LIVE_PHOTO_IMAGE = bool(
+                        config_data.get("download_live_photo_image", cls.DOWNLOAD_LIVE_PHOTO_IMAGE)
+                    )
                     cls.FILENAME_TEMPLATE = cls.normalize_filename_template(
                         config_data.get("filename_template", cls.FILENAME_TEMPLATE),
                         cls.FILENAME_TEMPLATE,
@@ -282,6 +290,8 @@ class Config:
                     im_friend_include_all_users=cls.IM_FRIEND_INCLUDE_ALL_USERS,
                     im_friend_refresh_interval_seconds=cls.IM_FRIEND_REFRESH_INTERVAL_SECONDS,
                     proxy=cls.PROXY,
+                    download_live_photo_video=cls.DOWNLOAD_LIVE_PHOTO_VIDEO,
+                    download_live_photo_image=cls.DOWNLOAD_LIVE_PHOTO_IMAGE,
                 )
                 print(f"\033[93m检测到不安全的下载目录在安装包/程序包内，已自动重置为: {safe_default}\033[0m")
 
@@ -408,6 +418,8 @@ class Config:
         im_friend_include_all_users=None,
         im_friend_refresh_interval_seconds=None,
         proxy=None,
+        download_live_photo_video=None,
+        download_live_photo_image=None,
     ):
         """保存配置到配置文件"""
         resolved_quality = cls.normalize_download_quality(download_quality or cls.DOWNLOAD_QUALITY)
@@ -424,6 +436,18 @@ class Config:
             cls.FOLDER_NAME_TEMPLATE,
         )
         resolved_auto_create_folder = cls.AUTO_CREATE_FOLDER if auto_create_folder is None else bool(auto_create_folder)
+        resolved_live_photo_video = (
+            cls.DOWNLOAD_LIVE_PHOTO_VIDEO
+            if download_live_photo_video is None
+            else bool(download_live_photo_video)
+        )
+        resolved_live_photo_image = (
+            cls.DOWNLOAD_LIVE_PHOTO_IMAGE
+            if download_live_photo_image is None
+            else bool(download_live_photo_image)
+        )
+        if not resolved_live_photo_video and not resolved_live_photo_image:
+            resolved_live_photo_video = True
         resolved_proxy = cls.normalize_proxy(proxy if proxy is not None else cls.PROXY)
         resolved_accounts = accounts if accounts is not None else cls.ACCOUNTS
         resolved_current_sec_uid = current_sec_uid if current_sec_uid is not None else cls.CURRENT_SEC_UID
@@ -461,6 +485,8 @@ class Config:
             "filename_template": resolved_filename_template,
             "folder_name_template": resolved_folder_name_template,
             "auto_create_folder": resolved_auto_create_folder,
+            "download_live_photo_video": resolved_live_photo_video,
+            "download_live_photo_image": resolved_live_photo_image,
             "proxy": resolved_proxy,
             "accounts": resolved_accounts,
             "current_sec_uid": resolved_current_sec_uid,

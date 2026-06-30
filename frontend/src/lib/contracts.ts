@@ -7,6 +7,8 @@ export interface AppConfig {
   filename_template: string;
   max_concurrent: number;
   download_quality: string;
+  download_live_photo_video: boolean;
+  download_live_photo_image: boolean;
   auto_create_folder: boolean;
   folder_name_template: string;
   save_metadata: boolean;

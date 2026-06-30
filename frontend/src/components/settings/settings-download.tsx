@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { FileText, FolderOpen, FolderTree, Gauge, Loader2, Zap } from "lucide-react";
+import { FileImage, FileText, FolderOpen, FolderTree, Gauge, Loader2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TEMPLATE_VARIABLES, type SavingFields, type SettingsField, type SettingStatus } from "./settings-utils";
 import { SettingGroup } from "./settings-components";
@@ -10,6 +10,8 @@ interface SettingsDownloadTabProps {
   downloadPath: string;
   setDownloadPath: (value: string) => void;
   downloadQuality: string;
+  downloadLivePhotoVideo: boolean;
+  downloadLivePhotoImage: boolean;
   maxConcurrent: string;
   filenameTemplate: string;
   setFilenameTemplate: (value: string) => void;
@@ -21,6 +23,7 @@ interface SettingsDownloadTabProps {
   fieldStatus: (field: SettingsField) => SettingStatus | undefined;
   handleChooseDirectory: () => void;
   handleQualityChange: (value: string) => void;
+  handleLivePhotoContentChange: (kind: "video" | "image", value: boolean) => void;
   handleMaxConcurrentChange: (value: string) => void;
   handleAutoCreateFolderChange: (value: boolean) => void;
   saveFilenameTemplate: (value: string) => void;
@@ -29,7 +32,21 @@ interface SettingsDownloadTabProps {
   appendFolderToken: (token: string) => void;
 }
 
-export function SettingsDownloadTab({ downloadPath, setDownloadPath, downloadQuality, maxConcurrent, filenameTemplate, setFilenameTemplate, folderNameTemplate, setFolderNameTemplate, autoCreateFolder, choosingDirectory, savingFields, fieldStatus, handleChooseDirectory, handleQualityChange, handleMaxConcurrentChange, handleAutoCreateFolderChange, saveFilenameTemplate, saveFolderNameTemplate, appendFilenameToken, appendFolderToken }: SettingsDownloadTabProps) {
+export function SettingsDownloadTab({ downloadPath, setDownloadPath, downloadQuality, downloadLivePhotoVideo, downloadLivePhotoImage, maxConcurrent, filenameTemplate, setFilenameTemplate, folderNameTemplate, setFolderNameTemplate, autoCreateFolder, choosingDirectory, savingFields, fieldStatus, handleChooseDirectory, handleQualityChange, handleLivePhotoContentChange, handleMaxConcurrentChange, handleAutoCreateFolderChange, saveFilenameTemplate, saveFolderNameTemplate, appendFilenameToken, appendFolderToken }: SettingsDownloadTabProps) {
+  const renderLivePhotoToggle = (kind: "video" | "image", label: string, checked: boolean) => (
+    <button
+      type="button"
+      onClick={() => void handleLivePhotoContentChange(kind, !checked)}
+      disabled={savingFields.download_live_photo_video || savingFields.download_live_photo_image}
+      className={cn("flex h-8 items-center justify-between rounded-[8px] border px-2.5 transition-[background-color,border-color,opacity]", checked ? "border-accent/25 bg-accent/5" : "border-border bg-white/[0.01]", (savingFields.download_live_photo_video || savingFields.download_live_photo_image) && "opacity-70")}
+    >
+      <span className="text-[0.76rem] font-semibold text-text">{label}</span>
+      <span className={cn("relative h-4.5 w-8.5 rounded-full transition-colors", checked ? "bg-accent" : "bg-white/[0.12]")}>
+        <span className={cn("absolute left-0 top-0.5 h-3.5 w-3.5 rounded-full bg-white transition-transform", checked ? "translate-x-4.5" : "translate-x-0.5")} />
+      </span>
+    </button>
+  );
+
   return (
     <div className="space-y-4">
       <SettingGroup icon={FolderOpen} label="下载目录" status={fieldStatus("download_path")}>
@@ -77,6 +94,13 @@ export function SettingsDownloadTab({ downloadPath, setDownloadPath, downloadQua
           </Select>
         </SettingGroup>
       </div>
+
+      <SettingGroup icon={FileImage} label="实况图内容" status={fieldStatus("download_live_photo_video") || fieldStatus("download_live_photo_image")}>
+        <div className="grid grid-cols-2 gap-2">
+          {renderLivePhotoToggle("video", "视频", downloadLivePhotoVideo)}
+          {renderLivePhotoToggle("image", "图片", downloadLivePhotoImage)}
+        </div>
+      </SettingGroup>
     </div>
   );
 }

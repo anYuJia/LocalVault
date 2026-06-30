@@ -175,6 +175,8 @@ def get_config():
         'download_roots': [str(root) for root in _get_all_download_roots()],
         'cookie_preview': f"{_Config.COOKIE[:12]}..." if _Config.COOKIE else '',
         'download_quality': getattr(_Config, 'DOWNLOAD_QUALITY', 'auto'),
+        'download_live_photo_video': getattr(_Config, 'DOWNLOAD_LIVE_PHOTO_VIDEO', True),
+        'download_live_photo_image': getattr(_Config, 'DOWNLOAD_LIVE_PHOTO_IMAGE', True),
         'max_concurrent': getattr(_Config, 'MAX_CONCURRENT', 3),
         'proxy': getattr(_Config, 'PROXY', '') or None,
         'filename_template': getattr(_Config, 'FILENAME_TEMPLATE', '{title}'),
@@ -235,6 +237,12 @@ def set_config():
             _Config.DOWNLOAD_DIR = _Config.BASE_DIR
         if 'download_quality' in data:
             _Config.DOWNLOAD_QUALITY = _Config.normalize_download_quality(data.get('download_quality'))
+        if 'download_live_photo_video' in data:
+            _Config.DOWNLOAD_LIVE_PHOTO_VIDEO = bool(data.get('download_live_photo_video'))
+        if 'download_live_photo_image' in data:
+            _Config.DOWNLOAD_LIVE_PHOTO_IMAGE = bool(data.get('download_live_photo_image'))
+        if not _Config.DOWNLOAD_LIVE_PHOTO_VIDEO and not _Config.DOWNLOAD_LIVE_PHOTO_IMAGE:
+            _Config.DOWNLOAD_LIVE_PHOTO_VIDEO = True
         if 'max_concurrent' in data:
             _Config.MAX_CONCURRENT = _coerce_int(data.get('max_concurrent'), 3, 1, 10)
         if 'proxy' in data:
@@ -293,6 +301,8 @@ def set_config():
             _Config.BASE_DIR,
             _Config.HISTORY_DIRS,
             download_quality=_Config.DOWNLOAD_QUALITY,
+            download_live_photo_video=_Config.DOWNLOAD_LIVE_PHOTO_VIDEO,
+            download_live_photo_image=_Config.DOWNLOAD_LIVE_PHOTO_IMAGE,
             max_concurrent=_Config.MAX_CONCURRENT,
             proxy=_Config.PROXY,
             filename_template=_Config.FILENAME_TEMPLATE,
@@ -320,6 +330,8 @@ def set_config():
             'download_root': str(_get_download_root()),
             'download_roots': [str(root) for root in _get_all_download_roots()],
             'download_quality': _Config.DOWNLOAD_QUALITY,
+            'download_live_photo_video': _Config.DOWNLOAD_LIVE_PHOTO_VIDEO,
+            'download_live_photo_image': _Config.DOWNLOAD_LIVE_PHOTO_IMAGE,
             'max_concurrent': _Config.MAX_CONCURRENT,
             'proxy': _Config.PROXY or None,
             'filename_template': _Config.FILENAME_TEMPLATE,

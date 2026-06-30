@@ -69,7 +69,7 @@ class VideoDetailsService:
                             'type': 'live_photo',
                             'url': video_urls[0]
                         })
-                elif img.get("url_list"):
+                if img.get("url_list"):
                     has_image = True
                     urls.append({
                         'type': 'image',

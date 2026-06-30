@@ -83,6 +83,8 @@ export function collectVideoMedia(video: VideoInfo | null | undefined): VideoMed
     const progressiveItems = rawMediaItems.filter(
       (item) => item.type !== "video" || !isDashVideoOnlyUrl(item.url)
     );
+    const livePhotoItems = progressiveItems.filter((item) => item.type === "live_photo");
+    if (livePhotoItems.length > 0) return uniqueMediaItems(livePhotoItems);
     if (progressiveItems.length > 0) return progressiveItems;
   }
 
@@ -99,8 +101,10 @@ export function collectVideoMedia(video: VideoInfo | null | undefined): VideoMed
     items.push({ type: "live_photo", url, poster });
   }
 
-  for (const url of imageUrls) {
-    items.push({ type: "image", url });
+  if (livePhotoUrls.length === 0) {
+    for (const url of imageUrls) {
+      items.push({ type: "image", url });
+    }
   }
 
   const playUrl = readUrl(videoData.play_addr);

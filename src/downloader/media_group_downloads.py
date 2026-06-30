@@ -111,6 +111,13 @@ class MediaGroupDownloads:
             # 下载所有文件
             success = True
             downloaded_files = []  # 记录已下载的文件，用于取消时清理
+            media_types = {str(item.get('type') or '') for item in urls if isinstance(item, dict)}
+            live_pair_count = min(
+                sum(1 for item in urls if isinstance(item, dict) and item.get('type') == 'live_photo'),
+                sum(1 for item in urls if isinstance(item, dict) and item.get('type') == 'image'),
+            ) if media_types.issubset({'live_photo', 'image'}) else 0
+            use_live_pair_stems = live_pair_count > 0
+            live_pair_positions = {'live_photo': 0, 'image': 0}
 
             for i, url_info in enumerate(urls):
                 response = None
@@ -193,7 +200,21 @@ class MediaGroupDownloads:
                         print(f"\033[93m[Downloader] 请求状态码: {response.status_code}\033[0m")
 
                     # 改进文件命名逻辑，避免重复
-                    if len(urls) == 1:
+                    if use_live_pair_stems and file_type in live_pair_positions:
+                        pair_index = live_pair_positions[file_type]
+                        live_pair_positions[file_type] += 1
+                        if live_pair_count > 1:
+                            index_suffix = f"_{pair_index + 1:02d}"
+                            protected_suffix = index_suffix
+                            if aweme_id and filename.endswith(f"_{aweme_id}"):
+                                protected_suffix = f"_{aweme_id}{index_suffix}"
+                            filename_with_index = self._sanitize_filename(
+                                f"{filename}{index_suffix}",
+                                protected_suffix=protected_suffix,
+                            )
+                        else:
+                            filename_with_index = self._sanitize_filename(filename)
+                    elif len(urls) == 1:
                         # 单个文件不添加索引
                         filename_with_index = self._sanitize_filename(filename)
                     else:
@@ -210,7 +231,7 @@ class MediaGroupDownloads:
                     user_path = os.path.join(self.download_dir, user_dir)
                     os.makedirs(user_path, exist_ok=True)
 
-                    extension = self._extension_for_media(file_type, url, response)
+                    extension = 'mp4' if use_live_pair_stems and file_type == 'live_photo' else self._extension_for_media(file_type, url, response)
                     filepath = self._unique_filepath(user_path, filename_with_index, extension)
                     filename_with_index = os.path.splitext(os.path.basename(filepath))[0]
 
