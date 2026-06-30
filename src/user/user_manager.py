@@ -479,7 +479,7 @@ class DouyinUserManager:
         """判断是否为图片作品"""
         return post_formatters.is_image_post(post)
 
-    def get_media_info(self, post: dict) -> Tuple[str, List[Dict[str, str]]]:
+    def get_media_info(self, post: dict) -> Tuple[str, List[Dict[str, object]]]:
         return self.video_details.get_media_info(post)
 
     def _extract_bgm_url(self, post: dict) -> Optional[str]:

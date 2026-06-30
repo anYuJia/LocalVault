@@ -249,7 +249,8 @@ async def download_media_group_async(
 
                 response = None
                 try:
-                    response, selected_url = await _open_response(session, [url], headers)
+                    candidate_urls = [url, *(url_info.get('fallback_urls') or [])]
+                    response, selected_url = await _open_response(session, candidate_urls, headers)
                     response_size = _response_size(response.headers)
 
                     if use_live_pair_stems and file_type in live_pair_positions:

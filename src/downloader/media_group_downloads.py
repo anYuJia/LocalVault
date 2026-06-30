@@ -192,8 +192,25 @@ class MediaGroupDownloads:
                         )
 
                     headers = self._get_download_headers()
-                    response = _get_session().get(url, headers=headers, stream=True, timeout=(10, 120))
-                    response.raise_for_status()
+                    # 主地址 403/限流时，依次尝试其余镜像 host
+                    candidate_urls = [url, *(url_info.get('fallback_urls') or [])]
+                    selected_url = url
+                    last_error = None
+                    for candidate_url in candidate_urls:
+                        if not candidate_url or _is_dash_video_only_url(candidate_url):
+                            continue
+                        try:
+                            response = _get_session().get(candidate_url, headers=headers, stream=True, timeout=(10, 120))
+                            response.raise_for_status()
+                            selected_url = candidate_url
+                            break
+                        except Exception as request_error:
+                            last_error = request_error
+                            if response is not None:
+                                response.close()
+                                response = None
+                    if response is None:
+                        raise last_error or RuntimeError('没有可用的下载地址')
                     response_size = self._get_response_size(response)
 
                     if self.debug_mode:
@@ -231,7 +248,7 @@ class MediaGroupDownloads:
                     user_path = os.path.join(self.download_dir, user_dir)
                     os.makedirs(user_path, exist_ok=True)
 
-                    extension = 'mp4' if use_live_pair_stems and file_type == 'live_photo' else self._extension_for_media(file_type, url, response)
+                    extension = 'mp4' if use_live_pair_stems and file_type == 'live_photo' else self._extension_for_media(file_type, selected_url, response)
                     filepath = self._unique_filepath(user_path, filename_with_index, extension)
                     filename_with_index = os.path.splitext(os.path.basename(filepath))[0]
 

@@ -26,9 +26,11 @@ def test_live_photo_keeps_static_image_url_with_live_video():
         {
             "type": "live_photo",
             "url": "https://example.com/live-photo.mp4",
+            "fallback_urls": [],
         },
         {
             "type": "image",
             "url": "https://example.com/image-large.jpeg",
+            "fallback_urls": ["https://example.com/image-small.webp"],
         },
     ]

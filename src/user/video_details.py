@@ -9,6 +9,18 @@ import aiohttp
 logger = logging.getLogger(__name__)
 
 
+def _dedup_media_urls(url_list) -> list[str]:
+    """去重并保序地清洗 url_list，过滤空值。"""
+    seen = set()
+    result = []
+    for url in url_list or []:
+        url = str(url or '').strip()
+        if url and url not in seen:
+            seen.add(url)
+            result.append(url)
+    return result
+
+
 class VideoDetailsService:
     """封装作品媒体信息、详情读取与分享链接解析。"""
 
@@ -50,7 +62,7 @@ class VideoDetailsService:
     def _post_boolish(self, post: dict, *keys: str, default: bool = False) -> bool:
         return self._mgr._post_boolish(post, *keys, default=default)
 
-    def get_media_info(self, post: dict) -> Tuple[str, List[Dict[str, str]]]:
+    def get_media_info(self, post: dict) -> Tuple[str, List[Dict[str, object]]]:
         """从帖子数据中提取媒体信息 (URL, 类型)。"""
         urls = []
         media_type = 'unknown'
@@ -63,17 +75,22 @@ class VideoDetailsService:
             for img in images:
                 if img.get("video") and img["video"].get("play_addr"):
                     has_live = True
-                    video_urls = img["video"]["play_addr"].get("url_list", [])
+                    video_urls = _dedup_media_urls(img["video"]["play_addr"].get("url_list", []))
                     if video_urls:
+                        # 主地址之外，其余镜像作为候选，403/限流时自动轮询
                         urls.append({
                             'type': 'live_photo',
-                            'url': video_urls[0]
+                            'url': video_urls[0],
+                            'fallback_urls': video_urls[1:],
                         })
-                if img.get("url_list"):
+                img_urls = _dedup_media_urls(img.get("url_list"))
+                if img_urls:
                     has_image = True
+                    # url_list 最后一项通常是最高清，作为主地址，其余作为候选
                     urls.append({
                         'type': 'image',
-                        'url': img["url_list"][-1]
+                        'url': img_urls[-1],
+                        'fallback_urls': img_urls[:-1],
                     })
 
             if has_live and has_image:
