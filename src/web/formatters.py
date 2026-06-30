@@ -140,7 +140,8 @@ def format_comment_item(item: dict) -> dict:
         'digg_count': item.get('digg_count', 0),
         'user_digged': item.get('user_digged', 0),
         'reply_comment_total': item.get('reply_comment_total', 0),
-        'sub_comments': None,
+        # 保留根评论附带的 reply_comment 子数组（insert_ids 拉取时含目标子评论）。
+        'sub_comments': [format_comment_item(sub) for sub in (item.get('reply_comment') or []) if isinstance(sub, dict)] or None,
         'status': item.get('status', 0),
         'ip_label': item.get('ip_label', ''),
         'sticker_url': sticker_url,

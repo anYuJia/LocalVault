@@ -1227,14 +1227,14 @@ export async function getMixVideos(seriesId: string, cursor: number, count: numb
   };
 }
 
-export async function getComments(awemeId: string, count: number, cursor = 0): Promise<CommentsResponse> {
+export async function getComments(awemeId: string, count: number, cursor = 0, insertIds = ""): Promise<CommentsResponse> {
   if (shouldUseBrowserBridge()) {
     return requestJson("/api/get_comments", {
       method: "POST",
-      body: JSON.stringify({ aweme_id: awemeId, count, cursor }),
+      body: JSON.stringify({ aweme_id: awemeId, count, cursor, insert_ids: insertIds, insertIds }),
     });
   }
-  return invoke("get_comments", { awemeId, count, cursor });
+  return invoke("get_comments", { awemeId, count, cursor, insertIds, insert_ids: insertIds });
 }
 
 export async function getCommentReplies(

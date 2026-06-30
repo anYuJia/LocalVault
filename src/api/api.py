@@ -701,8 +701,8 @@ class DouyinAPI:
     ) -> tuple[dict, bool]:
         return await self.comment.publish_comment(aweme_id, text, reply_id, reply_to_reply_id)
 
-    async def get_comments(self, aweme_id: str, count: int = 20, cursor: int = 0) -> tuple[dict, bool]:
-        return await self.comment.get_comments(aweme_id, count, cursor)
+    async def get_comments(self, aweme_id: str, count: int = 20, cursor: int = 0, insert_ids: str = '') -> tuple[dict, bool]:
+        return await self.comment.get_comments(aweme_id, count, cursor, insert_ids)
 
     async def get_comment_replies(self, aweme_id: str, comment_id: str, count: int = 6, cursor: int = 0) -> tuple[dict, bool]:
         return await self.comment.get_comment_replies(aweme_id, comment_id, count, cursor)

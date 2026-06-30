@@ -61,6 +61,7 @@ def get_comments():
         aweme_id = str(data.get('aweme_id') or '').strip()
         count = _coerce_int(data.get('count'), 20, 1, 100)
         cursor = _coerce_int(data.get('cursor'), 0, 0)
+        insert_ids = str(data.get('insert_ids') or data.get('insertIds') or '').strip()
 
         if not aweme_id:
             return jsonify({'success': False, 'message': '视频ID不能为空'}), 400
@@ -69,7 +70,7 @@ def get_comments():
         if not api:
             return jsonify({'success': False, 'message': '服务未初始化'}), 400
 
-        resp, success = _run_async(api.get_comments(aweme_id, count, cursor))
+        resp, success = _run_async(api.get_comments(aweme_id, count, cursor, insert_ids))
 
         if isinstance(resp, dict) and resp.get('_need_verify'):
             return jsonify(_verify_error_response(

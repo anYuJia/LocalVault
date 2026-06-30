@@ -17,15 +17,18 @@ class CommentReaders:
         """
         self._client = client
 
-    async def get_comments(self, aweme_id: str, count: int = 20, cursor: int = 0) -> tuple[dict, bool]:
-        """获取视频评论列表。"""
+    async def get_comments(self, aweme_id: str, count: int = 20, cursor: int = 0, insert_ids: str = '') -> tuple[dict, bool]:
+        """获取视频评论列表。
+
+        insert_ids 非空时，抖音会把指定 cid 的评论插入返回列表（用于定位特定评论）。
+        """
         params = {
             'aweme_id': str(aweme_id or ''),
             'cursor': str(cursor or 0),
             'count': str(count or 20),
             'pc_img_format': 'webp',
             'item_type': '0',
-            'insert_ids': '',
+            'insert_ids': str(insert_ids or ''),
             'whale_cut_token': '',
             'cut_version': '1',
             'rcFT': '',
