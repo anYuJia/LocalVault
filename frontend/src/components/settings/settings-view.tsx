@@ -182,7 +182,7 @@ export function SettingsView() {
           verifyCookie()
             .then((status) => {
               if (disposed) return;
-              setCookieLoggedIn(status.valid, status.user_name || undefined);
+              setCookieLoggedIn(status.valid, status.user_name || undefined, status.sec_uid || status.user_id || undefined);
               if (!status.valid) {
                 setLoginMessage(status.message || "Cookie 已失效，请重新登录");
               }
@@ -245,7 +245,7 @@ export function SettingsView() {
             if (cookie_set) {
               void verifyCookie()
                 .then((status) => {
-                  setCookieLoggedIn(status.valid, status.user_name || undefined);
+                  setCookieLoggedIn(status.valid, status.user_name || undefined, status.sec_uid || status.user_id || undefined);
                   if (!status.valid) {
                     setLoginStatus("error");
                     setLoginMessage(status.message || "Cookie 校验失败，请重新登录");

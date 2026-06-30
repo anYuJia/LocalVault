@@ -211,7 +211,7 @@ export default function App() {
             const status = await verifyCookie();
             if (disposed) return;
             if (status.valid) {
-              setCookieLoggedIn(true, status.user_name || undefined);
+              setCookieLoggedIn(true, status.user_name || undefined, status.sec_uid || status.user_id || undefined);
               return;
             }
             if (status.need_verify && !status.need_login) {
@@ -352,7 +352,7 @@ export default function App() {
               return;
             }
 
-            setCookieLoggedIn(status.valid, status.user_name || undefined);
+            setCookieLoggedIn(status.valid, status.user_name || undefined, status.sec_uid || status.user_id || undefined);
 
             if (status.valid) {
               prefetchTimer = window.setTimeout(() => {

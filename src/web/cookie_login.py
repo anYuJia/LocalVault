@@ -155,14 +155,18 @@ def _verify_native_cookie_login_impl(cookie: str) -> dict:
             }
 
         saved_profile = _Config.CURRENT_USER_PROFILE if isinstance(_Config.CURRENT_USER_PROFILE, dict) else {}
+        user_sec_uid = str(user.get('sec_uid') or '').strip()
+        saved_sec_uid = str(saved_profile.get('sec_uid') or '').strip()
+        profile_matches_user = bool(user_sec_uid and saved_sec_uid and user_sec_uid == saved_sec_uid)
+        safe_saved_profile = saved_profile if profile_matches_user else {}
         return {
             'success': True,
-            'nickname': (user.get('nickname') or saved_profile.get('nickname') or '').strip(),
-            'user_id': user.get('uid') or user.get('sec_uid') or saved_profile.get('uid') or saved_profile.get('sec_uid') or '',
-            'sec_uid': user.get('sec_uid') or saved_profile.get('sec_uid') or '',
-            'avatar_thumb': _avatar_url(user, 'avatar_thumb', 'avatar_100x100', 'avatar_168x168', 'avatar_medium', 'avatar_300x300', 'avatar_larger') or saved_profile.get('avatar_thumb') or '',
-            'avatar_medium': _avatar_url(user, 'avatar_medium', 'avatar_168x168', 'avatar_300x300', 'avatar_larger', 'avatar_thumb', 'avatar_100x100') or saved_profile.get('avatar_medium') or '',
-            'avatar_larger': _avatar_url(user, 'avatar_larger', 'avatar_300x300', 'avatar_medium', 'avatar_168x168', 'avatar_thumb', 'avatar_100x100') or saved_profile.get('avatar_larger') or '',
+            'nickname': (user.get('nickname') or safe_saved_profile.get('nickname') or '').strip(),
+            'user_id': user.get('uid') or user.get('sec_uid') or safe_saved_profile.get('uid') or safe_saved_profile.get('sec_uid') or '',
+            'sec_uid': user_sec_uid or safe_saved_profile.get('sec_uid') or '',
+            'avatar_thumb': _avatar_url(user, 'avatar_thumb', 'avatar_100x100', 'avatar_168x168', 'avatar_medium', 'avatar_300x300', 'avatar_larger') or safe_saved_profile.get('avatar_thumb') or '',
+            'avatar_medium': _avatar_url(user, 'avatar_medium', 'avatar_168x168', 'avatar_300x300', 'avatar_larger', 'avatar_thumb', 'avatar_100x100') or safe_saved_profile.get('avatar_medium') or '',
+            'avatar_larger': _avatar_url(user, 'avatar_larger', 'avatar_300x300', 'avatar_medium', 'avatar_168x168', 'avatar_thumb', 'avatar_100x100') or safe_saved_profile.get('avatar_larger') or '',
         }
     except Exception as error:
         _logger.warning('原生 Cookie 登录校验失败: %s', error)

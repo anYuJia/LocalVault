@@ -61,6 +61,14 @@ def _public_account_payload(account: dict) -> dict:
     }
 
 
+def _profile_from_account(account: dict) -> dict:
+    return {
+        'sec_uid': account.get('sec_uid', ''),
+        'nickname': account.get('nickname', ''),
+        'avatar_thumb': account.get('avatar_thumb', ''),
+    }
+
+
 @accounts_bp.route('/api/accounts', methods=['GET'])
 def get_accounts():
     """获取所有账号信息"""
@@ -93,6 +101,7 @@ def switch_account():
 
         _Config.COOKIE = target_account.get('cookie', '')
         _Config.CURRENT_SEC_UID = sec_uid
+        _Config.CURRENT_USER_PROFILE = _profile_from_account(target_account)
         _save_accounts_config()
         _init_app()
         return jsonify({
@@ -125,9 +134,11 @@ def delete_account():
                 next_acc = new_accounts[0]
                 _Config.COOKIE = next_acc.get('cookie', '')
                 _Config.CURRENT_SEC_UID = next_acc.get('sec_uid', '')
+                _Config.CURRENT_USER_PROFILE = _profile_from_account(next_acc)
             else:
                 _Config.COOKIE = ''
                 _Config.CURRENT_SEC_UID = ''
+                _Config.CURRENT_USER_PROFILE = {}
 
         _save_accounts_config()
         _init_app()
