@@ -134,6 +134,8 @@ interface FullscreenPlayerProps {
   onShowDetail?: (video: VideoInfo) => void;
   onAuthor?: (video: VideoInfo) => void;
   onVideoUpdate?: (video: VideoInfo) => void;
+  openComments?: boolean;
+  initialComment?: { rootCid: string; targetCid: string; isSub: boolean } | null;
 }
 
 export function FullscreenPlayer({
@@ -147,6 +149,8 @@ export function FullscreenPlayer({
   onShowDetail,
   onAuthor,
   onVideoUpdate,
+  openComments = false,
+  initialComment = null,
 }: FullscreenPlayerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [mediaTransition, setMediaTransition] = useState({ index: 0, direction: 0 });
@@ -189,6 +193,13 @@ export function FullscreenPlayer({
   const [commentDraft, setCommentDraft] = useState("");
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [commentReplyTarget, setCommentReplyTarget] = useState<CommentReplyTarget>(null);
+  // 通知跳转定位：高亮目标 cid + 定位失败提示。
+  const [highlightCid, setHighlightCid] = useState("");
+  const [locatePrompt, setLocatePrompt] = useState<"" | "deleted" | "not_in_first_pages">("");
+  const commentItemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const replyItemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const locateDoneRef = useRef(false);
+  const locatePageRef = useRef(0);
   const [videoOverrides, setVideoOverrides] = useState<Record<string, VideoInfo>>({});
   const [navigationNotice, setNavigationNotice] = useState("");
   const playerRootRef = useRef<HTMLDivElement>(null);
@@ -1887,6 +1898,85 @@ export function FullscreenPlayer({
     void loadComments("initial");
   }, [commentsLoadedAwemeId, commentsOpen, currentVideo?.aweme_id, loadComments]);
 
+  // 通知跳转：打开时强制展开评论区（降级类型 41/45 也展开）。
+  useEffect(() => {
+    if (!open) return;
+    if (openComments || initialComment) {
+      setCommentsOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // 通知跳转：定位并高亮目标评论。依赖评论列表/回复列表变化以驱动翻页与子评论加载。
+  useEffect(() => {
+    if (!initialComment || locateDoneRef.current) return;
+    const { rootCid, targetCid, isSub } = initialComment;
+
+    const finishWith = (prompt: "" | "deleted" | "not_in_first_pages") => {
+      locateDoneRef.current = true;
+      if (prompt) setLocatePrompt(prompt);
+    };
+    const highlight = (cid: string) => {
+      setHighlightCid(cid);
+      window.setTimeout(() => setHighlightCid((cur) => (cur === cid ? "" : cur)), 2000);
+    };
+
+    if (!isSub) {
+      // 定位根评论本身。
+      const node = commentItemRefs.current.get(targetCid);
+      if (node) {
+        node.scrollIntoView({ block: "center" });
+        highlight(targetCid);
+        finishWith("");
+        return;
+      }
+      // 不在当前页：翻页继续找（上限 3 页）。
+      if (commentsHasMore && locatePageRef.current < 3) {
+        locatePageRef.current += 1;
+        void loadComments("more");
+        return;
+      }
+      finishWith(commentsHasMore ? "not_in_first_pages" : "deleted");
+      return;
+    }
+
+    // 定位子评论：先找根评论、展开其回复区，再在子评论里找 targetCid。
+    const rootComment = comments.find((c) => c.cid === rootCid);
+    if (!rootComment) {
+      if (commentsHasMore && locatePageRef.current < 3) {
+        locatePageRef.current += 1;
+        void loadComments("more");
+        return;
+      }
+      finishWith(commentsHasMore ? "not_in_first_pages" : "deleted");
+      return;
+    }
+    if (!expandedCommentReplyIds.has(rootCid)) {
+      toggleCommentReplies(rootComment); // 仅展开一次，触发子评论加载
+      return;
+    }
+    const replyState = commentReplies[rootCid];
+    if (!replyState?.loaded) return; // 等子评论加载完再找
+    const replyNode = replyItemRefs.current.get(targetCid);
+    if (replyNode) {
+      replyNode.scrollIntoView({ block: "center" });
+      highlight(targetCid);
+      finishWith("");
+      return;
+    }
+    finishWith("deleted");
+  }, [initialComment, comments, commentReplies, expandedCommentReplyIds, commentsHasMore, loadComments, toggleCommentReplies]);
+
+  // 评论项 ref 回调工厂：el 为 null 时清理 stale 条目。
+  const registerCommentRef = useCallback((cid: string) => (el: HTMLDivElement | null) => {
+    if (el) commentItemRefs.current.set(cid, el);
+    else commentItemRefs.current.delete(cid);
+  }, []);
+  const registerReplyRef = useCallback((cid: string) => (el: HTMLDivElement | null) => {
+    if (el) replyItemRefs.current.set(cid, el);
+    else replyItemRefs.current.delete(cid);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (mediaSwitchReleaseRef.current) {
@@ -1921,6 +2011,13 @@ export function FullscreenPlayer({
     clearCommentsHoverCloseTimer();
     commentsPanelStickyRef.current = false;
     setCommentsOpen(false);
+    // 重置通知跳转定位状态（remount 也会重置，这里覆盖同实例复用情况）。
+    locateDoneRef.current = false;
+    locatePageRef.current = 0;
+    setLocatePrompt("");
+    setHighlightCid("");
+    commentItemRefs.current.clear();
+    replyItemRefs.current.clear();
     setPlaying(false);
     setShowLoadStatus(false);
     releasePlayerMediaResources();
@@ -2821,6 +2918,18 @@ export function FullscreenPlayer({
                           </button>
                         </div>
                         <div className="share-friends-scroll min-h-0 flex-1 overflow-y-auto p-2" onScroll={handleCommentsScroll}>
+                          {locatePrompt && (
+                            <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg bg-warning/10 px-3 py-2 text-[0.72rem] text-warning">
+                              <span>{locatePrompt === "deleted" ? "该评论可能已被删除" : "未在前 60 条评论中找到，可在评论区手动查找"}</span>
+                              <button
+                                type="button"
+                                onClick={() => setLocatePrompt("")}
+                                className="shrink-0 text-warning/70 hover:text-warning"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          )}
                           {commentsLoading && comments.length === 0 ? (
                             <div className="flex h-32 items-center justify-center gap-2 text-[0.74rem] text-white/58">
                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -2844,7 +2953,15 @@ export function FullscreenPlayer({
                                 const commentLiked = Number(comment.user_digged || 0) > 0;
                                 const commentDigging = commentDiggingIds.has(comment.cid);
                                 return (
-                                  <div key={comment.cid} className="flex gap-2 rounded-lg px-1.5 py-2 transition-colors hover:bg-white/[0.04]">
+                                  <div
+                                    key={comment.cid}
+                                    ref={registerCommentRef(comment.cid)}
+                                    data-cid={comment.cid}
+                                    className={cn(
+                                      "flex gap-2 rounded-lg px-1.5 py-2 transition-colors hover:bg-white/[0.04]",
+                                      highlightCid === comment.cid && "ring-2 ring-accent bg-accent-soft/40"
+                                    )}
+                                  >
                                     <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-white/[0.08]">
                                       {avatar ? (
                                         <img
@@ -2933,7 +3050,15 @@ export function FullscreenPlayer({
                                             const replyLiked = Number(reply.user_digged || 0) > 0;
                                             const replyDigging = commentDiggingIds.has(reply.cid);
                                             return (
-                                              <div key={reply.cid} className="flex gap-2">
+                                              <div
+                                                key={reply.cid}
+                                                ref={registerReplyRef(reply.cid)}
+                                                data-reply-cid={reply.cid}
+                                                className={cn(
+                                                  "flex gap-2",
+                                                  highlightCid === reply.cid && "ring-2 ring-accent bg-accent-soft/40 rounded-lg"
+                                                )}
+                                              >
                                                 <div className="h-6 w-6 shrink-0 overflow-hidden rounded-full bg-white/[0.08]">
                                                   {replyAvatar ? (
                                                     <img

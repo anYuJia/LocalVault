@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, Loader2, RefreshCw, Heart, UserPlus, MessageSquare, AtSign } from "lucide-react";
+import { Bell, Loader2, RefreshCw, Heart, UserPlus, MessageSquare, AtSign, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getNotices, mediaProxyUrl } from "@/lib/tauri";
-import type { NoticeItem, NoticeUser } from "@/lib/contracts";
+import { FullscreenPlayer } from "@/components/player/fullscreen-player";
+import { getNotices, getVideoDetail, mediaProxyUrl, publishComment } from "@/lib/tauri";
+import type { NoticeItem, NoticeUser, VideoInfo } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
+import { useSearchStore } from "@/stores/search-store";
 
 // 通知类型 → 图标/配色（实测 notice_list_v2 的 type 值）。
 const TYPE_META: Record<number, { icon: React.ElementType; tone: string }> = {
@@ -74,11 +76,37 @@ function AvatarStack({ users }: { users: NoticeUser[] }) {
   );
 }
 
-function NoticeCard({ notice }: { notice: NoticeItem }) {
+interface NoticeCardProps {
+  notice: NoticeItem;
+  clickable: boolean;
+  onOpen?: () => void;
+  // 通知内回复（仅 type 31 且 notice.comment 存在）
+  replyOpen: boolean;
+  replyDraft: string;
+  replySubmitting: boolean;
+  replyError: string;
+  onToggleReply: () => void;
+  onDraftChange: (text: string) => void;
+  onSubmitReply: () => void;
+}
+
+function NoticeCard({
+  notice,
+  clickable,
+  onOpen,
+  replyOpen,
+  replyDraft,
+  replySubmitting,
+  replyError,
+  onToggleReply,
+  onDraftChange,
+  onSubmitReply,
+}: NoticeCardProps) {
   const meta = typeMeta(notice.type);
   const Icon = meta.icon;
   const cover = mediaProxyUrl(notice.aweme?.cover, "image");
   const extraCount = notice.users.length - 3;
+  const canReply = Boolean(notice.comment && notice.aweme?.aweme_id);
 
   return (
     <div
@@ -86,8 +114,10 @@ function NoticeCard({ notice }: { notice: NoticeItem }) {
         "group flex items-center gap-3 rounded-[var(--radius-md)] border px-3 py-2.5 transition-colors",
         notice.has_read
           ? "border-border/60 bg-surface-solid/40"
-          : "border-accent/25 bg-accent-soft/50"
+          : "border-accent/25 bg-accent-soft/50",
+        clickable && "cursor-pointer hover:border-accent/40"
       )}
+      onClick={clickable ? onOpen : undefined}
     >
       <div className="relative">
         <AvatarStack users={notice.users} />
@@ -130,22 +160,58 @@ function NoticeCard({ notice }: { notice: NoticeItem }) {
             {extraCount > 0 ? ` 等 ${notice.merge_count || notice.users.length} 人` : ""}
           </p>
         )}
+        {replyOpen && (
+          <div className="mt-1.5 flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+            <textarea
+              value={replyDraft}
+              onChange={(e) => onDraftChange(e.target.value)}
+              placeholder={`回复 ${notice.comment?.user.nickname || "评论"}…`}
+              rows={2}
+              className="resize-none rounded-[var(--radius-sm)] border border-border bg-surface-solid px-2 py-1.5 text-[0.74rem] text-text outline-none focus:border-accent/50"
+              autoFocus
+            />
+            {replyError && <span className="text-[0.66rem] text-danger">{replyError}</span>}
+            <div className="flex justify-end gap-1.5">
+              <Button variant="ghost" size="sm" className="h-7" onClick={onToggleReply} disabled={replySubmitting}>
+                取消
+              </Button>
+              <Button size="sm" className="h-7" onClick={onSubmitReply} disabled={replySubmitting || !replyDraft.trim()}>
+                {replySubmitting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                回复
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {cover && (
-        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-[var(--radius-sm)] bg-surface-raised">
-          <img
-            src={cover}
-            alt=""
-            loading="lazy"
-            className="h-full w-full object-cover"
-            onError={(event) => {
-              const target = event.currentTarget;
-              target.style.display = "none";
+      <div className="flex shrink-0 flex-col items-end gap-1.5">
+        {cover && (
+          <div className="relative h-12 w-12 overflow-hidden rounded-[var(--radius-sm)] bg-surface-raised">
+            <img
+              src={cover}
+              alt=""
+              loading="lazy"
+              className="h-full w-full object-cover"
+              onError={(event) => {
+                const target = event.currentTarget;
+                target.style.display = "none";
+              }}
+            />
+          </div>
+        )}
+        {canReply && !replyOpen && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleReply();
             }}
-          />
-        </div>
-      )}
+            className="text-[0.66rem] font-semibold text-text-muted transition-colors hover:text-accent"
+          >
+            回复
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -153,6 +219,7 @@ function NoticeCard({ notice }: { notice: NoticeItem }) {
 export function NoticesView() {
   const setNoticeUnreadCount = useAppStore((state) => state.setNoticeUnreadCount);
   const cookieLoggedIn = useAppStore((state) => state.cookieLoggedIn);
+  const openUser = useSearchStore((state) => state.openUser);
 
   const [notices, setNotices] = useState<NoticeItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -164,6 +231,20 @@ export function NoticesView() {
   const requestedRef = useRef(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // 播放器跳转
+  const [playerVideos, setPlayerVideos] = useState<VideoInfo[]>([]);
+  const [playerOpen, setPlayerOpen] = useState(false);
+  const [playerInitialComment, setPlayerInitialComment] = useState<{ rootCid: string; targetCid: string; isSub: boolean } | null>(null);
+  const [playerOpenComments, setPlayerOpenComments] = useState(false);
+  const [jumpingId, setJumpingId] = useState("");
+  const [jumpError, setJumpError] = useState("");
+
+  // 通知内回复
+  const [replyingId, setReplyingId] = useState("");
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [replySubmittingId, setReplySubmittingId] = useState("");
+  const [replyErrors, setReplyErrors] = useState<Record<string, string>>({});
 
   const applyResponse = useCallback(
     (resp: Awaited<ReturnType<typeof getNotices>>, append: boolean) => {
@@ -209,6 +290,106 @@ export function NoticesView() {
       setLoadingMore(false);
     }
   }, [applyResponse, hasMore, loadingMore, cursor]);
+
+  // 点击通知跳转：评论/回复(31)带定位，赞评论(41)/@(45)降级开评论区，关注(33)跳用户主页。
+  const openNotice = useCallback(
+    async (notice: NoticeItem) => {
+      const awemeId = notice.aweme?.aweme_id;
+      // 关注通知：跳用户主页
+      if (notice.type === 33) {
+        const u = notice.users[0];
+        if (u?.sec_uid) {
+          await openUser(
+            {
+              uid: u.uid,
+              nickname: u.nickname || "抖音用户",
+              avatar_thumb: u.avatar,
+              avatar_medium: u.avatar,
+              avatar_larger: u.avatar,
+              signature: "",
+              follower_count: 0,
+              following_count: 0,
+              total_favorited: 0,
+              aweme_count: 0,
+              favoriting_count: 0,
+              is_follow: false,
+              follow_status: 0,
+              sec_uid: u.sec_uid,
+              unique_id: u.unique_id || "",
+              verify_status: 0,
+            },
+            { loadVideos: true }
+          );
+        }
+        return;
+      }
+      if (!awemeId) return;
+      setJumpingId(notice.id);
+      setJumpError("");
+      try {
+        const detail = await getVideoDetail(awemeId);
+        if (!detail.video) {
+          setJumpError("视频不可用");
+          return;
+        }
+        setPlayerVideos([detail.video]);
+        // type 31 且 comment 守卫通过：传 initialComment 定位；否则 openComments 降级。
+        if (notice.type === 31 && notice.comment && notice.comment.cid && notice.comment.root_cid) {
+          setPlayerInitialComment({
+            rootCid: notice.comment.root_cid,
+            targetCid: notice.comment.cid,
+            isSub: notice.comment.is_sub,
+          });
+          setPlayerOpenComments(false);
+        } else {
+          setPlayerInitialComment(null);
+          setPlayerOpenComments(true);
+        }
+        setPlayerOpen(true);
+      } catch (e) {
+        setJumpError(e instanceof Error ? e.message : "视频不可用");
+      } finally {
+        setJumpingId("");
+      }
+    },
+    [openUser]
+  );
+
+  const toggleReply = useCallback((noticeId: string) => {
+    setReplyingId((cur) => (cur === noticeId ? "" : noticeId));
+    setReplyErrors((prev) => ({ ...prev, [noticeId]: "" }));
+  }, []);
+
+  const submitReply = useCallback(
+    async (notice: NoticeItem) => {
+      const comment = notice.comment;
+      const awemeId = notice.aweme?.aweme_id;
+      if (!comment || !awemeId) return;
+      const text = (replyDrafts[notice.id] || "").trim();
+      if (!text) return;
+      setReplySubmittingId(notice.id);
+      setReplyErrors((prev) => ({ ...prev, [notice.id]: "" }));
+      try {
+        const result = await publishComment(
+          awemeId,
+          text,
+          comment.root_cid,
+          comment.is_sub ? comment.cid : "0"
+        );
+        if (!result.success) {
+          setReplyErrors((prev) => ({ ...prev, [notice.id]: result.message || "回复失败" }));
+          return;
+        }
+        setReplyDrafts((prev) => ({ ...prev, [notice.id]: "" }));
+        setReplyingId((cur) => (cur === notice.id ? "" : cur));
+      } catch (e) {
+        setReplyErrors((prev) => ({ ...prev, [notice.id]: e instanceof Error ? e.message : "回复失败" }));
+      } finally {
+        setReplySubmittingId("");
+      }
+    },
+    [replyDrafts]
+  );
 
   // 预翻页：sentinel 进入视口前 240px 即触发加载，让用户感觉不到"到底"。
   const loadOlderRef = useRef(loadOlder);
@@ -269,6 +450,12 @@ export function NoticesView() {
         </div>
       )}
 
+      {jumpError && (
+        <div className="rounded-[var(--radius-sm)] border border-white/[0.06] bg-danger-soft px-3 py-2 text-[0.78rem] text-danger">
+          {jumpError}
+        </div>
+      )}
+
       {!cookieLoggedIn && (
         <div className="rounded-[var(--radius-sm)] border border-border bg-surface-solid px-3 py-2 text-[0.78rem] text-text-muted">
           需要先登录 Cookie 才能获取通知。
@@ -289,9 +476,31 @@ export function NoticesView() {
             </div>
           ) : (
             <div className="flex flex-col gap-1.5 py-0.5">
-              {notices.map((notice) => (
-                <NoticeCard key={notice.id || `${notice.type}-${notice.create_time}`} notice={notice} />
-              ))}
+              {notices.map((notice) => {
+                const clickable =
+                  Boolean(notice.aweme?.aweme_id) || (notice.type === 33 && Boolean(notice.users[0]?.sec_uid));
+                return (
+                  <div key={notice.id || `${notice.type}-${notice.create_time}`} className="flex flex-col gap-1">
+                    {jumpingId === notice.id && (
+                      <div className="flex items-center gap-1.5 px-1 text-[0.66rem] text-text-muted">
+                        <Loader2 className="h-3 w-3 animate-spin" /> 正在打开视频…
+                      </div>
+                    )}
+                    <NoticeCard
+                      notice={notice}
+                      clickable={clickable}
+                      onOpen={() => void openNotice(notice)}
+                      replyOpen={replyingId === notice.id}
+                      replyDraft={replyDrafts[notice.id] || ""}
+                      replySubmitting={replySubmittingId === notice.id}
+                      replyError={replyErrors[notice.id] || ""}
+                      onToggleReply={() => toggleReply(notice.id)}
+                      onDraftChange={(text) => setReplyDrafts((prev) => ({ ...prev, [notice.id]: text }))}
+                      onSubmitReply={() => void submitReply(notice)}
+                    />
+                  </div>
+                );
+              })}
               {hasMore && (
                 <div
                   ref={sentinelRef}
@@ -308,6 +517,15 @@ export function NoticesView() {
           )}
         </ScrollArea>
       </div>
+
+      <FullscreenPlayer
+        key={playerOpen ? playerVideos[0]?.aweme_id || "open" : "closed"}
+        videos={playerVideos}
+        open={playerOpen}
+        openComments={playerOpenComments}
+        initialComment={playerInitialComment}
+        onClose={() => setPlayerOpen(false)}
+      />
     </div>
   );
 }
