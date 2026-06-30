@@ -6,12 +6,17 @@
 from __future__ import annotations
 
 import time
+from collections import OrderedDict
 from typing import Any, Callable
 
 import requests as http_requests
 from flask import Blueprint, Response, request
 
 media_proxy_bp = Blueprint("media_proxy", __name__)
+
+_MEDIA_PROXY_RANGE_CACHE_MAX_ENTRIES = 96
+_MEDIA_PROXY_RANGE_CACHE_MAX_BYTES = 4 * 1024 * 1024
+_MEDIA_PROXY_RANGE_CACHE: OrderedDict[tuple[str, str, str], tuple[int, dict, bytes]] = OrderedDict()
 
 # 注入的依赖
 _logger = None
@@ -73,6 +78,31 @@ def setup_media_proxy(
     _guess_audio_extension = guess_audio_extension
 
 
+def _range_cache_key(original_url: str, upstream_url: str, range_value: str | None, media_type: str) -> tuple[str, str, str] | None:
+    if media_type not in ('audio', 'video') or not range_value:
+        return None
+    return (upstream_url or original_url, range_value, media_type)
+
+
+def _get_range_cache(key: tuple[str, str, str] | None):
+    if key is None:
+        return None
+    cached = _MEDIA_PROXY_RANGE_CACHE.get(key)
+    if cached is None:
+        return None
+    _MEDIA_PROXY_RANGE_CACHE.move_to_end(key)
+    return cached
+
+
+def _remember_range_cache(key: tuple[str, str, str] | None, status_code: int, headers: dict, body: bytes) -> None:
+    if key is None or status_code != 206 or not body or len(body) > _MEDIA_PROXY_RANGE_CACHE_MAX_BYTES:
+        return
+    _MEDIA_PROXY_RANGE_CACHE[key] = (status_code, dict(headers), body)
+    _MEDIA_PROXY_RANGE_CACHE.move_to_end(key)
+    while len(_MEDIA_PROXY_RANGE_CACHE) > _MEDIA_PROXY_RANGE_CACHE_MAX_ENTRIES:
+        _MEDIA_PROXY_RANGE_CACHE.popitem(last=False)
+
+
 @media_proxy_bp.route('/api/media/proxy')
 def media_proxy():
     """代理抖音媒体资源，限制来源并安全处理重定向。"""
@@ -95,6 +125,14 @@ def media_proxy():
     cache_key = url if '/aweme/v1/play/' in url else None
     upstream_url = _MEDIA_PROXY_REDIRECT_CACHE.get(cache_key, url) if cache_key else url
     upstream_label = _media_url_label(upstream_url)
+    range_cache_key = _range_cache_key(url, upstream_url, upstream_range_value, requested_media_type)
+    cached_range = _get_range_cache(range_cache_key)
+    if cached_range is not None:
+        status_code, cached_headers, cached_body = cached_range
+        headers = dict(cached_headers)
+        headers['Access-Control-Allow-Origin'] = origin_value or '*'
+        headers['Cache-Control'] = 'public, max-age=3600'
+        return Response(cached_body, status=status_code, headers=headers)
 
     retry_count = 0
     redirect_hops = 0
@@ -188,6 +226,16 @@ def media_proxy():
         if cache_key and upstream_url != url:
             _remember_media_redirect(cache_key, upstream_url)
 
+        range_cache_key = _range_cache_key(url, upstream_url, upstream_range_value, requested_media_type)
+        cached_range = _get_range_cache(range_cache_key)
+        if cached_range is not None:
+            status_code, cached_headers, cached_body = cached_range
+            headers = dict(cached_headers)
+            headers['Access-Control-Allow-Origin'] = origin_value or '*'
+            headers['Cache-Control'] = 'public, max-age=3600'
+            resp.close()
+            return Response(cached_body, status=status_code, headers=headers)
+
         _logger.debug(
             '[media_proxy] 上游响应耗时 %.2fs, status=%s, seeded_range=%s, range="%s", url=%s',
             time.time() - start_time,
@@ -255,6 +303,21 @@ def media_proxy():
                     upstream_label,
                     decrypt_error,
                 )
+
+        should_cache_range = (
+            range_cache_key is not None
+            and resp.status_code == 206
+            and (int(content_length) if str(content_length or '').isdigit() else _MEDIA_PROXY_RANGE_CACHE_MAX_BYTES + 1) <= _MEDIA_PROXY_RANGE_CACHE_MAX_BYTES
+        )
+
+        if should_cache_range:
+            try:
+                body = resp.content
+                resp.close()
+                _remember_range_cache(range_cache_key, resp.status_code, resp_headers, body)
+                return Response(body, status=resp.status_code, headers=resp_headers)
+            except Exception as cache_error:
+                _logger.debug('[media_proxy] range缓存读取失败，将改用流式转发: %s', cache_error)
 
         def generate():
             total = 0

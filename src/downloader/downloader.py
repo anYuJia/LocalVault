@@ -28,8 +28,10 @@ _thread_local = threading.local()
 
 def _create_session():
     session = requests.Session()
-    session.mount('https://', HTTPAdapter(max_retries=_retry))
-    session.mount('http://', HTTPAdapter(max_retries=_retry))
+    pool_size = max(10, int(getattr(Config, 'MAX_CONCURRENT', 3) or 3) * 4)
+    adapter = HTTPAdapter(max_retries=_retry, pool_connections=pool_size, pool_maxsize=pool_size)
+    session.mount('https://', adapter)
+    session.mount('http://', adapter)
     return session
 
 

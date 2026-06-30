@@ -13,6 +13,7 @@ from datetime import datetime
 
 from flask import jsonify
 
+from src.downloader.async_downloads import download_media_group_async, download_video_async
 from src.web.downloads_routes import downloads_bp
 
 
@@ -188,31 +189,27 @@ def download_video_by_aweme_id():
         async def do_download():
             try:
                 if len(media_urls) == 1 and media_urls[0].get('type') == 'video':
-                    success = await asyncio.to_thread(
-                        user_manager.downloader.download_video,
+                    success = await download_video_async(
+                        user_manager.downloader,
                         media_urls[0]['url'],
                         name,
                         aweme_id,
-                        asyncio.Event(),
-                        dr._socketio,
-                        task_id,
-                        None,
-                        None,
-                        False,
+                        cancel_event=asyncio.Event(),
+                        socketio=dr._socketio,
+                        task_id=task_id,
+                        check_existing=False,
                         fallback_urls=video_fallback_urls,
                     )
                 else:
-                    success = await asyncio.to_thread(
-                        user_manager.downloader.download_media_group,
+                    success = await download_media_group_async(
+                        user_manager.downloader,
                         media_urls,
                         name,
                         aweme_id,
-                        dr._socketio,
-                        task_id,
-                        asyncio.Event(),
-                        None,
-                        None,
-                        False,
+                        socketio=dr._socketio,
+                        task_id=task_id,
+                        cancel_event=asyncio.Event(),
+                        check_existing=False,
                     )
 
                 if success:
@@ -287,7 +284,6 @@ def download_videos():
         # 在全局 Loop 中运行异步下载协程
         async def do_download_task():
             try:
-                pause_control = ThreadPauseEvent(pause_event)
                 # 发送开始信号
                 dr._socketio.emit('download_started', {
                     'task_id': task_id,
@@ -366,10 +362,16 @@ def download_videos():
                         media_urls = dr._normalize_download_media_urls(media_urls, raw_media_type)
                         video_fallback_urls = []
                         payload_video_data = video_val.get('video') if isinstance(video_val.get('video'), dict) else {}
+                        has_video_media = any(item.get('type') == 'video' for item in media_urls)
+                        has_usable_video_media = any(
+                            item.get('type') == 'video' and item.get('url') and not user_manager._is_dash_video_only_url(item.get('url'))
+                            for item in media_urls
+                        )
+                        payload_quality_height = user_manager._available_video_quality_height(payload_video_data) if payload_video_data else 0
 
                         should_refresh_video_media = (
                             raw_media_type == 'video'
-                            or (raw_media_type not in ('image', 'live_photo', 'mixed') and any(item.get('type') == 'video' for item in media_urls))
+                            or (raw_media_type not in ('image', 'live_photo', 'mixed') and has_video_media)
                             or not media_urls
                         )
                         if should_refresh_video_media and payload_video_data:
@@ -378,8 +380,22 @@ def download_videos():
                                 media_urls = dr._normalize_download_media_urls(payload_video_urls, 'video')
                                 raw_media_type = 'video'
                                 video_fallback_urls = user_manager.get_video_download_urls(payload_video_data)
+                                has_usable_video_media = any(
+                                    item.get('type') == 'video' and item.get('url') and not user_manager._is_dash_video_only_url(item.get('url'))
+                                    for item in media_urls
+                                )
 
-                        if should_refresh_video_media and aweme_id:
+                        needs_detail_refresh = (
+                            should_refresh_video_media
+                            and aweme_id
+                            and (
+                                not media_urls
+                                or not has_usable_video_media
+                                or (payload_video_data and payload_quality_height <= 0)
+                            )
+                        )
+
+                        if needs_detail_refresh:
                             detail = dr._run_async(user_manager.get_video_detail(aweme_id))
                             if detail and not isinstance(detail, dict) or (isinstance(detail, dict) and not detail.get('_need_verify') and not detail.get('_need_login')):
                                 detail_media_type = detail.get('raw_media_type') or detail.get('media_type') or raw_media_type
@@ -419,31 +435,25 @@ def download_videos():
 
                         # 开始下载单个作品
                         if len(media_urls) == 1 and media_urls[0].get('type') == 'video':
-                            success = await asyncio.to_thread(
-                                user_manager.downloader.download_video,
+                            success = await download_video_async(
+                                user_manager.downloader,
                                 media_urls[0]['url'],
                                 video_name,
                                 aweme_id,
-                                cancel_event,
-                                None,
-                                None,
-                                None,
-                                pause_control,
-                                False,
+                                cancel_event=cancel_event,
+                                pause_event=pause_event,
+                                check_existing=False,
                                 fallback_urls=video_fallback_urls,
                             )
                         else:
-                            success = await asyncio.to_thread(
-                                user_manager.downloader.download_media_group,
+                            success = await download_media_group_async(
+                                user_manager.downloader,
                                 media_urls,
                                 video_name,
                                 aweme_id,
-                                None,
-                                None,
-                                cancel_event,
-                                None,
-                                pause_control,
-                                False,
+                                cancel_event=cancel_event,
+                                pause_event=pause_event,
+                                check_existing=False,
                             )
 
                         if success:

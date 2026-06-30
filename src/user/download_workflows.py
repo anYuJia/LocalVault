@@ -5,10 +5,10 @@
 实例引用，复用 api、downloader、socketio、媒体信息与下载地址选择等能力。
 原方法保留为薄代理，确保外部调用兼容。
 """
-
 import asyncio
 
 from src.config.config import Config
+from src.downloader.async_downloads import download_media_group_async, download_video_async
 from src.downloader.filename_builder import build_download_name
 
 
@@ -158,8 +158,8 @@ class DownloadWorkflows:
                 continue
 
             if media_type in ['mixed', 'live_photo', 'image']:
-                success = await asyncio.to_thread(
-                    self.downloader.download_media_group,
+                success = await download_media_group_async(
+                    self.downloader,
                     urls,
                     name,
                     aweme_id,
@@ -179,8 +179,8 @@ class DownloadWorkflows:
 
             elif media_type == 'video':
                 fallback_urls = self.get_video_download_urls(post.get('video') or {})
-                success = await asyncio.to_thread(
-                    self.downloader.download_video,
+                success = await download_video_async(
+                    self.downloader,
                     urls[0]['url'],
                     name,
                     aweme_id,
@@ -236,16 +236,16 @@ class DownloadWorkflows:
                 async with semaphore:
                     if media_type == 'video' and len(media_urls) == 1:
                         fallback_urls = self.get_video_download_urls((video.get('video') or {}))
-                        success = await asyncio.to_thread(
-                            self.downloader.download_video,
+                        success = await download_video_async(
+                            self.downloader,
                             media_urls[0]['url'],
                             name,
                             aweme_id,
                             fallback_urls=fallback_urls,
                         )
                     else:
-                        success = await asyncio.to_thread(
-                            self.downloader.download_media_group,
+                        success = await download_media_group_async(
+                            self.downloader,
                             media_urls,
                             name,
                             aweme_id,

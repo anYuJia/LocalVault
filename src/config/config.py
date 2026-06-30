@@ -145,7 +145,7 @@ class Config:
     }
     
     # 下载设置
-    CHUNK_SIZE = 8192  # 下载块大小
+    CHUNK_SIZE = 1024 * 256  # 下载块大小
     
     
     # 文件命名设置
