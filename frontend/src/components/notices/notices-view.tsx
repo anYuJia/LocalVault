@@ -106,7 +106,8 @@ function NoticeCard({
   const Icon = meta.icon;
   const cover = mediaProxyUrl(notice.aweme?.cover, "image");
   const extraCount = notice.users.length - 3;
-  const canReply = Boolean(notice.comment && notice.aweme?.aweme_id);
+  // 仅评论/回复通知(31)支持通知内回复；赞评论(41)虽有 comment 但不回复。
+  const canReply = notice.type === 31 && Boolean(notice.comment && notice.aweme?.aweme_id);
 
   return (
     <div
@@ -235,7 +236,13 @@ export function NoticesView() {
   // 播放器跳转
   const [playerVideos, setPlayerVideos] = useState<VideoInfo[]>([]);
   const [playerOpen, setPlayerOpen] = useState(false);
-  const [playerInitialComment, setPlayerInitialComment] = useState<{ rootCid: string; targetCid: string; isSub: boolean } | null>(null);
+  const [playerInitialComment, setPlayerInitialComment] = useState<{
+    cid: string;
+    text: string;
+    digg_count: number;
+    create_time: number;
+    user: { uid: string; nickname: string; sec_uid: string; avatar: string };
+  } | null>(null);
   const [playerOpenComments, setPlayerOpenComments] = useState(false);
   const [jumpingId, setJumpingId] = useState("");
   const [jumpError, setJumpError] = useState("");
@@ -333,12 +340,19 @@ export function NoticesView() {
           return;
         }
         setPlayerVideos([detail.video]);
-        // type 31 且 comment 守卫通过：传 initialComment 定位；否则 openComments 降级。
-        if (notice.type === 31 && notice.comment && notice.comment.cid && notice.comment.root_cid) {
+        // 有 comment 子对象（评论31/赞评论41）→ 置顶高光该评论；否则仅打开评论区。
+        if (notice.comment && notice.comment.cid && notice.comment.user) {
           setPlayerInitialComment({
-            rootCid: notice.comment.root_cid,
-            targetCid: notice.comment.cid,
-            isSub: notice.comment.is_sub,
+            cid: notice.comment.cid,
+            text: notice.comment.text,
+            digg_count: notice.comment.digg_count,
+            create_time: notice.comment.create_time,
+            user: {
+              uid: notice.comment.user.uid,
+              nickname: notice.comment.user.nickname,
+              sec_uid: notice.comment.user.sec_uid,
+              avatar: notice.comment.user.avatar,
+            },
           });
           setPlayerOpenComments(false);
         } else {

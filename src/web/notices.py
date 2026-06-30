@@ -156,6 +156,25 @@ def _format_notice(item: dict) -> dict | None:
         if isinstance(comment, dict):
             is_comment_like = True
             comment_text = str(comment.get('text') or '').strip()
+            # 赞评论通知：被赞评论本身置顶高光。无 parent_id，root_cid 用 cid 自身。
+            liked_cid = str(comment.get('cid') or '').strip()
+            liked_text = comment_text
+            liked_user: dict | None = None
+            liked_user_raw = comment.get('user')
+            if isinstance(liked_user_raw, dict):
+                formatted = _format_user(liked_user_raw)
+                if formatted.get('uid') or formatted.get('nickname'):
+                    liked_user = formatted
+            if liked_cid and liked_user:
+                comment_brief = {
+                    'cid': liked_cid,
+                    'root_cid': liked_cid,
+                    'is_sub': False,
+                    'text': liked_text,
+                    'digg_count': int(comment.get('digg_count') or 0),
+                    'create_time': int(item.get('create_time') or 0),
+                    'user': liked_user,
+                }
         aweme_brief = _format_aweme_brief(digg.get('aweme'))
     elif isinstance(comment_wrap, dict):
         # 评论/回复类通知（type 31）：顶层 comment 是包装层，真实评论在
@@ -163,6 +182,7 @@ def _format_notice(item: dict) -> dict | None:
         inner = comment_wrap.get('comment')
         inner_cid = ''
         inner_user: dict | None = None
+        inner_text = ''
         if isinstance(inner, dict):
             inner_cid = str(inner.get('cid') or '').strip()
             user = inner.get('user')
@@ -171,7 +191,8 @@ def _format_notice(item: dict) -> dict | None:
                 if formatted.get('uid') or formatted.get('nickname'):
                     users = [formatted]
                     inner_user = formatted
-            comment_text = str(inner.get('text') or '').strip()
+            inner_text = str(inner.get('text') or '').strip()
+            comment_text = inner_text
         parent_id = str(comment_wrap.get('parent_id') or '').strip()
         reply = comment_wrap.get('reply_comment')
         if isinstance(reply, dict) and (reply.get('text') or reply.get('cid')):
@@ -182,6 +203,9 @@ def _format_notice(item: dict) -> dict | None:
                 'cid': inner_cid,
                 'root_cid': parent_id,
                 'is_sub': True,  # 实测 type 31 恒为子评论（parent_id 恒非空）
+                'text': inner_text,
+                'digg_count': int(inner.get('digg_count') or 0) if isinstance(inner, dict) else 0,
+                'create_time': int(item.get('create_time') or 0),
                 'user': inner_user or {},
             }
         merge_count = int(comment_wrap.get('merge_count') or 0) or 0
