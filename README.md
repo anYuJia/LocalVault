@@ -15,7 +15,7 @@
   <a href="https://github.com/anYuJia/better-douyin/releases/latest"><img src="https://img.shields.io/github/v/release/anYuJia/better-douyin?style=flat-square" alt="Release"></a>
   <a href="https://github.com/anYuJia/better-douyin/releases"><img src="https://img.shields.io/github/downloads/anYuJia/better-douyin/total?style=flat-square" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-555?style=flat-square" alt="Platform">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2ea44f?style=flat-square" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Non--Commercial-red?style=flat-square" alt="License"></a>
 </p>
 
 [下载发行版](#下载安装) · [功能能力](#功能能力) · [界面预览](#界面预览) · [源码运行](#源码运行) · [加入交流群](#加入交流群)
@@ -29,6 +29,10 @@
 better-douyin 是 Python 版抖音桌面工具，保留了完整的本地服务、浏览器访问和源码可改造能力。它适合想要研究实现、扩展接口、定制下载流程或在浏览器模式下运行的用户。
 
 如果你主要是日常桌面使用，更推荐 Rust / Tauri 版：[better-douyin-R](https://github.com/anYuJia/better-douyin-R)。
+
+## 许可协议
+
+本项目不再使用 MIT 协议。当前版本仅允许个人学习、研究和非商业使用，禁止未经授权的商业使用、销售、托管服务、商业集成或商业分发。详见 [LICENSE](LICENSE)。
 
 ## 功能能力
 

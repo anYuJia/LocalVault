@@ -15,7 +15,7 @@ A local Douyin downloader, previewer, and archive manager built with Python and 
   <a href="https://github.com/anYuJia/better-douyin/releases/latest"><img src="https://img.shields.io/github/v/release/anYuJia/better-douyin?style=flat-square" alt="Release"></a>
   <a href="https://github.com/anYuJia/better-douyin/releases"><img src="https://img.shields.io/github/downloads/anYuJia/better-douyin/total?style=flat-square" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-555?style=flat-square" alt="Platform">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2ea44f?style=flat-square" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Non--Commercial-red?style=flat-square" alt="License"></a>
 </p>
 
 [Download](#download) · [Features](#features) · [Screenshots](#screenshots) · [Run From Source](#run-from-source) · [FAQ](#faq)
@@ -29,6 +29,10 @@ A local Douyin downloader, previewer, and archive manager built with Python and 
 better-douyin is the Python edition of the Douyin desktop toolkit. It keeps the local Flask service, browser access mode, and Python source structure easy to inspect and extend.
 
 For daily desktop use, the Rust / Tauri edition is recommended: [better-douyin-R](https://github.com/anYuJia/better-douyin-R).
+
+## License
+
+This project is no longer licensed under the MIT License. Current versions are available only for personal, educational, research, and other non-commercial purposes. Unauthorized commercial use, sale, hosted services, commercial integration, or commercial redistribution are prohibited. See [LICENSE](LICENSE).
 
 ## Features
 

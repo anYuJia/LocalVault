@@ -1,21 +1,39 @@
-MIT License
+Better Douyin Non-Commercial License
 
-Copyright (c) 2023 anYuJia
+Copyright (c) 2023-present anYuJia
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software and its associated source code, binaries, assets, and
+documentation (the "Software") are made available for personal,
+educational, research, and other non-commercial purposes only.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Permission is granted, free of charge, to use, copy, study, and modify the
+Software for non-commercial purposes, subject to the conditions below.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+You may not, without prior written permission from the copyright holder:
+
+1. use the Software, modified versions, or derivative works for any
+   commercial purpose;
+2. sell, rent, lease, sublicense, host, or provide the Software as a paid
+   service, SaaS product, managed service, or commercial integration;
+3. distribute the Software, modified versions, derivative works, or binaries
+   for commercial gain;
+4. use the Software to provide paid data collection, scraping, downloading,
+   archiving, analytics, automation, or content-processing services;
+5. remove or alter copyright notices, license notices, or attribution notices.
+
+Commercial use includes use by or for a business, company, organization,
+paid service, revenue-generating activity, commercial product, consulting
+engagement, or any activity primarily intended for commercial advantage or
+monetary compensation.
+
+All rights not expressly granted in this license are reserved by the
+copyright holder.
+
+The Software is provided "as is", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability,
+fitness for a particular purpose, and non-infringement. In no event shall
+the authors or copyright holders be liable for any claim, damages, or other
+liability arising from or related to the Software or its use.
+
+For commercial licensing, redistribution permission, or other permissions
+outside this license, contact the copyright holder.
