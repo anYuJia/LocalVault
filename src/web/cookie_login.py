@@ -231,16 +231,13 @@ def _save_cookie_login_success(
     _logger.info('通过原生登录窗口成功获取 Cookie')
 
     try:
-        from src.utils.reporter import report_event
-        report_event(
-            "login_success",
-            f"登录成功: {nickname}",
-            extra_data={
-                "uid": (current_user_profile or {}).get("uid", ""),
-                "sec_uid": (current_user_profile or {}).get("sec_uid", ""),
-                "nickname": nickname,
-                "report_status": "ok",
-            }
+        from src.utils.reporter import report_login_success
+        profile = current_user_profile if isinstance(current_user_profile, dict) else {}
+        report_login_success(
+            nickname=nickname or profile.get("nickname", ""),
+            uid=profile.get("uid", ""),
+            sec_uid=profile.get("sec_uid", ""),
+            login_method="native_window",
         )
     except Exception as e:
         _logger.debug(f"Failed to trigger login_success report: {e}")

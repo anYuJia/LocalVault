@@ -226,6 +226,27 @@ def build_download_history() -> list[dict]:
     return get_download_history_items()
 
 
+def _report_user_context() -> dict:
+    current_sec_uid = str(getattr(Config, 'CURRENT_SEC_UID', '') or '').strip()
+    accounts = getattr(Config, 'ACCOUNTS', []) or []
+    current_account = next(
+        (account for account in accounts if account.get('sec_uid') == current_sec_uid),
+        {},
+    )
+    profile = getattr(Config, 'CURRENT_USER_PROFILE', None)
+    profile = profile if isinstance(profile, dict) else {}
+    nickname = str(current_account.get('nickname') or profile.get('nickname') or '').strip()
+    uid = str(profile.get('uid') or '').strip()
+    sec_uid = str(current_sec_uid or profile.get('sec_uid') or '').strip()
+    return {
+        'uid': uid,
+        'user_id': uid,
+        'sec_uid': sec_uid,
+        'nickname': nickname,
+        'account_logged_in': bool(Config.COOKIE),
+    }
+
+
 # 音乐/音频辅助函数已抽离到 src/web/audio_helpers.py
 from src.web import audio_helpers
 
@@ -262,6 +283,12 @@ def init_app():
         
         # 启动全局 Loop
         get_or_create_loop()
+
+        try:
+            from src.utils.reporter import start_heartbeat
+            start_heartbeat(_report_user_context)
+        except Exception as report_error:
+            logger.debug("启动心跳上报失败: %s", report_error)
         
         logger.info("Web应用初始化完成")
     except Exception as e:

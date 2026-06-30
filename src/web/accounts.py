@@ -174,6 +174,16 @@ def add_account():
 
         _save_accounts_config()
         _init_app()
+        try:
+            from src.utils.reporter import report_login_success
+            report_login_success(
+                nickname=nickname,
+                uid=verify_result.get('user_id', ''),
+                sec_uid=sec_uid,
+                login_method='manual_cookie',
+            )
+        except Exception:
+            pass
         return jsonify({
             'success': True,
             'message': f'成功添加并切换账号: {nickname}',
