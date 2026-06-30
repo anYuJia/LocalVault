@@ -34,6 +34,23 @@ For daily desktop use, the Rust / Tauri edition is recommended: [better-douyin-R
 
 This project is no longer licensed under the MIT License. Current versions are available only for personal, educational, research, and other non-commercial purposes. Unauthorized commercial use, sale, hosted services, commercial integration, or commercial redistribution are prohibited. See [LICENSE](LICENSE).
 
+## Legal Compliance and Acceptable Use
+
+This project is not an official product of Douyin, ByteDance, or any related platform, and it is not authorized, endorsed, sponsored, or approved by them. Platform names, trademarks, content, user content, and API capabilities remain the property of their respective rights holders.
+
+By using this project, you understand and agree that:
+
+- You may use it only for personal learning, research, debugging, and non-commercial backup of content that you are lawfully allowed to access.
+- You are solely responsible for ensuring that your use complies with applicable laws, platform terms, copyright rules, privacy rules, and data compliance requirements.
+- You may process only content that you own, have permission to use, or are otherwise allowed to access and save under applicable rules.
+- You may not use this project for commercial collection, commercial analytics, paid download services, SaaS products, hosted services, managed services, bulk data services, content republishing, account operation, marketing, lead generation, or any revenue-generating activity.
+- You may not use this project for large-scale scraping, automated crawling, bulk collection, credential abuse, access-control bypass, CAPTCHA bypass, risk-control bypass, rate-limit evasion, circumvention of technical protection measures, or interference with platform operations.
+- You may not download, store, publish, sell, publicly display, or redistribute any content that you are not authorized to use, including content protected by copyright, portrait rights, privacy rights, trademarks, or other rights.
+- You must not expose your Cookie, credentials, or login session to third parties. If you run this project on a server, LAN, or public network, you are responsible for access control, network isolation, and secret protection.
+- You are solely responsible for any consequences arising from violations of laws, platform rules, third-party rights, or this project's license.
+
+If you are unsure whether a use case is legal or permitted by the platform, do not use this project for that scenario.
+
 ## Features
 
 - Search Douyin creators and browse profile works, collected works, and liked works
@@ -175,7 +192,7 @@ Yes. Browser / headless mode is more suitable than desktop mode. If you expose i
 
 ## Disclaimer
 
-This project is for personal learning, research, and content backup only. Please follow applicable laws, platform rules, and copyright requirements. Do not use it for commercial collection or large-scale scraping. Users are responsible for the consequences of misuse.
+This project is provided "as is", without any warranty of availability, stability, accuracy, maintenance, or fitness for a particular purpose. The authors do not encourage, support, or authorize any illegal use, rights-infringing use, platform-rule violation, or commercial use of this project. You assume all risks and responsibilities arising from downloading, storing, processing, distributing, or using any content.
 
 ## Star History
 
