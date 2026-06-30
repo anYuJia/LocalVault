@@ -1915,12 +1915,18 @@ export function FullscreenPlayer({
 
   // 通知跳转：用 insert_ids=cid 拉评论列表，目标评论会被插入返回。
   // cid 在根列表 → 置顶高光根评论；cid 在某根评论的 sub_comments → 展开该根评论高光子评论。
+  // 不等 commentsLoadedAwemeId——抢先调 insert_ids 一步到位，省掉自动拉取的普通请求，
+  // 避免普通+insert_ids 两次串行请求导致进入慢。
   useEffect(() => {
     if (!initialComment || locateDoneRef.current) return;
-    if (commentsLoadedAwemeId !== currentVideo?.aweme_id) return;
     if (locatePageRef.current > 0) return; // 仅拉一次
     locatePageRef.current = 1;
     const { cid, text, digg_count, create_time, user } = initialComment;
+    // 立即占位标记已加载，阻止自动拉取 effect 并发跑普通请求（与 insert_ids 串行浪费）。
+    if (currentVideo?.aweme_id) {
+      setCommentsLoadedAwemeId(currentVideo.aweme_id);
+      setCommentsLoading(true);
+    }
 
     const highlight = (targetCid: string) => {
       setHighlightCid(targetCid);
@@ -1939,6 +1945,7 @@ export function FullscreenPlayer({
           setLocatePrompt("deleted");
           return;
         }
+        setCommentsLoading(false);
         // cid 在根列表 → 置顶高光。
         const asRoot = result.comments.find((c) => c.cid === cid);
         if (asRoot) {
@@ -1995,6 +2002,8 @@ export function FullscreenPlayer({
       } catch {
         locateDoneRef.current = true;
         setLocatePrompt("deleted");
+      } finally {
+        setCommentsLoading(false);
       }
     })();
   }, [initialComment, commentsLoadedAwemeId, currentVideo?.aweme_id]);
