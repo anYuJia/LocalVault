@@ -266,6 +266,7 @@ class DouyinUserManager:
         has_more = True
         
         while has_more and len(videos) < limit:
+            previous_cursor = max_cursor
             remaining = max(limit - len(videos), 1)
             request_count = min(USER_POST_PAGE_SIZE, remaining) if on_batch is not None else min(18, remaining)
             params = {
@@ -292,14 +293,24 @@ class DouyinUserManager:
                 }
             
             batch = resp.get('aweme_list', [])
+            next_cursor = resp.get('max_cursor', 0)
+            next_has_more = resp.get('has_more', 0) == 1
+            if not batch:
+                if self.debug_mode:
+                    print(f"\033[93m[UserManager] 用户作品分页返回空列表，停止继续抓取: user={user_id}, cursor={previous_cursor}, next_cursor={next_cursor}, has_more={next_has_more}\033[0m")
+                break
             if on_batch and batch:
                 on_batch(batch)
                 # 让下载消费者有机会在下一页抓取前先处理已入队作品
                 await asyncio.sleep(0)
                 
             videos.extend(batch)
-            max_cursor = resp.get('max_cursor', 0)
-            has_more = resp.get('has_more', 0) == 1
+            max_cursor = next_cursor
+            has_more = next_has_more
+            if has_more and max_cursor == previous_cursor:
+                if self.debug_mode:
+                    print(f"\033[93m[UserManager] 用户作品分页游标未前进，停止继续抓取: user={user_id}, cursor={max_cursor}\033[0m")
+                break
             
         return videos[:limit]
 

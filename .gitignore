@@ -170,6 +170,7 @@ docs/
 # 工具配置（本地开发用）
 .claude/
 .serena/
+.workbuddy/
 
 # 一次性脚本
 generate_icons.py
