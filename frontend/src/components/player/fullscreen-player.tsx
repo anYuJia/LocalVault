@@ -136,9 +136,7 @@ interface FullscreenPlayerProps {
   onVideoUpdate?: (video: VideoInfo) => void;
   openComments?: boolean;
   initialComment?: {
-    isSub: boolean;
-    rootCid: string;
-    targetCid: string;
+    cid: string;
     text: string;
     digg_count: number;
     create_time: number;
@@ -1915,81 +1913,56 @@ export function FullscreenPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // 通知跳转：定位高光目标评论。
-  // - isSub=false（评论/赞评论）：用通知 payload 数据构造 CommentInfo 置顶插入并高光。
-  // - isSub=true（回复通知）：用 insert_ids=rootCid 重拉评论列表让根评论入列，
-  //   根评论的 reply_comment 含目标子评论 → 展开回复区高光子评论。
+  // 通知跳转：用 insert_ids=cid 拉评论列表，目标评论会被插入返回。
+  // cid 在根列表 → 置顶高光根评论；cid 在某根评论的 sub_comments → 展开该根评论高光子评论。
   useEffect(() => {
     if (!initialComment || locateDoneRef.current) return;
     if (commentsLoadedAwemeId !== currentVideo?.aweme_id) return;
-    const { isSub, rootCid, targetCid, text, digg_count, create_time, user } = initialComment;
+    if (locatePageRef.current > 0) return; // 仅拉一次
+    locatePageRef.current = 1;
+    const { cid, text, digg_count, create_time, user } = initialComment;
 
-    const highlight = (cid: string) => {
-      setHighlightCid(cid);
-      window.setTimeout(() => setHighlightCid((cur) => (cur === cid ? "" : cur)), 2400);
+    const highlight = (targetCid: string) => {
+      setHighlightCid(targetCid);
+      window.setTimeout(() => setHighlightCid((cur) => (cur === targetCid ? "" : cur)), 2400);
       window.requestAnimationFrame(() => {
-        const node = commentItemRefs.current.get(cid) || replyItemRefs.current.get(cid);
+        const node = commentItemRefs.current.get(targetCid) || replyItemRefs.current.get(targetCid);
         if (node) node.scrollIntoView({ block: "center" });
       });
     };
 
-    if (!isSub) {
-      // 置顶插入目标评论。
-      const exists = comments.some((c) => c.cid === targetCid);
-      if (!exists) {
-        const pinned: CommentInfo = {
-          cid: targetCid,
-          text,
-          create_time,
-          digg_count,
-          user_digged: 0,
-          reply_comment_total: 0,
-          sub_comments: null,
-          user: {
-            uid: user.uid,
-            nickname: user.nickname,
-            sec_uid: user.sec_uid,
-            avatar_thumb: user.avatar,
-          },
-        };
-        setComments((prev) => [pinned, ...prev]);
-      }
-      locateDoneRef.current = true;
-      highlight(targetCid);
-      return;
-    }
-
-    // 回复通知：用 insert_ids 拉含根评论的列表（仅拉一次）。
-    if (locatePageRef.current > 0) return; // 已拉过
-    locatePageRef.current = 1;
     void (async () => {
       try {
-        const result = await getComments(currentVideo!.aweme_id, 20, 0, rootCid);
+        const result = await getComments(currentVideo!.aweme_id, 20, 0, cid);
         if (!result.success || !result.comments) {
           locateDoneRef.current = true;
           setLocatePrompt("deleted");
           return;
         }
-        const rootComment = result.comments.find((c) => c.cid === rootCid);
-        if (!rootComment) {
+        // cid 在根列表 → 置顶高光。
+        const asRoot = result.comments.find((c) => c.cid === cid);
+        if (asRoot) {
+          const ordered = [asRoot, ...result.comments.filter((c) => c.cid !== cid)];
+          setComments(ordered);
+          setCommentsLoadedAwemeId(currentVideo!.aweme_id);
           locateDoneRef.current = true;
-          setLocatePrompt("deleted");
+          highlight(cid);
           return;
         }
-        // 用 insert_ids 拉到的列表覆盖（根评论在其中），并标记已加载。
-        setComments(result.comments);
-        setCommentsLoadedAwemeId(currentVideo!.aweme_id);
-        // 根评论的 sub_comments（由 reply_comment 解析）含目标子评论，
-        // 填入 commentReplies 并展开。目标子评论置顶，其余按原顺序。
-        const subReplies = (rootComment.sub_comments || []) as CommentInfo[];
-        if (subReplies.length) {
+        // cid 在某根评论的 sub_comments → 展开该根评论高光子评论。
+        const host = result.comments.find((c) => (c.sub_comments || []).some((s) => s.cid === cid));
+        if (host) {
+          const subReplies = (host.sub_comments || []) as CommentInfo[];
           const ordered = [
-            ...subReplies.filter((r) => r.cid === targetCid),
-            ...subReplies.filter((r) => r.cid !== targetCid),
+            ...subReplies.filter((r) => r.cid === cid),
+            ...subReplies.filter((r) => r.cid !== cid),
           ];
+          const hostOrdered = [host, ...result.comments.filter((c) => c.cid !== host.cid)];
+          setComments(hostOrdered);
+          setCommentsLoadedAwemeId(currentVideo!.aweme_id);
           setCommentReplies((prev) => ({
             ...prev,
-            [rootCid]: {
+            [host.cid]: {
               items: ordered,
               cursor: 0,
               hasMore: false,
@@ -1999,16 +1972,32 @@ export function FullscreenPlayer({
               loaded: true,
             },
           }));
+          setExpandedCommentReplyIds((prev) => new Set(prev).add(host.cid));
+          locateDoneRef.current = true;
+          highlight(cid);
+          return;
         }
-        setExpandedCommentReplyIds((prev) => new Set(prev).add(rootCid));
+        // 兜底：评论已删或接口未返回，用通知数据构造置顶。
+        const pinned: CommentInfo = {
+          cid,
+          text,
+          create_time,
+          digg_count,
+          user_digged: 0,
+          reply_comment_total: 0,
+          sub_comments: null,
+          user: { uid: user.uid, nickname: user.nickname, sec_uid: user.sec_uid, avatar_thumb: user.avatar },
+        };
+        setComments((prev) => [pinned, ...prev]);
         locateDoneRef.current = true;
-        highlight(targetCid);
+        setLocatePrompt("deleted");
+        highlight(cid);
       } catch {
         locateDoneRef.current = true;
         setLocatePrompt("deleted");
       }
     })();
-  }, [initialComment, comments, commentsLoadedAwemeId, currentVideo?.aweme_id]);
+  }, [initialComment, commentsLoadedAwemeId, currentVideo?.aweme_id]);
 
   // 评论项 ref 回调工厂：el 为 null 时清理 stale 条目。
   const registerCommentRef = useCallback((cid: string) => (el: HTMLDivElement | null) => {

@@ -197,16 +197,17 @@ def _format_notice(item: dict) -> dict | None:
         reply = comment_wrap.get('reply_comment')
         if isinstance(reply, dict) and (reply.get('text') or reply.get('cid')):
             is_reply = True
-        # 定位信息守卫：cid 与 parent_id 均非空才输出 comment 子对象。
-        if inner_cid and parent_id:
+        # 定位信息：用 cid 走 insert_ids 拉评论列表，前端按 cid 在根列表或子评论里定位。
+        # root_cid 供通知内回复用（publish_comment 的 reply_id）。
+        if inner_cid and inner_user:
             comment_brief = {
                 'cid': inner_cid,
-                'root_cid': parent_id,
-                'is_sub': True,  # 实测 type 31 恒为子评论（parent_id 恒非空）
+                'root_cid': parent_id or inner_cid,
+                'is_sub': bool(parent_id),
                 'text': inner_text,
                 'digg_count': int(inner.get('digg_count') or 0) if isinstance(inner, dict) else 0,
                 'create_time': int(item.get('create_time') or 0),
-                'user': inner_user or {},
+                'user': inner_user,
             }
         merge_count = int(comment_wrap.get('merge_count') or 0) or 0
         label_text = str(comment_wrap.get('label_text') or '').strip()
@@ -220,14 +221,33 @@ def _format_notice(item: dict) -> dict | None:
     elif isinstance(at, dict):
         # @我 通知（type 45）：用户在 user_info（单个对象），文案在 content。
         user_info = at.get('user_info')
+        at_user: dict | None = None
         if isinstance(user_info, dict):
             formatted = _format_user(user_info)
             if formatted.get('uid') or formatted.get('nickname'):
                 users = [formatted]
+                at_user = formatted
         # at.content 形如 "@昵称"，不是通知主文案，仅作参考。
         content = ''
         label_text = str(at.get('label_text') or '').strip()
         aweme_brief = _format_aweme_brief(at.get('aweme'))
+        # @评论的 cid 在 schema_url 里：aweme://aweme/detail/{aweme_id}?cid={cid}
+        schema_url = str(at.get('schema_url') or '')
+        at_cid = ''
+        for seg in schema_url.split('?'):
+            if seg.startswith('cid='):
+                at_cid = seg[4:].strip()
+                break
+        if at_cid and at_user:
+            comment_brief = {
+                'cid': at_cid,
+                'root_cid': at_cid,
+                'is_sub': False,
+                'text': '',
+                'digg_count': 0,
+                'create_time': int(item.get('create_time') or 0),
+                'user': at_user,
+            }
     elif isinstance(follow, dict):
         # 关注类通知：from_user 是单个对象。
         from_user = follow.get('from_user')

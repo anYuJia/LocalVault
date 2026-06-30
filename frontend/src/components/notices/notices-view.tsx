@@ -237,9 +237,7 @@ export function NoticesView() {
   const [playerVideos, setPlayerVideos] = useState<VideoInfo[]>([]);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [playerInitialComment, setPlayerInitialComment] = useState<{
-    isSub: boolean;
-    rootCid: string;
-    targetCid: string;
+    cid: string;
     text: string;
     digg_count: number;
     create_time: number;
@@ -345,9 +343,7 @@ export function NoticesView() {
         // 有 comment 子对象（评论31/赞评论41）→ 置顶高光该评论；否则仅打开评论区。
         if (notice.comment && notice.comment.cid && notice.comment.user) {
           setPlayerInitialComment({
-            isSub: notice.comment.is_sub,
-            rootCid: notice.comment.root_cid,
-            targetCid: notice.comment.cid,
+            cid: notice.comment.cid,
             text: notice.comment.text,
             digg_count: notice.comment.digg_count,
             create_time: notice.comment.create_time,
