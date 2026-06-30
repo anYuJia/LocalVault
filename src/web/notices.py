@@ -127,6 +127,9 @@ def _format_notice(item: dict) -> dict | None:
     # 赞作品（digg_type=1）则没有。用 comment 是否存在来区分，比硬编码 digg_type 稳。
     is_comment_like = False
     is_reply = False
+    # type 31 评论/回复通知的定位信息：cid（别人发的那条）+ root_cid（根评论）。
+    # 实测 comment_wrap.parent_id 恒为根评论 cid；reply_comment 不带 cid 不可用。
+    comment_brief: dict | None = None
 
     digg = item.get('digg')
     follow = item.get('follow')
@@ -156,18 +159,31 @@ def _format_notice(item: dict) -> dict | None:
         aweme_brief = _format_aweme_brief(digg.get('aweme'))
     elif isinstance(comment_wrap, dict):
         # 评论/回复类通知（type 31）：顶层 comment 是包装层，真实评论在
-        # comment.comment（含 text + user），被回复的评论在 comment.reply_comment。
+        # comment.comment（含 cid/text/user），根评论 cid 在 comment.parent_id。
         inner = comment_wrap.get('comment')
+        inner_cid = ''
+        inner_user: dict | None = None
         if isinstance(inner, dict):
+            inner_cid = str(inner.get('cid') or '').strip()
             user = inner.get('user')
             if isinstance(user, dict):
                 formatted = _format_user(user)
                 if formatted.get('uid') or formatted.get('nickname'):
                     users = [formatted]
+                    inner_user = formatted
             comment_text = str(inner.get('text') or '').strip()
+        parent_id = str(comment_wrap.get('parent_id') or '').strip()
         reply = comment_wrap.get('reply_comment')
         if isinstance(reply, dict) and (reply.get('text') or reply.get('cid')):
             is_reply = True
+        # 定位信息守卫：cid 与 parent_id 均非空才输出 comment 子对象。
+        if inner_cid and parent_id:
+            comment_brief = {
+                'cid': inner_cid,
+                'root_cid': parent_id,
+                'is_sub': True,  # 实测 type 31 恒为子评论（parent_id 恒非空）
+                'user': inner_user or {},
+            }
         merge_count = int(comment_wrap.get('merge_count') or 0) or 0
         label_text = str(comment_wrap.get('label_text') or '').strip()
         if not label_text:
@@ -232,6 +248,7 @@ def _format_notice(item: dict) -> dict | None:
         'is_comment_like': is_comment_like,
         'is_reply': is_reply,
         'comment_text': comment_text,
+        'comment': comment_brief,
     }
 
 

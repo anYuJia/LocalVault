@@ -341,6 +341,13 @@ export interface NoticeAweme {
   aweme_type?: number;
 }
 
+export interface NoticeComment {
+  cid: string;
+  root_cid: string;
+  is_sub: boolean;
+  user: NoticeUser;
+}
+
 export interface NoticeItem {
   id: string;
   type: number;
@@ -356,6 +363,7 @@ export interface NoticeItem {
   is_comment_like?: boolean;
   is_reply?: boolean;
   comment_text?: string;
+  comment?: NoticeComment | null;
 }
 
 export interface NoticesResponse extends ApiResponse {
