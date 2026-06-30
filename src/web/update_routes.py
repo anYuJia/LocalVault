@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import shutil
@@ -62,6 +63,38 @@ def _dialog_cancelled(result: subprocess.CompletedProcess[str]) -> bool:
 def _dialog_error_message(result: subprocess.CompletedProcess[str], fallback: str) -> str:
     stderr = (result.stderr or "").strip()
     return stderr or fallback
+
+
+def _decode_utf8_base64_path(value: str) -> str:
+    value = (value or "").strip()
+    if not value:
+        return ""
+    try:
+        return base64.b64decode(value, validate=True).decode("utf-8").strip()
+    except Exception:
+        return value
+
+
+def _select_directory_with_tkinter(initial_dir: str) -> str:
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    try:
+        directory = filedialog.askdirectory(
+            parent=root,
+            title='选择下载目录',
+            initialdir=initial_dir or os.path.expanduser('~'),
+            mustexist=False,
+        )
+        return str(directory or '').strip()
+    finally:
+        try:
+            root.destroy()
+        except Exception:
+            pass
 
 
 @update_routes_bp.route('/api/get_app_version', methods=['GET'])
@@ -252,6 +285,14 @@ def select_directory():
         initial_dir = _Config.BASE_DIR or os.path.expanduser('~')
 
         if _IS_WINDOWS:
+            try:
+                directory = _select_directory_with_tkinter(str(initial_dir))
+                if directory:
+                    return jsonify({'success': True, 'path': directory})
+                return jsonify({'success': False, 'message': '用户取消选择'})
+            except Exception as error:
+                _logger.warning("tkinter 选择目录失败，回退 PowerShell: %s", error)
+
             initial_dir_ps = str(initial_dir).replace("'", "''")
             script = f'''
             Add-Type -AssemblyName System.Windows.Forms
@@ -261,17 +302,19 @@ def select_directory():
             $dialog.SelectedPath = '{initial_dir_ps}'
             $dialog.ShowNewFolderButton = $true
             if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {{
-                Write-Output $dialog.SelectedPath
+                [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($dialog.SelectedPath))
             }}
             '''
             result = subprocess.run(
                 ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=120,
                 creationflags=0x08000000,
             )
-            directory = result.stdout.strip()
+            directory = _decode_utf8_base64_path(result.stdout)
 
             if directory:
                 return jsonify({'success': True, 'path': directory})
@@ -285,6 +328,8 @@ def select_directory():
                     ['zenity', '--file-selection', '--directory', '--filename', str(initial_dir)],
                     capture_output=True,
                     text=True,
+                    encoding='utf-8',
+                    errors='replace',
                     timeout=120,
                 )
                 if result.returncode == 0 and result.stdout.strip():
@@ -298,6 +343,8 @@ def select_directory():
                     ['kdialog', '--getexistingdirectory', str(initial_dir)],
                     capture_output=True,
                     text=True,
+                    encoding='utf-8',
+                    errors='replace',
                     timeout=120,
                 )
                 if result.returncode == 0 and result.stdout.strip():
@@ -321,6 +368,8 @@ def select_directory():
             ['osascript', '-e', script],
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             timeout=60
         )
 
