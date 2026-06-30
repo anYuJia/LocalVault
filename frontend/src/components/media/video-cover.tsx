@@ -19,6 +19,7 @@ interface VideoCoverProps {
   video: VideoInfo;
   className?: string;
   imageClassName?: string;
+  priority?: boolean;
   showStats?: boolean;
   showDuration?: boolean;
   showPlayOverlay?: boolean;
@@ -29,6 +30,7 @@ export function VideoCover({
   video,
   className,
   imageClassName,
+  priority = false,
   showStats = true,
   showDuration = true,
   showPlayOverlay = true,
@@ -116,7 +118,8 @@ export function VideoCover({
               coverLoaded ? "opacity-100" : "opacity-95",
               imageClassName
             )}
-            loading="eager"
+            loading={priority ? "eager" : "lazy"}
+            fetchPriority={priority ? "high" : "auto"}
             decoding="async"
             onLoad={() => setCoverLoaded(true)}
             onError={() => setCoverFailed(true)}

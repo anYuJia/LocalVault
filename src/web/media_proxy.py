@@ -10,6 +10,7 @@ from collections import OrderedDict
 from typing import Any, Callable
 
 import requests as http_requests
+from requests.adapters import HTTPAdapter
 from flask import Blueprint, Response, request
 
 media_proxy_bp = Blueprint("media_proxy", __name__)
@@ -17,6 +18,13 @@ media_proxy_bp = Blueprint("media_proxy", __name__)
 _MEDIA_PROXY_RANGE_CACHE_MAX_ENTRIES = 96
 _MEDIA_PROXY_RANGE_CACHE_MAX_BYTES = 4 * 1024 * 1024
 _MEDIA_PROXY_RANGE_CACHE: OrderedDict[tuple[str, str, str], tuple[int, dict, bytes]] = OrderedDict()
+_MEDIA_PROXY_IMAGE_CACHE_MAX_ENTRIES = 384
+_MEDIA_PROXY_IMAGE_CACHE_MAX_BYTES = 2 * 1024 * 1024
+_MEDIA_PROXY_IMAGE_CACHE: OrderedDict[str, tuple[int, dict, bytes]] = OrderedDict()
+_MEDIA_PROXY_SESSION = http_requests.Session()
+_MEDIA_PROXY_ADAPTER = HTTPAdapter(pool_connections=64, pool_maxsize=64, max_retries=0)
+_MEDIA_PROXY_SESSION.mount('https://', _MEDIA_PROXY_ADAPTER)
+_MEDIA_PROXY_SESSION.mount('http://', _MEDIA_PROXY_ADAPTER)
 
 # 注入的依赖
 _logger = None
@@ -103,6 +111,25 @@ def _remember_range_cache(key: tuple[str, str, str] | None, status_code: int, he
         _MEDIA_PROXY_RANGE_CACHE.popitem(last=False)
 
 
+def _get_image_cache(key: str | None):
+    if not key:
+        return None
+    cached = _MEDIA_PROXY_IMAGE_CACHE.get(key)
+    if cached is None:
+        return None
+    _MEDIA_PROXY_IMAGE_CACHE.move_to_end(key)
+    return cached
+
+
+def _remember_image_cache(key: str | None, status_code: int, headers: dict, body: bytes) -> None:
+    if not key or status_code != 200 or not body or len(body) > _MEDIA_PROXY_IMAGE_CACHE_MAX_BYTES:
+        return
+    _MEDIA_PROXY_IMAGE_CACHE[key] = (status_code, dict(headers), body)
+    _MEDIA_PROXY_IMAGE_CACHE.move_to_end(key)
+    while len(_MEDIA_PROXY_IMAGE_CACHE) > _MEDIA_PROXY_IMAGE_CACHE_MAX_ENTRIES:
+        _MEDIA_PROXY_IMAGE_CACHE.popitem(last=False)
+
+
 @media_proxy_bp.route('/api/media/proxy')
 def media_proxy():
     """代理抖音媒体资源，限制来源并安全处理重定向。"""
@@ -125,6 +152,14 @@ def media_proxy():
     cache_key = url if '/aweme/v1/play/' in url else None
     upstream_url = _MEDIA_PROXY_REDIRECT_CACHE.get(cache_key, url) if cache_key else url
     upstream_label = _media_url_label(upstream_url)
+    image_cache_key = url if requested_media_type == 'image' and not image_skey else None
+    cached_image = _get_image_cache(image_cache_key)
+    if cached_image is not None:
+        status_code, cached_headers, cached_body = cached_image
+        headers = dict(cached_headers)
+        headers['Access-Control-Allow-Origin'] = origin_value or '*'
+        headers['Cache-Control'] = 'public, max-age=3600'
+        return Response(cached_body, status=status_code, headers=headers)
     range_cache_key = _range_cache_key(url, upstream_url, upstream_range_value, requested_media_type)
     cached_range = _get_range_cache(range_cache_key)
     if cached_range is not None:
@@ -162,7 +197,7 @@ def media_proxy():
                 headers['Range'] = upstream_range_value
 
             try:
-                resp = http_requests.get(
+                resp = _MEDIA_PROXY_SESSION.get(
                     upstream_url,
                     headers=headers,
                     stream=True,
@@ -303,6 +338,20 @@ def media_proxy():
                     upstream_label,
                     decrypt_error,
                 )
+
+        should_cache_image = (
+            image_cache_key is not None
+            and resp.status_code == 200
+            and (int(content_length) if str(content_length or '').isdigit() else _MEDIA_PROXY_IMAGE_CACHE_MAX_BYTES + 1) <= _MEDIA_PROXY_IMAGE_CACHE_MAX_BYTES
+        )
+        if should_cache_image:
+            try:
+                body = resp.content
+                resp.close()
+                _remember_image_cache(image_cache_key, resp.status_code, resp_headers, body)
+                return Response(body, status=resp.status_code, headers=resp_headers)
+            except Exception as cache_error:
+                _logger.debug('[media_proxy] 图片缓存读取失败，将改用流式转发: %s', cache_error)
 
         should_cache_range = (
             range_cache_key is not None

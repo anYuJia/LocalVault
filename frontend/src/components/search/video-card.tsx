@@ -43,10 +43,6 @@ export function VideoCard({
     onSelect?.(video);
   };
 
-  const schedulePrewarm = (delay = 80) => {
-    window.setTimeout(() => prewarmVideoForPlayback(video), delay);
-  };
-
   const stopAndRun = (
     event: ReactMouseEvent,
     action: ((video: VideoInfo) => void) | undefined
@@ -66,15 +62,11 @@ export function VideoCard({
         : {})}
       style={{ breakInside: "avoid" }}
       onClick={handleCardClick}
-      onPointerEnter={(event) => {
-        if (event.pointerType === "touch") return;
-        schedulePrewarm();
-      }}
-      onPointerDown={() => schedulePrewarm(0)}
-      onFocus={() => schedulePrewarm()}
+      onPointerDown={() => prewarmVideoForPlayback(video)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
+          prewarmVideoForPlayback(video);
           handleCardClick();
         }
       }}
@@ -87,7 +79,7 @@ export function VideoCard({
         selected && "border-accent shadow-[var(--shadow-glow)]"
       )}
     >
-      <VideoCover video={video} className={VIDEO_CARD_COVER_CLASS} showPlayOverlay={false} />
+      <VideoCover video={video} className={VIDEO_CARD_COVER_CLASS} priority={index < 8} showPlayOverlay={false} />
 
       {(video.is_liked || video.is_collected) && (
         <div className="pointer-events-none absolute left-2 top-2 z-10 flex gap-1">
