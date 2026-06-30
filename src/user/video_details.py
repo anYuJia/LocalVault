@@ -103,22 +103,27 @@ class VideoDetailsService:
             }
 
             # detail 接口必须带 a_bogus 签名（skip_sign=True 实测必返回空）。
-            resp, succ = await self.api.common_request('/aweme/v1/web/aweme/detail/',
-                                                     params,
-                                                     {}, skip_sign=False)
-            # 对抗偶发空响应/限流：退避后重试一次。
-            if (not succ or not (isinstance(resp, dict) and resp.get('aweme_detail'))) and not (isinstance(resp, dict) and (resp.get('_need_verify') or resp.get('_need_login'))):
-                import asyncio as _asyncio
-                await _asyncio.sleep(0.8)
+            # 偶发空响应/限流时递增退避重试，最多 3 次尝试。
+            import asyncio as _asyncio
+            resp, succ = None, False
+            backoffs = [0, 0.6, 1.2]
+            for attempt, delay in enumerate(backoffs):
+                if delay > 0:
+                    await _asyncio.sleep(delay)
                 resp, succ = await self.api.common_request('/aweme/v1/web/aweme/detail/',
                                                          params,
                                                          {}, skip_sign=False)
+                if isinstance(resp, dict) and (resp.get('_need_verify') or resp.get('_need_login')):
+                    break
+                if succ and isinstance(resp, dict) and resp.get('aweme_detail'):
+                    break
+                logger.warning(f"获取视频详情第{attempt + 1}次失败: succ={succ}, aweme_id={aweme_id}")
 
             if isinstance(resp, dict) and (resp.get('_need_verify') or resp.get('_need_login')):
                 return resp
 
             if not succ or not resp.get('aweme_detail'):
-                logger.warning(f"获取视频详情失败: succ={succ}, aweme_id={aweme_id}")
+                logger.warning(f"获取视频详情最终失败: succ={succ}, aweme_id={aweme_id}")
                 return None
 
             post = resp['aweme_detail']
