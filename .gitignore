@@ -162,6 +162,7 @@ scripts/package-lock.json
 
 # 分析/临时文档
 API_UNIFICATION_REPORT.md
+Better-Douyin-性能分析报告.docx
 COOKIE_SOLUTIONS.md
 RECOMMENDED_VIDEO_OPTIMIZATION.md
 analyze_api.py
