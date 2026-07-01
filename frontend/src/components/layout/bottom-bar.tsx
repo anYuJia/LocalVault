@@ -74,7 +74,7 @@ export function BottomBar() {
         onClick={toggleExpanded}
       >
         <div className="min-w-0 flex-1 text-[0.72rem] font-medium text-text-muted">
-          {hasActiveTasks ? `${activeCount} 个下载任务` : "下载面板"}
+          {hasActiveTasks ? `${activeCount} 个下载任务` : ""}
         </div>
         <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
           <Tabs
