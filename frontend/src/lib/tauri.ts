@@ -262,6 +262,26 @@ export function mediaProxyUrl(url: string | null | undefined, mediaType = "image
   }
 }
 
+export function isBrowserBridgeRuntime() {
+  return shouldUseBrowserBridge();
+}
+
+export async function loadRecentSearchUsersFromBackend<T>(): Promise<T[]> {
+  const result = await requestJson<{ success?: boolean; users?: T[] }>("/api/recent_search_users", {
+    suppressCookieInvalidEvent: true,
+  });
+  return Array.isArray(result.users) ? result.users : [];
+}
+
+export async function saveRecentSearchUsersToBackend<T>(users: T[]): Promise<T[]> {
+  const result = await requestJson<{ success?: boolean; users?: T[] }>("/api/recent_search_users", {
+    method: "POST",
+    body: JSON.stringify({ users }),
+    suppressCookieInvalidEvent: true,
+  });
+  return Array.isArray(result.users) ? result.users : users;
+}
+
 export function localFileAssetUrl(path: string | null | undefined): string {
   const trimmed = (path || "").trim();
   if (!trimmed) return "";

@@ -1,4 +1,10 @@
-import type { UserInfo, VideoInfo } from "@/lib/tauri";
+import {
+  isBrowserBridgeRuntime,
+  loadRecentSearchUsersFromBackend,
+  saveRecentSearchUsersToBackend,
+  type UserInfo,
+  type VideoInfo,
+} from "@/lib/tauri";
 
 const STORAGE_KEY = "dy_recent_searches";
 const USER_STORAGE_KEY = "dy_recent_search_users";
@@ -83,6 +89,41 @@ export function loadRecentSearchUsers(): RecentSearchUser[] {
   }
 }
 
+function cacheRecentSearchUsers(users: RecentSearchUser[]): void {
+  try {
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(users));
+  } catch {
+    // Ignore storage failures
+  }
+}
+
+function persistRecentSearchUsers(users: RecentSearchUser[]): void {
+  if (!isBrowserBridgeRuntime()) return;
+  void saveRecentSearchUsersToBackend<RecentSearchUser>(users).catch(() => {
+    // Local cache remains usable if the backend is unavailable during startup/shutdown.
+  });
+}
+
+export async function loadRecentSearchUsersAsync(): Promise<RecentSearchUser[]> {
+  if (!isBrowserBridgeRuntime()) return loadRecentSearchUsers();
+  const localUsers = loadRecentSearchUsers();
+
+  try {
+    const users = await loadRecentSearchUsersFromBackend<RecentSearchUser>();
+    if (users.length > 0) {
+      cacheRecentSearchUsers(users);
+      return loadRecentSearchUsers();
+    }
+    if (localUsers.length > 0) {
+      persistRecentSearchUsers(localUsers);
+    }
+  } catch {
+    // Fall back to localStorage for browser dev mode or transient backend errors.
+  }
+
+  return localUsers;
+}
+
 export function saveRecentSearchUser(user: UserInfo): RecentSearchUser[] {
   const key = userHistoryKey(user);
   if (!key) return loadRecentSearchUsers();
@@ -101,6 +142,7 @@ export function saveRecentSearchUser(user: UserInfo): RecentSearchUser[] {
   } catch {
     // Ignore storage failures
   }
+  persistRecentSearchUsers(updated);
 
   return updated;
 }
@@ -112,6 +154,7 @@ export function removeRecentSearchUser(key: string): RecentSearchUser[] {
   } catch {
     // Ignore storage failures
   }
+  persistRecentSearchUsers(updated);
   return updated;
 }
 
@@ -121,6 +164,7 @@ export function clearRecentSearchUsers(): void {
   } catch {
     // Ignore storage failures
   }
+  persistRecentSearchUsers([]);
 }
 
 export function saveRecentSearch(text: string): RecentSearch[] {

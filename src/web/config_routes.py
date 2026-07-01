@@ -29,6 +29,8 @@ _get_current_app_version: Callable[[], str] | None = None
 _init_app: Callable[[], None] | None = None
 _move_directory_contents: Callable[[Path, Path], int] | None = None
 
+_MAX_RECENT_SEARCH_USERS = 200
+
 
 def setup_config_routes(
     *,
@@ -62,6 +64,72 @@ def _friend_chat_state_path() -> Path:
     if current_uid:
         return Path(_Config.CONFIG_FILE).with_name(f'friend_chat_state_{current_uid}.json')
     return Path(_Config.CONFIG_FILE).with_name('friend_chat_state.json')
+
+
+def _recent_search_users_path() -> Path:
+    return Path(_Config.USER_DATA_DIR) / 'recent_search_users.json'
+
+
+def _sanitize_recent_search_user(value):
+    if not isinstance(value, dict):
+        return None
+    user = value.get('user')
+    if not isinstance(user, dict):
+        return None
+    key = str(value.get('key') or user.get('sec_uid') or user.get('uid') or user.get('unique_id') or user.get('nickname') or '').strip()
+    if not key:
+        return None
+    try:
+        last_searched_at = int(float(value.get('lastSearchedAt') or 0))
+    except Exception:
+        last_searched_at = 0
+    if last_searched_at <= 0:
+        return None
+
+    def text(name, limit=500):
+        return str(user.get(name) or '').strip()[:limit]
+
+    def number(name):
+        try:
+            return max(0, int(float(user.get(name) or 0)))
+        except Exception:
+            return 0
+
+    return {
+        'key': key[:240],
+        'user': {
+            'uid': text('uid', 120),
+            'sec_uid': text('sec_uid', 240),
+            'nickname': text('nickname', 120),
+            'avatar_thumb': text('avatar_thumb', 1000),
+            'avatar_medium': text('avatar_medium', 1000),
+            'avatar_larger': text('avatar_larger', 1000),
+            'signature': text('signature', 1000),
+            'unique_id': text('unique_id', 120),
+            'follower_count': number('follower_count'),
+            'following_count': number('following_count'),
+            'total_favorited': number('total_favorited'),
+            'aweme_count': number('aweme_count'),
+            'favoriting_count': number('favoriting_count'),
+            'is_follow': bool(user.get('is_follow')),
+            'follow_status': number('follow_status'),
+            'verify_status': number('verify_status'),
+        },
+        'lastSearchedAt': last_searched_at,
+    }
+
+
+def _sanitize_recent_search_users(value):
+    raw_items = value if isinstance(value, list) else []
+    items = []
+    seen = set()
+    for raw_item in raw_items:
+        item = _sanitize_recent_search_user(raw_item)
+        if not item or item['key'] in seen:
+            continue
+        seen.add(item['key'])
+        items.append(item)
+    return sorted(items, key=lambda item: item['lastSearchedAt'], reverse=True)[:_MAX_RECENT_SEARCH_USERS]
 
 
 def _sanitize_friend_chat_message(value):
@@ -221,6 +289,38 @@ def save_friend_chat_state():
     except Exception as error:
         _logger.warning('保存好友聊天状态失败: %s', error)
         return jsonify({'success': False, 'message': f'保存好友聊天状态失败: {str(error)}'}), 500
+
+
+@config_bp.route('/api/recent_search_users', methods=['GET'])
+def get_recent_search_users():
+    try:
+        history_path = _recent_search_users_path()
+        if not history_path.exists():
+            return jsonify({'success': True, 'users': []})
+        with open(history_path, 'r', encoding='utf-8') as history_file:
+            users = _sanitize_recent_search_users(json.load(history_file))
+        return jsonify({'success': True, 'users': users})
+    except Exception as error:
+        _logger.warning('读取搜索用户历史失败: %s', error)
+        return jsonify({'success': True, 'users': []})
+
+
+@config_bp.route('/api/recent_search_users', methods=['POST'])
+def save_recent_search_users():
+    try:
+        data = _request_json()
+        users = _sanitize_recent_search_users(data.get('users') if isinstance(data, dict) else [])
+        history_path = _recent_search_users_path()
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = history_path.with_suffix(f'{history_path.suffix}.tmp')
+        with open(temp_path, 'w', encoding='utf-8') as history_file:
+            json.dump(users, history_file, ensure_ascii=False, indent=2)
+            history_file.write('\n')
+        os.replace(temp_path, history_path)
+        return jsonify({'success': True, 'users': users})
+    except Exception as error:
+        _logger.warning('保存搜索用户历史失败: %s', error)
+        return jsonify({'success': False, 'message': f'保存搜索用户历史失败: {str(error)}'}), 500
 
 
 @config_bp.route('/api/config', methods=['POST'])

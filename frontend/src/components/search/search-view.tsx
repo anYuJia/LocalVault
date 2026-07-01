@@ -11,6 +11,7 @@ import {
   clearRecentSearchUsers,
   loadRecentSearches,
   loadRecentSearchUsers,
+  loadRecentSearchUsersAsync,
   removeRecentSearchUser,
   saveRecentSearch,
   type RecentSearch,
@@ -59,8 +60,15 @@ export function SearchView() {
     setRecentKeywords(loadRecentSearches());
   };
 
+  const syncHistoryAsync = async () => {
+    const users = await loadRecentSearchUsersAsync();
+    setHistory(users);
+    setRecentKeywords(loadRecentSearches());
+  };
+
   useEffect(() => {
     syncHistory();
+    void syncHistoryAsync();
   }, []);
 
   useEffect(() => {
@@ -75,6 +83,7 @@ export function SearchView() {
     setRecentKeywords(saveRecentSearch(keyword));
     await search(keyword);
     syncHistory();
+    void syncHistoryAsync();
   };
 
   const handleResumeVerifySearch = async () => {
@@ -83,11 +92,13 @@ export function SearchView() {
     setRecentKeywords(saveRecentSearch(pendingVerifySearch.keyword));
     await resumeVerifySearch();
     syncHistory();
+    void syncHistoryAsync();
   };
 
   const handleOpenUser = async (user: UserInfo) => {
     await openUser(user);
     syncHistory();
+    void syncHistoryAsync();
   };
 
   const handleRemoveHistory = (key: string) => {
