@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config.config import Config
 from src.downloader.downloader import build_download_title
+from src.downloader.filename_builder import sanitize_template_component
 
 
 def check_download_title_can_omit_aweme_id_suffix():
@@ -66,6 +67,21 @@ def check_download_title_keeps_legacy_positional_template_argument():
     assert title == f"旧调用_{aweme_id}"
 
 
+def check_download_title_replaces_filesystem_rejected_unicode():
+    title = build_download_title(
+        "云南公主的下午茶\U0001faef\U0001faef#蓬莱",
+        "7380011223344556677",
+        template="{title}",
+    )
+
+    assert "\U0001faef" not in title
+    assert title == "云南公主的下午茶_#蓬莱"
+
+
+def check_sanitize_component_replaces_private_use_characters():
+    assert sanitize_template_component("作者\ue000名字", "未知作者") == "作者_名字"
+
+
 if __name__ == "__main__":
     check_download_title_can_omit_aweme_id_suffix()
     check_long_download_title_preserves_aweme_id_suffix_when_requested()
@@ -73,3 +89,5 @@ if __name__ == "__main__":
     check_download_title_uses_work_create_time_for_date_tokens()
     check_download_title_leaves_date_tokens_empty_without_create_time()
     check_download_title_keeps_legacy_positional_template_argument()
+    check_download_title_replaces_filesystem_rejected_unicode()
+    check_sanitize_component_replaces_private_use_characters()

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import time
+import unicodedata
 from typing import Optional
 
 from src.config.config import Config
@@ -92,8 +93,25 @@ def neutralize_path_separators(value: str) -> str:
     return re.sub(r'[\\/]+', '_', str(value or ''))
 
 
+def replace_filesystem_unsafe_unicode(value: str) -> str:
+    """Replace Unicode code points that common filesystems may reject."""
+    output = []
+    previous_was_placeholder = False
+    for char in str(value or ''):
+        category = unicodedata.category(char)
+        if category.startswith('C'):
+            if not previous_was_placeholder:
+                output.append('_')
+                previous_was_placeholder = True
+            continue
+        output.append(char)
+        previous_was_placeholder = False
+    return ''.join(output)
+
+
 def sanitize_template_component(value: str, default: str) -> str:
-    sanitized = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', str(value or ''))
+    sanitized = replace_filesystem_unsafe_unicode(value)
+    sanitized = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', sanitized)
     sanitized = ' '.join(sanitized.split()).strip(' ._')
     return sanitized if sanitized not in ('', '.', '..') else default
 
@@ -125,7 +143,7 @@ def build_download_title(
         {**fields, 'title': normalized_desc or default_prefix},
         '{title}',
     )
-    base = neutralize_path_separators(base)
+    base = replace_filesystem_unsafe_unicode(neutralize_path_separators(base))
     base = ' '.join(base.split()).strip(' ._') or fallback
     protected_suffix = ''
     if normalized_aweme_id and '{aweme_id}' in str(template_text or ''):
