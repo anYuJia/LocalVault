@@ -13,6 +13,7 @@ export interface AppConfig {
   folder_name_template: string;
   save_metadata: boolean;
   proxy: string | null;
+  ssl_verify?: boolean;
   cookie: string;
   im_friend_sec_user_ids?: string[];
   im_friend_include_all_users?: boolean;

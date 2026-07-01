@@ -4,6 +4,10 @@ import getpass
 import sys
 import platform
 
+from src.utils.ssl_utils import apply_default_ca_env, parse_ssl_verify
+
+apply_default_ca_env()
+
 # 判断是否被 PyInstaller 打包
 IS_FROZEN = getattr(sys, 'frozen', False)
 if IS_FROZEN:
@@ -96,6 +100,7 @@ class Config:
     }
     MAX_CONCURRENT = 3
     PROXY = ""
+    SSL_VERIFY = True
     
     # 请求参数
     HOST = 'https://www.douyin.com'
@@ -206,6 +211,7 @@ class Config:
                     cls.CURRENT_SEC_UID = config_data.get("current_sec_uid", "")
                     cls.BASE_DIR = config_data.get("base_dir", cls.BASE_DIR)
                     cls.PROXY = cls.normalize_proxy(config_data.get("proxy", cls.PROXY))
+                    cls.SSL_VERIFY = parse_ssl_verify(config_data.get("ssl_verify"), cls.SSL_VERIFY)
                     cls.DOWNLOAD_DIR = cls.BASE_DIR
                     cls.HISTORY_DIRS = cls.normalize_history_dirs(config_data.get("history_dirs", []))
                     cls.DOWNLOAD_QUALITY = cls.normalize_download_quality(
@@ -306,6 +312,7 @@ class Config:
         env_quality = os.environ.get("DOUYIN_DOWNLOAD_QUALITY")
         env_max_concurrent = os.environ.get("DOUYIN_MAX_CONCURRENT")
         env_proxy = os.environ.get("DOUYIN_PROXY")
+        env_ssl_verify = os.environ.get("DOUYIN_SSL_VERIFY")
         env_relation_signer = os.environ.get("DOUYIN_RELATION_SIGNER")
 
         if env_cookie is not None:
@@ -322,6 +329,8 @@ class Config:
                 pass
         if env_proxy is not None:
             cls.PROXY = cls.normalize_proxy(env_proxy)
+        if env_ssl_verify is not None:
+            cls.SSL_VERIFY = parse_ssl_verify(env_ssl_verify, cls.SSL_VERIFY)
         if env_relation_signer:
             try:
                 signer = json.loads(env_relation_signer)
@@ -418,6 +427,7 @@ class Config:
         im_friend_include_all_users=None,
         im_friend_refresh_interval_seconds=None,
         proxy=None,
+        ssl_verify=None,
         download_live_photo_video=None,
         download_live_photo_image=None,
     ):
@@ -449,6 +459,7 @@ class Config:
         if not resolved_live_photo_video and not resolved_live_photo_image:
             resolved_live_photo_video = True
         resolved_proxy = cls.normalize_proxy(proxy if proxy is not None else cls.PROXY)
+        resolved_ssl_verify = parse_ssl_verify(ssl_verify, cls.SSL_VERIFY)
         resolved_accounts = accounts if accounts is not None else cls.ACCOUNTS
         resolved_current_sec_uid = current_sec_uid if current_sec_uid is not None else cls.CURRENT_SEC_UID
         resolved_im_friend_sec_user_ids = cls.normalize_sec_user_ids(
@@ -488,6 +499,7 @@ class Config:
             "download_live_photo_video": resolved_live_photo_video,
             "download_live_photo_image": resolved_live_photo_image,
             "proxy": resolved_proxy,
+            "ssl_verify": resolved_ssl_verify,
             "accounts": resolved_accounts,
             "current_sec_uid": resolved_current_sec_uid,
             "im_friend_sec_user_ids": resolved_im_friend_sec_user_ids,

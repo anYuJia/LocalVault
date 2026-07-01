@@ -9,6 +9,7 @@ import requests.adapters
 import urllib3.util.retry
 
 from src.api import sign as douyin_sign
+from src.utils.ssl_utils import requests_verify_value
 
 _retry = urllib3.util.retry.Retry(total=3, backoff_factor=0.5, status_forcelist=[502, 503, 504])
 _thread_local = threading.local()
@@ -30,6 +31,7 @@ def sign_spider_a_bogus(query: str, data: str) -> str:
 
 def create_api_session():
     session = requests.Session()
+    session.verify = requests_verify_value()
     session.mount('https://', requests.adapters.HTTPAdapter(max_retries=_retry))
     return session
 
@@ -39,6 +41,8 @@ def get_api_session():
     if session is None:
         session = create_api_session()
         _thread_local.api_session = session
+    else:
+        session.verify = requests_verify_value()
     return session
 
 

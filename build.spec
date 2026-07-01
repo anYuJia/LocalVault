@@ -93,7 +93,8 @@ if sys.platform == 'win32':
         print("[build.spec] Warning: pythonnet not installed")
 
 # 收集 src 包的所有子模块（PyInstaller 无法自动分析 gevent 条件导入的模块）
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+datas.extend(collect_data_files('certifi'))
 src_submodules = collect_submodules('src')
 hiddenimports.extend(src_submodules)
 

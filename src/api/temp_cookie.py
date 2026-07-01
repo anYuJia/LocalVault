@@ -5,6 +5,7 @@ import asyncio
 import platform
 
 import requests
+from src.utils.ssl_utils import requests_verify_value
 
 
 async def get_temp_cookie(common_headers: dict, debug_mode: bool = False) -> dict:
@@ -51,6 +52,7 @@ async def get_temp_cookie_http(common_headers: dict, debug_mode: bool = False) -
         }
 
         session = requests.Session()
+        session.verify = requests_verify_value()
         response = await asyncio.to_thread(
             session.get,
             'https://www.douyin.com/',

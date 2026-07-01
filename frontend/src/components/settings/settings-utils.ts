@@ -12,7 +12,8 @@ export type SettingsField =
   | "max_concurrent"
   | "filename_template"
   | "folder_name_template"
-  | "auto_create_folder";
+  | "auto_create_folder"
+  | "ssl_verify";
 
 export type SavingFields = Partial<Record<SettingsField, boolean>>;
 

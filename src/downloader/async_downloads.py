@@ -12,6 +12,7 @@ import aiohttp
 from src.config.config import Config
 from src.downloader.downloader import _is_dash_video_only_url
 from src.utils.download_history_index import remove_download_history_entries, upsert_download_history_entries
+from src.utils.ssl_utils import aiohttp_ssl_context
 
 
 def _response_size(headers) -> int:
@@ -86,7 +87,8 @@ async def download_video_async(
     response = None
     filepath = ''
     try:
-        async with aiohttp.ClientSession(auto_decompress=False) as session:
+        connector = aiohttp.TCPConnector(ssl=aiohttp_ssl_context())
+        async with aiohttp.ClientSession(auto_decompress=False, connector=connector) as session:
             response, selected_url = await _open_response(session, candidate_urls, headers)
             response_size = _response_size(response.headers)
             file_started_at = time.monotonic()
@@ -225,7 +227,8 @@ async def download_media_group_async(
     downloaded_files: list[str] = []
 
     try:
-        async with aiohttp.ClientSession(auto_decompress=False) as session:
+        connector = aiohttp.TCPConnector(ssl=aiohttp_ssl_context())
+        async with aiohttp.ClientSession(auto_decompress=False, connector=connector) as session:
             for index, url_info in enumerate(urls):
                 await _wait_if_paused(pause_event, cancel_event)
                 if _cancelled(cancel_event):

@@ -20,6 +20,7 @@ from src.utils.download_history_index import (
     remove_download_history_entries,
     upsert_download_history_entries,
 )
+from src.utils.ssl_utils import requests_verify_value
 
 # 带重试的 requests session。Session 本身不跨线程共享，避免批量下载并发时互相污染连接状态。
 _retry = Retry(total=3, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504])
@@ -28,6 +29,7 @@ _thread_local = threading.local()
 
 def _create_session():
     session = requests.Session()
+    session.verify = requests_verify_value()
     pool_size = max(10, int(getattr(Config, 'MAX_CONCURRENT', 3) or 3) * 4)
     adapter = HTTPAdapter(max_retries=_retry, pool_connections=pool_size, pool_maxsize=pool_size)
     session.mount('https://', adapter)
@@ -40,6 +42,8 @@ def _get_session():
     if session is None:
         session = _create_session()
         _thread_local.session = session
+    else:
+        session.verify = requests_verify_value()
     return session
 
 

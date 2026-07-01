@@ -179,6 +179,7 @@ def get_config():
         'download_live_photo_image': getattr(_Config, 'DOWNLOAD_LIVE_PHOTO_IMAGE', True),
         'max_concurrent': getattr(_Config, 'MAX_CONCURRENT', 3),
         'proxy': getattr(_Config, 'PROXY', '') or None,
+        'ssl_verify': getattr(_Config, 'SSL_VERIFY', True),
         'filename_template': getattr(_Config, 'FILENAME_TEMPLATE', '{title}'),
         'folder_name_template': getattr(_Config, 'FOLDER_NAME_TEMPLATE', '{author}'),
         'auto_create_folder': getattr(_Config, 'AUTO_CREATE_FOLDER', True),
@@ -247,6 +248,10 @@ def set_config():
             _Config.MAX_CONCURRENT = _coerce_int(data.get('max_concurrent'), 3, 1, 10)
         if 'proxy' in data:
             _Config.PROXY = _Config.normalize_proxy(data.get('proxy'))
+        if 'ssl_verify' in data:
+            from src.utils.ssl_utils import parse_ssl_verify
+
+            _Config.SSL_VERIFY = parse_ssl_verify(data.get('ssl_verify'), True)
         if 'filename_template' in data:
             _Config.FILENAME_TEMPLATE = _Config.normalize_filename_template(
                 data.get('filename_template'),
@@ -305,6 +310,7 @@ def set_config():
             download_live_photo_image=_Config.DOWNLOAD_LIVE_PHOTO_IMAGE,
             max_concurrent=_Config.MAX_CONCURRENT,
             proxy=_Config.PROXY,
+            ssl_verify=_Config.SSL_VERIFY,
             filename_template=_Config.FILENAME_TEMPLATE,
             folder_name_template=_Config.FOLDER_NAME_TEMPLATE,
             auto_create_folder=_Config.AUTO_CREATE_FOLDER,
@@ -334,6 +340,7 @@ def set_config():
             'download_live_photo_image': _Config.DOWNLOAD_LIVE_PHOTO_IMAGE,
             'max_concurrent': _Config.MAX_CONCURRENT,
             'proxy': _Config.PROXY or None,
+            'ssl_verify': _Config.SSL_VERIFY,
             'filename_template': _Config.FILENAME_TEMPLATE,
             'folder_name_template': _Config.FOLDER_NAME_TEMPLATE,
             'auto_create_folder': _Config.AUTO_CREATE_FOLDER,

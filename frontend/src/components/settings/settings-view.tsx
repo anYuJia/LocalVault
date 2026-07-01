@@ -94,6 +94,7 @@ export function SettingsView() {
   const [filenameTemplate, setFilenameTemplate] = useState("{title}_{aweme_id}");
   const [folderNameTemplate, setFolderNameTemplate] = useState("{author}");
   const [autoCreateFolder, setAutoCreateFolder] = useState(true);
+  const [sslVerify, setSslVerify] = useState(true);
   const [updateProxy, setUpdateProxy] = useState("");
   const [savingProxy, setSavingProxy] = useState(false);
   const [choosingDirectory, setChoosingDirectory] = useState(false);
@@ -110,6 +111,7 @@ export function SettingsView() {
     filenameTemplate: "{title}_{aweme_id}",
     folderNameTemplate: "{author}",
     autoCreateFolder: true,
+    sslVerify: true,
     updateProxy: "",
     theme,
   });
@@ -156,6 +158,7 @@ export function SettingsView() {
         const nextFilenameTemplate = config.filename_template || "{title}_{aweme_id}";
         const nextFolderNameTemplate = config.folder_name_template || "{author}";
         const nextAutoCreateFolder = config.auto_create_folder ?? true;
+        const nextSslVerify = config.ssl_verify ?? true;
         const nextUpdateProxy = config.proxy || "";
         setDownloadPath(nextDownloadPath);
         setDownloadQuality(nextDownloadQuality);
@@ -165,6 +168,7 @@ export function SettingsView() {
         setFilenameTemplate(nextFilenameTemplate);
         setFolderNameTemplate(nextFolderNameTemplate);
         setAutoCreateFolder(nextAutoCreateFolder);
+        setSslVerify(nextSslVerify);
         setUpdateProxy(nextUpdateProxy);
         savedSettingsRef.current = {
           ...savedSettingsRef.current,
@@ -176,6 +180,7 @@ export function SettingsView() {
           filenameTemplate: nextFilenameTemplate,
           folderNameTemplate: nextFolderNameTemplate,
           autoCreateFolder: nextAutoCreateFolder,
+          sslVerify: nextSslVerify,
           updateProxy: nextUpdateProxy,
         };
         if (config.cookie_set) {
@@ -603,6 +608,24 @@ export function SettingsView() {
     }
   };
 
+  const handleSslVerifyChange = async (value: boolean) => {
+    const previousValue = savedSettingsRef.current.sslVerify;
+    setSslVerify(value);
+    if (value === previousValue || savingFields.ssl_verify) return;
+
+    const saved = await saveSetting(
+      "ssl_verify",
+      { ssl_verify: value },
+      value ? "SSL 证书校验已开启" : "SSL 证书校验已关闭",
+      value ? "SSL 证书校验已开启" : "SSL 证书校验已关闭"
+    );
+    if (saved) {
+      savedSettingsRef.current.sslVerify = value;
+    } else {
+      setSslVerify(previousValue);
+    }
+  };
+
   const handleSaveUpdateProxy = async (proxy: string | null) => {
     const nextProxy = (proxy || "").trim();
     const previousProxy = savedSettingsRef.current.updateProxy;
@@ -833,7 +856,7 @@ export function SettingsView() {
               )}
 
               {activeTab === "download" && (
-                <SettingsDownloadTab downloadPath={downloadPath} setDownloadPath={setDownloadPath} downloadQuality={downloadQuality} downloadLivePhotoVideo={downloadLivePhotoVideo} downloadLivePhotoImage={downloadLivePhotoImage} maxConcurrent={maxConcurrent} filenameTemplate={filenameTemplate} setFilenameTemplate={setFilenameTemplate} folderNameTemplate={folderNameTemplate} setFolderNameTemplate={setFolderNameTemplate} autoCreateFolder={autoCreateFolder} choosingDirectory={choosingDirectory} savingFields={savingFields} fieldStatus={fieldStatus} handleChooseDirectory={handleChooseDirectory} handleQualityChange={handleQualityChange} handleLivePhotoContentChange={handleLivePhotoContentChange} handleMaxConcurrentChange={handleMaxConcurrentChange} handleAutoCreateFolderChange={handleAutoCreateFolderChange} saveFilenameTemplate={saveFilenameTemplate} saveFolderNameTemplate={saveFolderNameTemplate} appendFilenameToken={appendFilenameToken} appendFolderToken={appendFolderToken} />
+                <SettingsDownloadTab downloadPath={downloadPath} setDownloadPath={setDownloadPath} downloadQuality={downloadQuality} downloadLivePhotoVideo={downloadLivePhotoVideo} downloadLivePhotoImage={downloadLivePhotoImage} maxConcurrent={maxConcurrent} filenameTemplate={filenameTemplate} setFilenameTemplate={setFilenameTemplate} folderNameTemplate={folderNameTemplate} setFolderNameTemplate={setFolderNameTemplate} autoCreateFolder={autoCreateFolder} sslVerify={sslVerify} choosingDirectory={choosingDirectory} savingFields={savingFields} fieldStatus={fieldStatus} handleChooseDirectory={handleChooseDirectory} handleQualityChange={handleQualityChange} handleLivePhotoContentChange={handleLivePhotoContentChange} handleMaxConcurrentChange={handleMaxConcurrentChange} handleAutoCreateFolderChange={handleAutoCreateFolderChange} handleSslVerifyChange={handleSslVerifyChange} saveFilenameTemplate={saveFilenameTemplate} saveFolderNameTemplate={saveFolderNameTemplate} appendFilenameToken={appendFilenameToken} appendFolderToken={appendFolderToken} />
               )}
 
               {activeTab === "preferences" && (

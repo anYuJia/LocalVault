@@ -12,6 +12,7 @@ from typing import Any, Callable
 import requests as http_requests
 from requests.adapters import HTTPAdapter
 from flask import Blueprint, Response, request
+from src.utils.ssl_utils import requests_verify_value
 
 media_proxy_bp = Blueprint("media_proxy", __name__)
 
@@ -22,6 +23,7 @@ _MEDIA_PROXY_IMAGE_CACHE_MAX_ENTRIES = 384
 _MEDIA_PROXY_IMAGE_CACHE_MAX_BYTES = 2 * 1024 * 1024
 _MEDIA_PROXY_IMAGE_CACHE: OrderedDict[str, tuple[int, dict, bytes]] = OrderedDict()
 _MEDIA_PROXY_SESSION = http_requests.Session()
+_MEDIA_PROXY_SESSION.verify = requests_verify_value()
 _MEDIA_PROXY_ADAPTER = HTTPAdapter(pool_connections=64, pool_maxsize=64, max_retries=0)
 _MEDIA_PROXY_SESSION.mount('https://', _MEDIA_PROXY_ADAPTER)
 _MEDIA_PROXY_SESSION.mount('http://', _MEDIA_PROXY_ADAPTER)
@@ -197,6 +199,7 @@ def media_proxy():
                 headers['Range'] = upstream_range_value
 
             try:
+                _MEDIA_PROXY_SESSION.verify = requests_verify_value()
                 resp = _MEDIA_PROXY_SESSION.get(
                     upstream_url,
                     headers=headers,
@@ -455,6 +458,7 @@ def download_music():
                 stream=True,
                 timeout=(10, 120),
                 allow_redirects=False,
+                verify=requests_verify_value(),
             )
 
             if 300 <= resp.status_code < 400:
