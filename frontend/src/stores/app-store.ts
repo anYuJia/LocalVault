@@ -252,7 +252,7 @@ const createEmptyTask = (id: string): DownloadTask => ({
 
 const countActiveTasks = (tasks: Record<string, DownloadTask>) =>
   Object.values(tasks).filter(
-    (t) => t.status === "downloading" || t.status === "pending"
+    (t) => t.status === "downloading" || t.status === "pending" || t.status === "paused"
   ).length;
 
 const deriveTaskProgress = (task: DownloadTask, patch: Partial<DownloadTask>) => {
@@ -265,6 +265,35 @@ const deriveTaskProgress = (task: DownloadTask, patch: Partial<DownloadTask>) =>
   return Math.max(0, Math.min(100, (task.fileIndex / task.fileTotal) * 100));
 };
 
+const preservePausedProgressSnapshot = (
+  existing: DownloadTask,
+  patch: Partial<DownloadTask>,
+  merged: DownloadTask
+) => {
+  if (patch.status !== "paused") return merged;
+
+  const restored = { ...merged };
+  if ((patch.progress === undefined || patch.progress === 0) && existing.progress > 0) {
+    restored.progress = existing.progress;
+  }
+  if ((patch.fileProgress === undefined || patch.fileProgress === 0) && (existing.fileProgress ?? 0) > 0) {
+    restored.fileProgress = existing.fileProgress;
+  }
+  if ((patch.fileIndex === undefined || patch.fileIndex === 0) && (existing.fileIndex ?? 0) > 0) {
+    restored.fileIndex = existing.fileIndex;
+  }
+  if ((patch.completedCount === undefined || patch.completedCount === 0) && (existing.completedCount ?? 0) > 0) {
+    restored.completedCount = existing.completedCount;
+  }
+  if ((patch.downloadedBytes === undefined || patch.downloadedBytes === 0) && (existing.downloadedBytes ?? 0) > 0) {
+    restored.downloadedBytes = existing.downloadedBytes;
+  }
+  if ((patch.totalBytes === undefined || patch.totalBytes === 0) && (existing.totalBytes ?? 0) > 0) {
+    restored.totalBytes = existing.totalBytes;
+  }
+  return restored;
+};
+
 export const useDownloadStore = create<DownloadStore>((set) => ({
   tasks: {},
   activeCount: 0,
@@ -274,7 +303,7 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
       const definedPatch = Object.fromEntries(
         Object.entries(task).filter(([, value]) => value !== undefined && value !== "")
       ) as Partial<DownloadTask> & { id: string };
-      const merged = { ...existing, ...definedPatch };
+      const merged = preservePausedProgressSnapshot(existing, definedPatch, { ...existing, ...definedPatch });
       const updated = { ...merged, progress: deriveTaskProgress(merged, definedPatch) };
       const newTasks = { ...s.tasks, [task.id]: updated };
       return { tasks: newTasks, activeCount: countActiveTasks(newTasks) };
