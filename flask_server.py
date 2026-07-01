@@ -9,12 +9,14 @@ import sys
 import os
 
 
-def run_flask_process(port: int, project_root: str, exit_event=None, gui_queue=None) -> None:
+def run_flask_process(port: int, project_root: str, exit_event=None, gui_queue=None, startup_token: str = "") -> None:
     """子进程入口函数。"""
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
     os.chdir(project_root)
     os.environ['USE_PYWEBVIEW'] = '1'
+    if startup_token:
+        os.environ['BETTER_DOUYIN_STARTUP_TOKEN'] = startup_token
 
     if sys.platform == 'win32':
         import asyncio

@@ -10,7 +10,7 @@ if not IS_WINDOWS and not (IS_MACOS and os.environ.get('USE_PYWEBVIEW') == '1') 
     from gevent import monkey
     monkey.patch_all()
 
-from flask import Flask
+from flask import Flask, jsonify, request
 from flask_socketio import SocketIO
 import asyncio
 import sys
@@ -122,6 +122,7 @@ from src.web.response_helpers import (
 )
 from src.web.static_routes import get_react_dist_dir, setup_static_routes, static_assets_bp
 from src.web.socket_events import register_socket_events
+from src.web.port_utils import find_available_port
 from src.utils.download_history_index import get_download_history_items
 from src.user.user_manager import DouyinUserManager
 
@@ -542,7 +543,20 @@ def send_heartbeat():
     """定时发送心跳消息"""
     logger.debug("发送WebSocket心跳消息")
     socketio.emit('heartbeat', {'timestamp': datetime.now().strftime('%H:%M:%S')})
-    
+
+
+@app.route('/api/health')
+def health_check():
+    startup_token = os.environ.get('BETTER_DOUYIN_STARTUP_TOKEN', '')
+    request_token = request.args.get('token', '')
+    if startup_token and request_token != startup_token:
+        return jsonify({'success': False, 'message': 'token mismatch'}), 403
+    return jsonify({
+        'success': True,
+        'app': 'better-douyin',
+        'token': startup_token,
+        'timestamp': datetime.now().isoformat(),
+    })
 
 
 def start_server(port=None):
@@ -552,9 +566,9 @@ def start_server(port=None):
     logger.info("启动抖音下载器Web服务...")
     logger.info(f"SocketIO async_mode: {socketio.async_mode}")
 
-    if port is None:
-        port = int(os.environ.get('PORT', 5001))
     host = (os.environ.get('HOST') or '127.0.0.1').strip() or '127.0.0.1'
+    if port is None:
+        port = find_available_port(host=host)
 
     # 初始化应用
     init_app()
@@ -581,7 +595,8 @@ def main():
     import threading
     import time
 
-    port = int(os.environ.get('PORT', 5001))
+    host = (os.environ.get('HOST') or '127.0.0.1').strip() or '127.0.0.1'
+    port = find_available_port(host=host)
     url = f"http://localhost:{port}"
 
     # 在后台线程启动服务

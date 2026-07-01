@@ -17,10 +17,11 @@ if __name__ == '__main__':
     # ==========================================
     # 常规主进程启动逻辑 (pywebview 原生窗口)
     # ==========================================
-    import socket
     import threading
     import time
+    import uuid
     import webbrowser
+    from src.web.port_utils import find_available_port
 
     # macOS 上跳过 gevent patch，避免与 Cocoa 运行循环冲突
     os.environ['USE_PYWEBVIEW'] = '1'
@@ -31,28 +32,80 @@ if __name__ == '__main__':
     if IS_WINDOWS:
         from flask_server import run_flask_process
 
-    def find_free_port(start=5001, end=5010):
-        """查找可用端口"""
-        for port in range(start, end + 1):
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.bind(('127.0.0.1', port))
-                return port
-            except OSError:
-                continue
-        return start  # fallback
-
-    def wait_for_server(port, timeout=30):
+    def wait_for_server(port, startup_token, timeout=30, failed=None):
         """等待Flask服务就绪"""
         start_time = time.time()
         while time.time() - start_time < timeout:
+            if failed and failed():
+                return False
             try:
+                import json
                 import urllib.request
-                urllib.request.urlopen('http://127.0.0.1:{}/'.format(port), timeout=1)
-                return True
+                url = 'http://127.0.0.1:{}/api/health?token={}'.format(port, startup_token)
+                with urllib.request.urlopen(url, timeout=1) as response:
+                    payload = json.loads(response.read().decode('utf-8'))
+                if payload.get('app') == 'better-douyin' and payload.get('token') == startup_token:
+                    return True
             except Exception:
                 time.sleep(0.3)
         return False
+
+    def _start_backend(candidate_port, startup_token):
+        os.environ['BETTER_DOUYIN_STARTUP_TOKEN'] = startup_token
+        if IS_WINDOWS:
+            import multiprocessing
+            project_root = os.path.dirname(os.path.abspath(__file__))
+            exit_event = multiprocessing.Event()
+            queue = multiprocessing.Queue()
+            proc = multiprocessing.Process(
+                target=run_flask_process,
+                args=(candidate_port, project_root, exit_event, queue, startup_token),
+                daemon=True,
+            )
+            proc.start()
+            return {
+                'type': 'process',
+                'process': proc,
+                'exit_event': exit_event,
+                'gui_queue': queue,
+                'failed': lambda: proc.exitcode is not None,
+            }
+
+        from src.web.web_app import start_server as _flask_start_server
+        thread = threading.Thread(
+            target=_flask_start_server, kwargs={'port': candidate_port}, daemon=True
+        )
+        thread.start()
+        return {
+            'type': 'thread',
+            'thread': thread,
+            'failed': lambda: not thread.is_alive(),
+        }
+
+    def _stop_backend(handle):
+        if not handle or handle.get('type') != 'process':
+            return
+        proc = handle.get('process')
+        if proc is not None and proc.is_alive():
+            proc.terminate()
+            proc.join(timeout=2)
+
+    def start_backend_with_retry(max_attempts=20):
+        """启动后端。端口在探测后仍可能被抢占，所以失败时继续换端口重试。"""
+        failed_ports = set()
+        last_handle = None
+        for _ in range(max_attempts):
+            candidate_port = find_available_port(exclude=failed_ports)
+            startup_token = uuid.uuid4().hex
+            handle = _start_backend(candidate_port, startup_token)
+            if wait_for_server(candidate_port, startup_token, timeout=30, failed=handle.get('failed')):
+                return candidate_port, handle
+
+            failed_ports.add(candidate_port)
+            _stop_backend(handle)
+            last_handle = handle
+        _stop_backend(last_handle)
+        raise RuntimeError('连续尝试多个端口后仍无法启动本地服务')
 
     def on_closing():
         """窗口关闭回调 — 立即退出（对 Alt+F4 / 任务栏关闭等系统路径生效）"""
@@ -128,19 +181,21 @@ if __name__ == '__main__':
             if target.startswith(('http://', 'https://')):
                 webbrowser.open(target)
 
-    # 查找可用端口
-    port = find_free_port()
-
-    # 启动 Flask 服务
-    if IS_WINDOWS:
-        import multiprocessing
-        project_root = os.path.dirname(os.path.abspath(__file__))
-        _flask_exit_event = multiprocessing.Event()
-        gui_queue = multiprocessing.Queue()
-        flask_proc = multiprocessing.Process(
-            target=run_flask_process, args=(port, project_root, _flask_exit_event, gui_queue), daemon=True
+    try:
+        port, backend_handle = start_backend_with_retry()
+    except Exception as start_error:
+        import webview
+        err_win = webview.create_window(
+            title='启动失败',
+            html='<h2>服务启动失败</h2><p>{}</p>'.format(str(start_error)),
+            width=460, height=220,
         )
-        flask_proc.start()
+        webview.start()
+        os._exit(1)
+
+    if IS_WINDOWS:
+        _flask_exit_event = backend_handle['exit_event']
+        gui_queue = backend_handle['gui_queue']
 
         def _watch_flask_exit():
             _flask_exit_event.wait()
@@ -330,26 +385,6 @@ if __name__ == '__main__':
 
         _gui_watcher = threading.Thread(target=_watch_gui_queue, args=(port, gui_queue), daemon=True)
         _gui_watcher.start()
-    else:
-        # Mac/Linux: 线程（不引入 multiprocessing，避免创建子进程在 Dock 显示多余图标）
-        from src.web.web_app import start_server as _flask_start_server
-        flask_thread = threading.Thread(
-            target=_flask_start_server, kwargs={'port': port}, daemon=True
-        )
-        flask_thread.start()
-
-    # 等待服务就绪
-    if not wait_for_server(port):
-        # 服务启动失败，延迟导入 webview 显示错误对话框
-        import webview
-        err_win = webview.create_window(
-            title='启动失败',
-            html='<h2>服务启动超时</h2><p>端口 {} 无法连接，请检查是否有其他程序占用。</p>'.format(port),
-            width=400, height=200,
-        )
-        webview.start()
-        os._exit(1)
-
     # 延迟导入 webview，避免启动时加载
     import webview
 
