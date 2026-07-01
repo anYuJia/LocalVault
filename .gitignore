@@ -52,6 +52,7 @@ frontend/tsconfig.tsbuildinfo
 
 # 项目特定文件
 config.json
+install_id
 friend_chat_state.json
 friend_chat_state_*.json
 data/

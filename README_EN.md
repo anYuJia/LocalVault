@@ -32,24 +32,22 @@ For daily desktop use, the Rust / Tauri edition is recommended: [better-douyin-R
 
 ## License
 
-This project is no longer licensed under the MIT License. Current versions are available only for personal, educational, research, and other non-commercial purposes. Unauthorized commercial use, sale, hosted services, commercial integration, or commercial redistribution are prohibited. See [LICENSE](LICENSE).
+This project is licensed under the **[PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)** license. Current versions are available only for personal, non-commercial learning, research, academic discussion, and testing. Commercial distribution, commercial integration, paid download services, hosted services, data resale, and any direct or indirect revenue-generating activity are prohibited. See the [LICENSE](LICENSE) file in the project root.
 
 ## Legal Compliance and Acceptable Use
 
-This project is not an official product of Douyin, ByteDance, or any related platform, and it is not authorized, endorsed, sponsored, or approved by them. Platform names, trademarks, content, user content, and API capabilities remain the property of their respective rights holders.
+This project is a non-destructive client-side tool and proof-of-concept research project intended to help users browse and study lawful public data. It does not provide bypasses, cryptographic cracking, credential stuffing, automated attacks, or unauthorized access to non-public data. Its network behavior follows standard browser communication patterns and public Douyin APIs, equivalent to ordinary local browser access by the user.
 
-By using this project, you understand and agree that:
+By using this project, you understand and agree to the following terms:
 
-- You may use it only for personal learning, research, debugging, and non-commercial backup of content that you are lawfully allowed to access.
-- You are solely responsible for ensuring that your use complies with applicable laws, platform terms, copyright rules, privacy rules, and data compliance requirements.
-- You may process only content that you own, have permission to use, or are otherwise allowed to access and save under applicable rules.
-- You may not use this project for commercial collection, commercial analytics, paid download services, SaaS products, hosted services, managed services, bulk data services, content republishing, account operation, marketing, lead generation, or any revenue-generating activity.
-- You may not use this project for large-scale scraping, automated crawling, bulk collection, credential abuse, access-control bypass, CAPTCHA bypass, risk-control bypass, rate-limit evasion, circumvention of technical protection measures, or interference with platform operations.
-- You may not download, store, publish, sell, publicly display, or redistribute any content that you are not authorized to use, including content protected by copyright, portrait rights, privacy rights, trademarks, or other rights.
-- You must not expose your Cookie, credentials, or login session to third parties. If you run this project on a server, LAN, or public network, you are responsible for access control, network isolation, and secret protection.
-- You are solely responsible for any consequences arising from violations of laws, platform rules, third-party rights, or this project's license.
+- **Compliant use**: Use this project only for personal learning, research, interface-mechanism study, or non-commercial backup of lawful content you are allowed to access.
+- **Your responsibility**: You are solely responsible for ensuring that your use complies with applicable laws, platform terms, copyright law, cybersecurity rules, and data protection requirements.
+- **Rights boundary**: Process only public content that you published, own, have explicit permission to use, or are clearly allowed by platform rules to view and save.
+- **Commercial prohibition**: Do not use this project for commercial data collection, commercial analytics, paid distribution, SaaS hosting, paid download services, content republishing, account marketing, lead generation, or any revenue-generating activity.
+- **Security boundary**: Do not use this project for malicious high-frequency requests, large-scale automated crawling, account abuse, access-control or risk-control bypass, rate-limit evasion, or any activity that interferes with or burdens platform services.
+- **Privacy and credentials**: Do not expose your login credentials, including Cookies, to untrusted third parties or public networks. If you run this project on a LAN or server, you must configure access control and network firewall protections yourself.
 
-If you are unsure whether a use case is legal or permitted by the platform, do not use this project for that scenario.
+If you are unsure whether your purpose or scenario complies with these laws and rules, delete this software immediately and stop using it.
 
 ## Features
 
@@ -192,7 +190,9 @@ Yes. Browser / headless mode is more suitable than desktop mode. If you expose i
 
 ## Disclaimer
 
-This project is provided "as is", without any warranty of availability, stability, accuracy, maintenance, or fitness for a particular purpose. The authors do not encourage, support, or authorize any illegal use, rights-infringing use, platform-rule violation, or commercial use of this project. You assume all risks and responsibilities arising from downloading, storing, processing, distributing, or using any content.
+1. This project is provided "as is", without any express or implied warranty, including availability, stability, accuracy, completeness, or fitness for a particular purpose.
+2. The authors do not encourage, support, or authorize any violation of laws, infringement of third-party rights, violation of platform terms, or commercial use of this project.
+3. This project is downloaded, built, configured, and run locally by users at their own discretion. Any account restrictions, account bans, data loss, network blocking, copyright disputes, civil claims, administrative penalties, or economic losses arising from running this software or improperly distributing downloaded content are solely the user's responsibility. The project developers assume no direct or indirect legal liability.
 
 ## Star History
 
