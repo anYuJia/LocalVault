@@ -143,6 +143,7 @@ export interface UserInfo {
   follow_status: number;
   sec_uid: string;
   unique_id: string;
+  short_id?: string;
   verify_status: number;
 }
 

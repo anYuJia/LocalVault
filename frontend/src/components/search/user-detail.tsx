@@ -256,14 +256,15 @@ export function UserDetailCard({ user, busy, onDownloadAll, onViewVideos }: User
     { label: "关注", value: user.following_count || 0 },
     { label: "获赞", value: user.total_favorited || 0 },
   ];
+  const displayUid = user.unique_id || user.short_id || user.sec_uid || user.uid || "";
 
-  const copyUid = async () => {
-    if (!user.uid) return;
+  const copyDisplayUid = async () => {
+    if (!displayUid) return;
     try {
-      await navigator.clipboard.writeText(user.uid);
-      toast("已复制 UID", "success");
+      await navigator.clipboard.writeText(displayUid);
+      toast("已复制抖音号", "success");
     } catch {
-      addLog("复制 UID 失败", "error");
+      addLog("复制抖音号失败", "error");
     }
   };
 
@@ -330,12 +331,12 @@ export function UserDetailCard({ user, busy, onDownloadAll, onViewVideos }: User
           </h3>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex max-w-[220px] items-center gap-1 rounded-full border border-border bg-background-soft/70 pl-2.5 pr-1.5 py-1 text-[0.72rem] font-mono text-text-secondary">
-              <span className="truncate">@{user.unique_id || user.sec_uid}</span>
-              {user.uid && (
+              <span className="truncate">@{displayUid}</span>
+              {displayUid && (
                 <button
                   type="button"
-                  onClick={() => void copyUid()}
-                  title={`复制 UID: ${user.uid}`}
+                  onClick={() => void copyDisplayUid()}
+                  title={`复制抖音号: ${displayUid}`}
                   className="shrink-0 rounded-full p-0.5 text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
                 >
                   <Copy className="w-3 h-3" />
