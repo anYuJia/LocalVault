@@ -9,7 +9,7 @@ from typing import Callable
 
 from flask import Blueprint, jsonify
 
-from src.web.cookie_login import _cookie_verify_cache, _verify_native_cookie_login
+from src.web.cookie_login import _cookie_verify_cache, _verify_native_cookie_login, sanitize_avatar_url
 
 accounts_bp = Blueprint("accounts", __name__)
 
@@ -57,7 +57,7 @@ def _public_account_payload(account: dict) -> dict:
     return {
         'sec_uid': account.get('sec_uid', ''),
         'nickname': account.get('nickname', ''),
-        'avatar_thumb': account.get('avatar_thumb', ''),
+        'avatar_thumb': sanitize_avatar_url(account.get('avatar_thumb')),
     }
 
 
@@ -65,7 +65,7 @@ def _profile_from_account(account: dict) -> dict:
     return {
         'sec_uid': account.get('sec_uid', ''),
         'nickname': account.get('nickname', ''),
-        'avatar_thumb': account.get('avatar_thumb', ''),
+        'avatar_thumb': sanitize_avatar_url(account.get('avatar_thumb')),
     }
 
 
@@ -169,11 +169,13 @@ def add_account():
 
         nickname = verify_result.get('nickname', '')
         sec_uid = verify_result.get('sec_uid', '')
-        avatar_thumb = verify_result.get('avatar_thumb', '')
+        avatar_thumb = sanitize_avatar_url(verify_result.get('avatar_thumb', ''))
 
         _Config.COOKIE = cookie
         _Config.CURRENT_SEC_UID = sec_uid
         accounts = list(getattr(_Config, 'ACCOUNTS', []))
+        previous_account = next((account for account in accounts if account.get('sec_uid') == sec_uid), {})
+        avatar_thumb = avatar_thumb or sanitize_avatar_url(previous_account.get('avatar_thumb'))
         accounts = [account for account in accounts if account.get('sec_uid') != sec_uid]
         accounts.append({
             'sec_uid': sec_uid,

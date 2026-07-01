@@ -10,6 +10,7 @@ import threading
 import time
 from http.cookies import SimpleCookie
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 from flask import Blueprint, jsonify, request
 
@@ -31,9 +32,59 @@ _coerce_int: Callable[..., int] | None = None
 
 _gui_queue = None
 
+_NON_AVATAR_URL_MARKERS = (
+    'emblem',
+    'logo',
+    'badge',
+    'icon',
+    'sprite',
+    'placeholder',
+    'default-avatar',
+    'default_avatar',
+)
+_AVATAR_URL_MARKERS = (
+    'avatar',
+    'aweme-avatar',
+    'user-avatar',
+    'avatar_',
+    'avatar-',
+    '300x300',
+    '168x168',
+    '100x100',
+)
+
 def set_gui_queue(queue):
     global _gui_queue
     _gui_queue = queue
+
+
+def sanitize_avatar_url(value: Any) -> str:
+    """Keep likely user avatar URLs and drop page emblems/icons accidentally scraped from DOM."""
+    url = str(value or '').strip()
+    if not url:
+        return ''
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return ''
+    if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+        return ''
+
+    lowered = url.lower()
+    if any(marker in lowered for marker in _NON_AVATAR_URL_MARKERS):
+        return ''
+    if any(marker in lowered for marker in _AVATAR_URL_MARKERS):
+        return url
+
+    # Some Douyin avatar CDN paths are opaque. Allow image-looking ByteDance CDN URLs only
+    # when they have no obvious non-avatar markers.
+    host = parsed.netloc.lower()
+    if (
+        any(token in host for token in ('douyinpic.com', 'byteimg.com', 'bytedance.com'))
+        and any(parsed.path.lower().endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.webp'))
+    ):
+        return url
+    return ''
 
 
 def setup_cookie_login(
@@ -159,14 +210,17 @@ def _verify_native_cookie_login_impl(cookie: str) -> dict:
         saved_sec_uid = str(saved_profile.get('sec_uid') or '').strip()
         profile_matches_user = bool(user_sec_uid and saved_sec_uid and user_sec_uid == saved_sec_uid)
         safe_saved_profile = saved_profile if profile_matches_user else {}
+        user_avatar_thumb = sanitize_avatar_url(_avatar_url(user, 'avatar_thumb', 'avatar_100x100', 'avatar_168x168', 'avatar_medium', 'avatar_300x300', 'avatar_larger'))
+        user_avatar_medium = sanitize_avatar_url(_avatar_url(user, 'avatar_medium', 'avatar_168x168', 'avatar_300x300', 'avatar_larger', 'avatar_thumb', 'avatar_100x100'))
+        user_avatar_larger = sanitize_avatar_url(_avatar_url(user, 'avatar_larger', 'avatar_300x300', 'avatar_medium', 'avatar_168x168', 'avatar_thumb', 'avatar_100x100'))
         return {
             'success': True,
             'nickname': (user.get('nickname') or safe_saved_profile.get('nickname') or '').strip(),
             'user_id': user.get('uid') or user.get('sec_uid') or safe_saved_profile.get('uid') or safe_saved_profile.get('sec_uid') or '',
             'sec_uid': user_sec_uid or safe_saved_profile.get('sec_uid') or '',
-            'avatar_thumb': _avatar_url(user, 'avatar_thumb', 'avatar_100x100', 'avatar_168x168', 'avatar_medium', 'avatar_300x300', 'avatar_larger') or safe_saved_profile.get('avatar_thumb') or '',
-            'avatar_medium': _avatar_url(user, 'avatar_medium', 'avatar_168x168', 'avatar_300x300', 'avatar_larger', 'avatar_thumb', 'avatar_100x100') or safe_saved_profile.get('avatar_medium') or '',
-            'avatar_larger': _avatar_url(user, 'avatar_larger', 'avatar_300x300', 'avatar_medium', 'avatar_168x168', 'avatar_thumb', 'avatar_100x100') or safe_saved_profile.get('avatar_larger') or '',
+            'avatar_thumb': user_avatar_thumb or sanitize_avatar_url(safe_saved_profile.get('avatar_thumb')) or '',
+            'avatar_medium': user_avatar_medium or sanitize_avatar_url(safe_saved_profile.get('avatar_medium')) or '',
+            'avatar_larger': user_avatar_larger or sanitize_avatar_url(safe_saved_profile.get('avatar_larger')) or '',
         }
     except Exception as error:
         _logger.warning('原生 Cookie 登录校验失败: %s', error)
@@ -187,17 +241,26 @@ def _save_cookie_login_success(
             **current_user_profile,
         }
     saved_profile = _Config.CURRENT_USER_PROFILE if isinstance(_Config.CURRENT_USER_PROFILE, dict) else {}
+    for avatar_key in ('avatar_thumb', 'avatar_medium', 'avatar_larger'):
+        cleaned_avatar = sanitize_avatar_url(saved_profile.get(avatar_key))
+        if cleaned_avatar:
+            saved_profile[avatar_key] = cleaned_avatar
+        elif avatar_key in saved_profile:
+            saved_profile.pop(avatar_key, None)
+    _Config.CURRENT_USER_PROFILE = saved_profile
     sec_uid = str(saved_profile.get('sec_uid') or '').strip()
     account_nickname = str(nickname or saved_profile.get('nickname') or '').strip()
-    avatar_thumb = str(
-        saved_profile.get('avatar_thumb')
-        or saved_profile.get('avatar_medium')
-        or saved_profile.get('avatar_larger')
+    avatar_thumb = (
+        sanitize_avatar_url(saved_profile.get('avatar_thumb'))
+        or sanitize_avatar_url(saved_profile.get('avatar_medium'))
+        or sanitize_avatar_url(saved_profile.get('avatar_larger'))
         or ''
-    ).strip()
+    )
     if sec_uid:
         _Config.CURRENT_SEC_UID = sec_uid
         accounts = list(getattr(_Config, 'ACCOUNTS', []) or [])
+        previous_account = next((account for account in accounts if account.get('sec_uid') == sec_uid), {})
+        avatar_thumb = avatar_thumb or sanitize_avatar_url(previous_account.get('avatar_thumb'))
         accounts = [account for account in accounts if account.get('sec_uid') != sec_uid]
         accounts.append({
             'sec_uid': sec_uid,

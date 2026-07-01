@@ -357,6 +357,8 @@ if __name__ == '__main__':
         """Mac: 隐藏标题栏文字，保留左上角三个系统按键（关闭/最小化/缩放）"""
         if sys.platform != 'darwin':
             return
+        if getattr(target_window, '_better_douyin_system_decorated', False):
+            return
         try:
             import AppKit
 
@@ -452,7 +454,9 @@ if __name__ == '__main__':
             def patched(self, webview, nav):
                 result = original(self, webview, nav)
                 try:
-                    configure_macos_native_window(webview.pywebview_window)
+                    target_window = webview.pywebview_window
+                    if not getattr(target_window, '_better_douyin_system_decorated', False):
+                        configure_macos_native_window(target_window)
                 except Exception:
                     pass
                 return result

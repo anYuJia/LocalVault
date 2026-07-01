@@ -22,6 +22,11 @@
   </head>
   <body>
     <div id="root">
+      <div style="position:fixed;right:0;top:0;z-index:10;display:flex;height:36px;user-select:none;">
+        <button type="button" aria-label="最小化窗口" title="最小化" data-window-action="minimize" style="display:flex;height:36px;width:44px;align-items:center;justify-content:center;border:0;background:transparent;color:#9b9baa;cursor:pointer;">－</button>
+        <button type="button" aria-label="最大化或还原窗口" title="最大化/还原" data-window-action="toggle_maximize" style="display:flex;height:36px;width:44px;align-items:center;justify-content:center;border:0;background:transparent;color:#9b9baa;cursor:pointer;">□</button>
+        <button type="button" aria-label="关闭窗口" title="关闭" data-window-action="close" style="display:flex;height:36px;width:44px;align-items:center;justify-content:center;border:0;background:transparent;color:#9b9baa;cursor:pointer;">×</button>
+      </div>
       <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0e0e14;color:#9b9baa;font-family:system-ui,sans-serif;">
         <div style="text-align:center;">
           <div style="font-size:0.85rem;opacity:0.5;">正在加载...</div>
@@ -88,6 +93,16 @@
             renderBootError("入口脚本加载失败", `无法加载模块脚本: ${source}`);
           },
         };
+
+        document.addEventListener("click", (event) => {
+          const button = event.target && event.target.closest && event.target.closest("[data-window-action]");
+          if (!button) return;
+          const action = button.getAttribute("data-window-action");
+          const api = window.pywebview && window.pywebview.api;
+          if (api && typeof api[action] === "function") {
+            api[action]();
+          }
+        });
 
         window.addEventListener(
           "error",

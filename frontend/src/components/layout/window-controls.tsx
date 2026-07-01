@@ -38,7 +38,10 @@ async function callWindowAction(action: "minimize" | "toggle_maximize" | "close"
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
     const currentWindow = getCurrentWindow();
     if (action === "minimize") await currentWindow.minimize();
-    if (action === "toggle_maximize") await currentWindow.toggleMaximize();
+    if (action === "toggle_maximize") {
+      if (await currentWindow.isMaximized()) await currentWindow.unmaximize();
+      else await currentWindow.maximize();
+    }
     if (action === "close") await currentWindow.close();
     return;
   }
@@ -48,6 +51,10 @@ async function callWindowAction(action: "minimize" | "toggle_maximize" | "close"
   if (typeof pywebviewAction === "function") {
     await pywebviewAction();
   }
+}
+
+export function toggleWindowMaximize() {
+  void callWindowAction("toggle_maximize");
 }
 
 export function WindowControls() {

@@ -67,7 +67,7 @@ def create_native_douyin_window(
 ):
     import webview
 
-    return webview.create_window(
+    window = webview.create_window(
         title=title,
         url=url,
         width=width,
@@ -75,6 +75,11 @@ def create_native_douyin_window(
         resizable=True,
         focus=True,
     )
+    try:
+        setattr(window, '_better_douyin_system_decorated', True)
+    except Exception:
+        pass
+    return window
 
 
 def create_login_window():
@@ -370,6 +375,23 @@ def inject_relation_signer_probe(window: Any) -> None:
                         }
                         return "";
                     };
+                    const isLikelyAvatarUrl = (src) => {
+                        const value = String(src || "").trim();
+                        if (!new RegExp("^https?://", "i").test(value)) return false;
+                        if (/emblem|logo|badge|icon|sprite|placeholder|default[-_]?avatar/i.test(value)) return false;
+                        return /avatar|aweme-avatar|user-avatar|avatar[_-]|300x300|168x168|100x100/i.test(value);
+                    };
+                    const isLikelyAvatarNode = (node) => {
+                        const text = [
+                            node.alt,
+                            node.className,
+                            node.id,
+                            node.getAttribute("data-e2e"),
+                            node.getAttribute("data-testid"),
+                            node.parentElement && node.parentElement.className,
+                        ].map((item) => String(item || "")).join(" ");
+                        return /avatar|user|account|profile|头像/i.test(text);
+                    };
                     const app = window.SSR_RENDER_DATA && window.SSR_RENDER_DATA.app || {};
                     const odin = app.odin || {};
                     const user = app.user || app.userInfo || app.user_info || {};
@@ -388,8 +410,9 @@ def inject_relation_signer_probe(window: Any) -> None:
                     };
                     if (!payload.avatar_thumb) {
                         const image = Array.from(document.querySelectorAll("img"))
+                            .filter((node) => isLikelyAvatarNode(node))
                             .map((node) => node.currentSrc || node.src || "")
-                            .find((src) => /avatar|aweme-avatar|user-avatar|p3-pc|p9-pc/i.test(src));
+                            .find((src) => isLikelyAvatarUrl(src));
                         payload.avatar_thumb = image || "";
                     }
                     if (payload.uid || payload.sec_uid || payload.avatar_thumb || payload.avatar_medium || payload.avatar_larger) {
