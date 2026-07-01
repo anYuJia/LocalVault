@@ -4,7 +4,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { TaskCard } from "@/components/downloads/task-card";
-import { Download, ChevronUp, Trash2, ArrowDown, FolderOpen } from "lucide-react";
+import { ChevronUp, Trash2, ArrowDown, FolderOpen } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useDownloads } from "@/hooks/use-downloads";
@@ -32,12 +32,6 @@ export function BottomBar() {
   const visibleLogs = useMemo(() => logs.slice(-300), [logs]);
   const hiddenLogCount = Math.max(0, logs.length - visibleLogs.length);
   const hasActiveTasks = activeCount > 0;
-  const activeProgress =
-    activeCount > 0
-      ? tasksList
-          .filter((task) => task.status === "downloading" || task.status === "pending" || task.status === "paused")
-          .reduce((sum, task) => sum + (task.progress || 0), 0) / activeCount
-      : 0;
   const scrollLogsToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     const viewport = logsViewportRef.current;
     if (!viewport) return;
@@ -67,18 +61,21 @@ export function BottomBar() {
   return (
     <motion.div
       ref={containerRef}
-      className="absolute bottom-4 right-4 z-40 bg-background/95 backdrop-blur shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-border/80 rounded-xl flex flex-col overflow-hidden"
+      className="absolute bottom-4 right-4 z-40 flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-background/96 shadow-[0_12px_40px_rgba(0,0,0,0.14)] backdrop-blur-xl"
       animate={{
-        height: expanded ? 320 : 42,
-        width: expanded ? 400 : 230,
+        height: expanded ? 360 : 42,
+        width: expanded ? "min(620px, calc(100vw - 32px))" : 246,
       }}
       transition={{ type: "spring", stiffness: 350, damping: 30 }}
     >
       {/* Header */}
       <div
-        className="flex items-center justify-end h-[42px] px-3 cursor-pointer select-none gap-2 border-b border-border/10"
+        className="flex h-[42px] cursor-pointer select-none items-center justify-between gap-3 border-b border-border/10 px-3"
         onClick={toggleExpanded}
       >
+        <div className="min-w-0 flex-1 text-[0.72rem] font-medium text-text-muted">
+          {hasActiveTasks ? `${activeCount} 个下载任务` : "下载面板"}
+        </div>
         <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
           <Tabs
             value={activeTab}
@@ -107,7 +104,7 @@ export function BottomBar() {
               event.stopPropagation();
               void openDownloadsDirectory();
             }}
-            className="w-7 h-7 rounded-[var(--radius-sm)] flex items-center justify-center text-text-muted hover:text-text hover:bg-surface-raised transition-[background-color,color,transform] duration-[var(--duration-fast)] cursor-pointer"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-[background-color,color,transform] duration-[var(--duration-fast)] hover:bg-surface-raised hover:text-text active:scale-[0.96]"
             title="打开下载目录"
           >
             <FolderOpen className="w-3.5 h-3.5" />
@@ -118,7 +115,7 @@ export function BottomBar() {
               event.stopPropagation();
               toggleExpanded();
             }}
-            className="w-7 h-7 rounded-[var(--radius-sm)] flex items-center justify-center text-text-muted hover:text-text hover:bg-surface-raised transition-[background-color,color,transform] duration-[var(--duration-fast)] cursor-pointer"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-[background-color,color,transform] duration-[var(--duration-fast)] hover:bg-surface-raised hover:text-text active:scale-[0.96]"
             animate={{ rotate: expanded ? 180 : 0 }}
             transition={{ duration: 0.2 }}
           >
@@ -134,7 +131,7 @@ export function BottomBar() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="px-3 pb-2 flex-1 overflow-hidden"
+            className="flex-1 overflow-hidden px-3 pb-3"
           >
             {/* Progress Panel */}
             {activeTab === "progress" && (
@@ -144,7 +141,7 @@ export function BottomBar() {
                     暂无下载任务
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-1.5 py-1">
+                  <div className="flex flex-col gap-2 py-2">
                     <AnimatePresence initial={false}>
                       {tasksList.map((task) => (
                         <TaskCard

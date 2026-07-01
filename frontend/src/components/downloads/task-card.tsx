@@ -3,7 +3,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, easeConfig, formatBytes } from "@/lib/utils";
-import { Ban, Clock3, FolderOpen, Pause, Play, RotateCw, X, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Ban, Clock3, FolderOpen, Pause, Play, RotateCw, X, CheckCircle2, AlertCircle, Loader2, Gauge, HardDrive } from "lucide-react";
 import type { DownloadTask, DownloadStatus } from "@/types";
 
 interface TaskCardProps {
@@ -50,6 +50,8 @@ export function TaskCard({
     ? `${task.fileIndex ?? 0}/${task.fileTotal}`
     : "";
   const active = task.status === "downloading" || task.status === "pending" || task.status === "paused";
+  const percentLabel = progress >= 10 ? progress.toFixed(1) : progress.toFixed(0);
+  const currentLabel = currentProgress !== undefined ? `${currentProgress.toFixed(0)}%` : "";
 
   return (
     <motion.div
@@ -59,23 +61,23 @@ export function TaskCard({
       exit={{ opacity: 0, x: -12 }}
       transition={{ duration: 0.16, ease: easeConfig }}
       className={cn(
-        "flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-md)] border transition-[background-color,border-color,box-shadow] duration-150 ease-out",
+        "group flex items-start gap-3 rounded-xl border px-3 py-3 transition-[background-color,border-color,box-shadow] duration-150 ease-out",
         task.status === "completed"
-          ? "border-success/20 bg-success-soft/30"
+          ? "border-success/20 bg-success-soft/25"
           : task.status === "error"
-            ? "border-danger/20 bg-danger-soft/30"
+            ? "border-danger/20 bg-danger-soft/25"
             : task.status === "cancelled"
               ? "border-border bg-surface/35 opacity-80"
               : task.status === "paused"
-                ? "border-warning/25 bg-warning-soft/20"
-            : "border-border bg-surface/50"
+                ? "border-warning/30 bg-warning-soft/16"
+                : "border-border bg-surface/45 hover:bg-surface/65"
       )}
     >
       {/* Icon */}
-      <div className={cn("shrink-0", cfg.color)}>
+      <div className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-raised/70", cfg.color)}>
         <Icon
           className={cn(
-            "w-4 h-4",
+            "h-4 w-4",
             task.status === "downloading" && "animate-spin",
             task.status === "pending" && "animate-pulse"
           )}
@@ -84,8 +86,8 @@ export function TaskCard({
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex min-w-0 items-center gap-2 mb-1">
-          <span className="min-w-0 flex-1 truncate text-[0.78rem] font-medium text-text">
+        <div className="mb-2 flex min-w-0 items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-[0.84rem] font-semibold leading-5 text-text">
             {displayTitle}
           </span>
           <Badge
@@ -107,52 +109,66 @@ export function TaskCard({
         </div>
 
         {active && (
-          <Progress value={progress} className="h-1.5 mb-1" />
+          <div className="mb-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+            <span className="min-w-[2.8rem] text-right text-[0.72rem] font-semibold tabular-nums text-text-secondary">
+              {percentLabel}%
+            </span>
+            <Progress value={progress} className="h-2 bg-surface-raised/80" />
+            {fileLabel ? (
+              <span className="min-w-[4.6rem] text-right text-[0.68rem] font-medium tabular-nums text-text-muted">
+                {itemLabel} {fileLabel}
+              </span>
+            ) : (
+              <span className="min-w-[2rem]" />
+            )}
+          </div>
         )}
 
         {active ? (
-          <div className="grid grid-cols-1 items-center gap-x-4 gap-y-1 text-[0.68rem] text-text-muted tabular-nums lg:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="flex min-w-0 items-center gap-3 overflow-hidden">
-              <span className="shrink-0">{progress.toFixed(1)}%</span>
-              {fileLabel && <span className="shrink-0">{itemLabel} {fileLabel}</span>}
+          <div className="space-y-2 text-[0.69rem] text-text-muted">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 tabular-nums">
               {task.skippedCount !== undefined && task.skippedCount > 0 && (
-                <span className="shrink-0">跳过 {task.skippedCount}</span>
+                <span className="shrink-0 rounded-full bg-surface-raised/60 px-1.5 py-0.5">跳过 {task.skippedCount}</span>
               )}
               {task.failedCount !== undefined && task.failedCount > 0 && (
-                <span className="shrink-0 text-warning">失败 {task.failedCount}</span>
+                <span className="shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-warning">失败 {task.failedCount}</span>
               )}
               {task.currentName && (
-                <span className="min-w-0 flex-1 truncate">
+                <span className="min-w-[12rem] flex-1 truncate">
                   当前 {task.currentName}
                 </span>
               )}
             </div>
 
-            <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 whitespace-nowrap lg:min-w-[22rem] lg:flex-nowrap lg:justify-end">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 tabular-nums sm:grid-cols-[auto_auto_auto_auto]">
               {currentProgress !== undefined && (
-                <span className="inline-block min-w-[3.5rem] text-right">当前 {currentProgress.toFixed(0)}%</span>
+                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <Gauge className="h-3 w-3" />
+                  当前 {currentLabel}
+                </span>
               )}
               {task.speed > 0 && (
-                <span className="inline-block min-w-[5rem] text-right">{formatBytes(task.speed)}/s</span>
+                <span className="whitespace-nowrap">{formatBytes(task.speed)}/s</span>
               )}
               {task.downloadedBytes !== undefined && (
-                <span className="inline-block text-right">
+                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <HardDrive className="h-3 w-3" />
                   {formatBytes(task.downloadedBytes)}{task.totalBytes ? ` / ${formatBytes(task.totalBytes)}` : ""}
                 </span>
               )}
               {task.etaSeconds !== undefined && task.etaSeconds > 0 && (
-                <span className="inline-flex min-w-[4.75rem] items-center justify-end gap-1">
-                  <Clock3 className="w-3 h-3" />
+                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <Clock3 className="h-3 w-3" />
                   约 {formatDurationLabel(task.etaSeconds)}
                 </span>
               )}
               {elapsedSeconds > 0 && (
-                <span className="inline-flex min-w-[4.75rem] items-center justify-end gap-1">
-                  <Clock3 className="w-3 h-3" />
+                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <Clock3 className="h-3 w-3" />
                   已用 {formatDurationLabel(elapsedSeconds)}
                 </span>
               )}
-              {startedAt && <span className="inline-block min-w-[5rem] text-right">开始 {startedAt}</span>}
+              {startedAt && <span className="whitespace-nowrap">开始 {startedAt}</span>}
             </div>
           </div>
         ) : (
@@ -178,7 +194,7 @@ export function TaskCard({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex shrink-0 items-center gap-1">
         {task.status === "completed" && (
           <Button variant="ghost" size="icon-sm" onClick={() => onOpen?.(task)} title="打开位置">
             <FolderOpen className="w-3.5 h-3.5" />
