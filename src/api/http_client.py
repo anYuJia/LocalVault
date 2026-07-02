@@ -49,13 +49,23 @@ def get_api_session():
 def api_get(*args, **kwargs):
     if args and isinstance(args[0], str):
         args = (_normalize_request_url(args[0]),) + args[1:]
-    return get_api_session().get(*args, **kwargs)
+    session = get_api_session()
+    try:
+        session.cookies.clear()
+    except Exception:
+        pass
+    return session.get(*args, **kwargs)
 
 
 def api_post(*args, **kwargs):
     if args and isinstance(args[0], str):
         args = (_normalize_request_url(args[0]),) + args[1:]
-    return get_api_session().post(*args, **kwargs)
+    session = get_api_session()
+    try:
+        session.cookies.clear()
+    except Exception:
+        pass
+    return session.post(*args, **kwargs)
 
 
 def api_post_stateless(*args, **kwargs):

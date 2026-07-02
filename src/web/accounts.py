@@ -52,12 +52,45 @@ def _save_accounts_config() -> None:
     )
 
 
+def _clear_cookie_cache() -> None:
+    _cookie_verify_cache.clear()
+    try:
+        from src.api.http_client import get_api_session
+
+        get_api_session().cookies.clear()
+    except Exception:
+        pass
+
+
+def _account_profile(account: dict) -> dict:
+    profile = account.get('current_user_profile')
+    if isinstance(profile, dict):
+        result = dict(profile)
+    else:
+        result = {}
+    result.setdefault('sec_uid', account.get('sec_uid', ''))
+    result.setdefault('nickname', account.get('nickname', ''))
+    avatar = sanitize_avatar_url(account.get('avatar_thumb'))
+    if avatar:
+        result.setdefault('avatar_thumb', avatar)
+    return result
+
+
+def _apply_account(account: dict) -> None:
+    _Config.COOKIE = account.get('cookie', '')
+    _Config.CURRENT_SEC_UID = account.get('sec_uid', '')
+    _Config.CURRENT_USER_PROFILE = _account_profile(account)
+    _Config.RELATION_SIGNER = account.get('relation_signer') if isinstance(account.get('relation_signer'), dict) else None
+    _Config.IM_FRIEND_SEC_USER_IDS = _Config.normalize_sec_user_ids(account.get('im_friend_sec_user_ids', []))
+
+
 def _public_account_payload(account: dict) -> dict:
     """Return non-sensitive account fields safe for API responses."""
     return {
         'sec_uid': account.get('sec_uid', ''),
         'nickname': account.get('nickname', ''),
         'avatar_thumb': sanitize_avatar_url(account.get('avatar_thumb')),
+        'is_valid': account.get('is_valid', True),
     }
 
 
@@ -87,7 +120,7 @@ def get_accounts():
 @accounts_bp.route('/api/accounts/switch', methods=['POST'])
 def switch_account():
     """切换当前账号"""
-    _cookie_verify_cache.clear()
+    _clear_cookie_cache()
     try:
         data = _request_json()
         sec_uid = data.get('sec_uid')
@@ -99,9 +132,7 @@ def switch_account():
         if not target_account:
             return jsonify({'success': False, 'message': '账号不存在'}), 404
 
-        _Config.COOKIE = target_account.get('cookie', '')
-        _Config.CURRENT_SEC_UID = sec_uid
-        _Config.CURRENT_USER_PROFILE = _profile_from_account(target_account)
+        _apply_account(target_account)
         _save_accounts_config()
         _init_app()
         return jsonify({
@@ -116,7 +147,7 @@ def switch_account():
 @accounts_bp.route('/api/accounts', methods=['DELETE'])
 def delete_account():
     """删除账号"""
-    _cookie_verify_cache.clear()
+    _clear_cookie_cache()
     try:
         data = _request_json()
         sec_uid = data.get('sec_uid')
@@ -132,13 +163,13 @@ def delete_account():
         if getattr(_Config, 'CURRENT_SEC_UID', '') == sec_uid:
             if new_accounts:
                 next_acc = new_accounts[0]
-                _Config.COOKIE = next_acc.get('cookie', '')
-                _Config.CURRENT_SEC_UID = next_acc.get('sec_uid', '')
-                _Config.CURRENT_USER_PROFILE = _profile_from_account(next_acc)
+                _apply_account(next_acc)
             else:
                 _Config.COOKIE = ''
                 _Config.CURRENT_SEC_UID = ''
                 _Config.CURRENT_USER_PROFILE = {}
+                _Config.RELATION_SIGNER = None
+                _Config.IM_FRIEND_SEC_USER_IDS = []
 
         _save_accounts_config()
         _init_app()
@@ -150,7 +181,7 @@ def delete_account():
 @accounts_bp.route('/api/accounts/add', methods=['POST'])
 def add_account():
     """手动添加账号"""
-    _cookie_verify_cache.clear()
+    _clear_cookie_cache()
     try:
         data = _request_json()
         cookie = data.get('cookie')
@@ -173,6 +204,14 @@ def add_account():
 
         _Config.COOKIE = cookie
         _Config.CURRENT_SEC_UID = sec_uid
+        _Config.CURRENT_USER_PROFILE = {
+            'uid': verify_result.get('user_id', ''),
+            'sec_uid': sec_uid,
+            'nickname': nickname,
+            'avatar_thumb': avatar_thumb,
+            'avatar_medium': sanitize_avatar_url(verify_result.get('avatar_medium', '')),
+            'avatar_larger': sanitize_avatar_url(verify_result.get('avatar_larger', '')),
+        }
         accounts = list(getattr(_Config, 'ACCOUNTS', []))
         previous_account = next((account for account in accounts if account.get('sec_uid') == sec_uid), {})
         avatar_thumb = avatar_thumb or sanitize_avatar_url(previous_account.get('avatar_thumb'))
@@ -182,6 +221,10 @@ def add_account():
             'nickname': nickname,
             'avatar_thumb': avatar_thumb,
             'cookie': cookie,
+            'relation_signer': previous_account.get('relation_signer') if isinstance(previous_account.get('relation_signer'), dict) else None,
+            'current_user_profile': _Config.CURRENT_USER_PROFILE,
+            'im_friend_sec_user_ids': previous_account.get('im_friend_sec_user_ids', []),
+            'is_valid': True,
         })
         _Config.ACCOUNTS = accounts
 

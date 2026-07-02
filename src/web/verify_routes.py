@@ -150,6 +150,42 @@ def _schedule_verify_navigation(window, target_url: str, delay: float = 2.2) -> 
     threading.Timer(delay, navigate).start()
 
 
+def _set_current_account_valid(is_valid: bool) -> None:
+    current_sec_uid = str(getattr(_Config, 'CURRENT_SEC_UID', '') or '').strip()
+    if not current_sec_uid:
+        return
+
+    accounts = []
+    changed = False
+    for account in list(getattr(_Config, 'ACCOUNTS', []) or []):
+        if account.get('sec_uid') == current_sec_uid and account.get('is_valid', True) != is_valid:
+            account = {**account, 'is_valid': is_valid}
+            changed = True
+        accounts.append(account)
+
+    if not changed:
+        return
+
+    _Config.ACCOUNTS = accounts
+    _Config.save_config(
+        _Config.COOKIE,
+        _Config.BASE_DIR,
+        _Config.HISTORY_DIRS,
+        download_quality=_Config.DOWNLOAD_QUALITY,
+        max_concurrent=_Config.MAX_CONCURRENT,
+        filename_template=_Config.FILENAME_TEMPLATE,
+        folder_name_template=_Config.FOLDER_NAME_TEMPLATE,
+        auto_create_folder=_Config.AUTO_CREATE_FOLDER,
+        relation_signer=_Config.RELATION_SIGNER,
+        current_user_profile=_Config.CURRENT_USER_PROFILE,
+        accounts=_Config.ACCOUNTS,
+        current_sec_uid=_Config.CURRENT_SEC_UID,
+        im_friend_sec_user_ids=_Config.IM_FRIEND_SEC_USER_IDS,
+        im_friend_include_all_users=_Config.IM_FRIEND_INCLUDE_ALL_USERS,
+        im_friend_refresh_interval_seconds=_Config.IM_FRIEND_REFRESH_INTERVAL_SECONDS,
+    )
+
+
 @verify_routes_bp.route('/')
 def index():
     """主页"""
@@ -286,6 +322,7 @@ def verify_cookie():
 
     result = _verify_native_cookie_login(cookie)
     if result.get('success'):
+        _set_current_account_valid(True)
         return jsonify({
             'valid': True,
             'user_name': result.get('nickname') or None,
@@ -298,6 +335,7 @@ def verify_cookie():
             'message': 'Cookie 可用',
         })
 
+    _set_current_account_valid(False)
     return jsonify({
         'valid': False,
         'user_name': None,

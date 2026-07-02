@@ -91,6 +91,17 @@ def collect_sec_uid_records(value):
 def save_im_friend_cache(sec_user_ids=None):
     if sec_user_ids is not None:
         _Config.IM_FRIEND_SEC_USER_IDS = _Config.normalize_sec_user_ids(sec_user_ids)
+    current_sec_uid = str(getattr(_Config, 'CURRENT_SEC_UID', '') or '').strip()
+    if current_sec_uid:
+        accounts = []
+        for account in list(getattr(_Config, 'ACCOUNTS', []) or []):
+            if account.get('sec_uid') == current_sec_uid:
+                account = {
+                    **account,
+                    'im_friend_sec_user_ids': list(getattr(_Config, 'IM_FRIEND_SEC_USER_IDS', []) or []),
+                }
+            accounts.append(account)
+        _Config.ACCOUNTS = accounts
     _Config.save_config(
         _Config.COOKIE,
         _Config.BASE_DIR,
@@ -100,6 +111,10 @@ def save_im_friend_cache(sec_user_ids=None):
         filename_template=_Config.FILENAME_TEMPLATE,
         folder_name_template=_Config.FOLDER_NAME_TEMPLATE,
         auto_create_folder=_Config.AUTO_CREATE_FOLDER,
+        relation_signer=_Config.RELATION_SIGNER,
+        current_user_profile=_Config.CURRENT_USER_PROFILE,
+        accounts=_Config.ACCOUNTS,
+        current_sec_uid=_Config.CURRENT_SEC_UID,
         im_friend_sec_user_ids=_Config.IM_FRIEND_SEC_USER_IDS,
         im_friend_include_all_users=_Config.IM_FRIEND_INCLUDE_ALL_USERS,
         im_friend_refresh_interval_seconds=_Config.IM_FRIEND_REFRESH_INTERVAL_SECONDS,

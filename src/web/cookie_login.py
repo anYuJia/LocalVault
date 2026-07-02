@@ -250,6 +250,14 @@ def _save_cookie_login_success(
     relation_signer: dict | None = None,
     current_user_profile: dict | None = None,
 ) -> None:
+    _cookie_verify_cache.clear()
+    try:
+        from src.api.http_client import get_api_session
+
+        get_api_session().cookies.clear()
+    except Exception:
+        pass
+
     _Config.COOKIE = cookie
     _Config.RELATION_SIGNER = relation_signer
     if isinstance(current_user_profile, dict) and current_user_profile:
@@ -278,14 +286,27 @@ def _save_cookie_login_success(
         accounts = list(getattr(_Config, 'ACCOUNTS', []) or [])
         previous_account = next((account for account in accounts if account.get('sec_uid') == sec_uid), {})
         avatar_thumb = avatar_thumb or sanitize_avatar_url(previous_account.get('avatar_thumb'))
+        account_relation_signer = (
+            relation_signer
+            if isinstance(relation_signer, dict)
+            else previous_account.get('relation_signer') if isinstance(previous_account.get('relation_signer'), dict) else None
+        )
+        account_im_friend_ids = _Config.normalize_sec_user_ids(
+            previous_account.get('im_friend_sec_user_ids', [])
+        )
         accounts = [account for account in accounts if account.get('sec_uid') != sec_uid]
         accounts.append({
             'sec_uid': sec_uid,
             'nickname': account_nickname,
             'avatar_thumb': avatar_thumb,
             'cookie': cookie,
+            'relation_signer': account_relation_signer,
+            'current_user_profile': saved_profile,
+            'im_friend_sec_user_ids': account_im_friend_ids,
+            'is_valid': True,
         })
         _Config.ACCOUNTS = accounts
+        _Config.IM_FRIEND_SEC_USER_IDS = account_im_friend_ids
     _Config.save_config(
         _Config.COOKIE,
         _Config.BASE_DIR,
