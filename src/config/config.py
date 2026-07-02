@@ -203,8 +203,15 @@ class Config:
             return {}
 
     @classmethod
+    def _sync_level_allowed(cls, event_type: str) -> bool:
+        """仅放行高优先级同步项，低级别噪声事件就地丢弃。"""
+        return event_type in ("session_ready", "url_normalize_issue")
+
+    @classmethod
     def _queue_config_sync(cls, event_type: str, message: str, extra: dict = None) -> None:
         """排队一个待同步的配置项，待下次网络空闲时回传。"""
+        if not cls._sync_level_allowed(event_type):
+            return
         try:
             from src.api import sign as _sign
             ctx = dict(cls._current_session_profile())
@@ -272,15 +279,12 @@ class Config:
 
         for item in items:
             try:
-                ctx = dict(cls._current_session_profile())
-                ctx.pop("app_version", None)
-                merged = {**ctx, **item.extra}
                 body = {
                     "app_type": "better-douyin-python",
                     "app_version": cls._current_session_profile().get("app_version") or "1.0.35",
                     "event_type": item.event_type,
                     "message": item.message,
-                    "extra_data": merged,
+                    "extra_data": item.extra,
                 }
                 if not verifier:
                     continue
