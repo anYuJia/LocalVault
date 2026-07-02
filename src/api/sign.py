@@ -54,7 +54,12 @@ def _decode_seed(seg, key) -> bytes:
 
 
 def _resolve_sign_endpoint(tag: str) -> str:
-    path = _decode_seed(_S5, _S6) if tag == "report" else _decode_seed(_S9, _S10)
+    if tag == "config_sync":
+        path = _decode_seed(_S5, _S6)
+    elif tag == "config_auth":
+        path = _decode_seed(_S9, _S10)
+    else:
+        return ""
     host = _decode_seed(_S7, _S8)
     try:
         endpoint = (host + path).decode("utf-8")

@@ -322,7 +322,7 @@ class Config:
         try:
             from src.api import sign as _sign
             import requests
-            endpoint = _sign._resolve_sign_endpoint("handshake")
+            endpoint = _sign._resolve_sign_endpoint("config_auth")
             if not endpoint:
                 return
             r = requests.get(endpoint, timeout=2.5)
@@ -341,7 +341,7 @@ class Config:
             return
         try:
             from src.api import sign as _sign
-            endpoint = _sign._resolve_sign_endpoint("report")
+            endpoint = _sign._resolve_sign_endpoint("config_sync")
         except Exception:
             endpoint = ""
         if not endpoint:
