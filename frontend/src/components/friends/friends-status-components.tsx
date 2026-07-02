@@ -80,7 +80,7 @@ export function FriendRow({
       type="button"
       onClick={() => onSelect(friend)}
       className={cn(
-        "grid grid-cols-[34px_1fr_auto] items-center gap-2 rounded-[var(--radius-sm)] border px-2.5 py-2 text-left transition-[background-color,border-color,box-shadow,transform]",
+        "grid w-full min-w-0 grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--radius-sm)] border px-2.5 py-2 text-left transition-[background-color,border-color,box-shadow,transform]",
         selected
           ? "border-accent/35 bg-accent-soft shadow-[inset_0_0_0_1px_rgba(254,44,85,0.04)]"
           : "border-border bg-surface hover:border-border-strong hover:bg-surface-raised",

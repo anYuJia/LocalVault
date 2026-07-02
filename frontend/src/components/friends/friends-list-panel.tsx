@@ -59,7 +59,7 @@ export function FriendListPanel({ friends, friendItems, selectedFriendId, online
       ) : (
         <div data-friend-scroll className="grid min-h-0 flex-1 content-start gap-1.5 overflow-y-auto pr-1">
           {friendItems.map((friend, index) => (
-            <div key={friend.secUid} ref={hasMore && index === triggerIndex ? loadMoreRef : undefined}>
+            <div key={friend.secUid} ref={hasMore && index === triggerIndex ? loadMoreRef : undefined} className="w-full min-w-0">
               <FriendRow friend={friend} selected={friend.secUid === selectedFriendId} onSelect={selectFriend} onOpenProfile={openFriendProfile} />
             </div>
           ))}
