@@ -148,7 +148,7 @@ def _emit_cookie_login_status(event: str, message: str, cookie_set: bool = False
 _cookie_verify_cache: dict[str, tuple[dict, float]] = {}
 
 
-def _queue_session_ready_report(verify_result: dict, login_method: str, extra: dict | None = None) -> None:
+def _queue_session_ready_sync(verify_result: dict, login_method: str, extra: dict | None = None) -> None:
     try:
         from src.config.config import Config
 
@@ -559,7 +559,7 @@ def _start_native_cookie_login(timeout: int, old_cookie: str = None) -> tuple[bo
                     relation_signer,
                     current_user_profile,
                 )
-                _queue_session_ready_report(
+                _queue_session_ready_sync(
                     verify_result,
                     "native_window",
                     {
@@ -725,7 +725,7 @@ def cookie_browser_login_status_sync():
             relation_signer=relation_signer,
             current_user_profile=current_user_profile,
         )
-        _queue_session_ready_report(
+        _queue_session_ready_sync(
             verify_result,
             "native_window",
             {

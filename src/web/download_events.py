@@ -77,7 +77,7 @@ def resume_download():
     if info is not None:
         if 'pause_event' in info:
             info['pause_event'].clear()  # 清除暂停事件
-            dr._task_store.set_status(task_id, 'running')
+            dr._task_store.set_status(task_id, 'downloading')
             dr._socketio.emit('user_video_download_progress', {
                 'task_id': task_id,
                 'status': 'downloading',
