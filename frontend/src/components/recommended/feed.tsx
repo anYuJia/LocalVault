@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   VIDEO_CARD_BODY_CLASS,
@@ -40,7 +40,6 @@ export function RecommendedFeed() {
   const [detailVideo, setDetailVideo] = useState<VideoInfo | null>(null);
   const [playerIndex, setPlayerIndex] = useState<number | null>(null);
   const [authorLoadingId, setAuthorLoadingId] = useState<string | null>(null);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const openPlayer = (video: VideoInfo) => {
     const index = videos.findIndex((item) => item.aweme_id === video.aweme_id);
@@ -71,29 +70,6 @@ export function RecommendedFeed() {
       void loadFeed();
     }
   }, [feedType, initialized, loadFeed, videos.length, loading]);
-
-  useEffect(() => {
-    if (!hasMore || loading || loadingMore || videos.length === 0) return;
-
-    const node = loadMoreRef.current;
-    if (!node) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          void loadMore();
-        }
-      },
-      {
-        root: null,
-        rootMargin: FEED_PRELOAD_ROOT_MARGIN,
-        threshold: 0.01,
-      }
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [hasMore, loadMore, loading, loadingMore, videos.length]);
 
   return (
     <>
