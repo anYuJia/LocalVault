@@ -467,23 +467,31 @@ export function parseDynamicPatchCard(root: JsonRecord): SharedMessageCard | nul
   const hint = stringField(root, ["push_detail", "description", "msgHint"]);
   const signal = `${cardKey} ${cardType} ${hint}`.toLowerCase();
   const aweType = Number(root.aweType || root.awe_type || 0);
-  const isLocation = aweType === 110147 || /poi|shop|地点/.test(signal);
+  const schema = stringField(root, ["schema"]) || stringField(patch, ["schema"]);
+  const isVideo = aweType === 11054 || cardKey === "msg_video" || /aweme\/detail|note\/detail/.test(schema);
+  const isLocation = !isVideo && (aweType === 110147 || /poi|shop|地点/.test(signal));
   const isProduct = aweType === 11052 || /product|goods|group|商品/.test(signal);
-  if (!rawData && !isLocation && !isProduct) return null;
-  const titleFromHint = hint.replace(/^分享(?:地点|商品)\s*[:：]\s*/, "");
-  const title = imDynamicText(rawData?.content_top) || titleFromHint;
+  if (!rawData && !isVideo && !isLocation && !isProduct) return null;
+  const titleFromHint = hint.replace(/^\[?分享(?:视频|地点|商品)\]?\s*[:：]?\s*/, "");
+  const title =
+    imDynamicText(rawData?.top_bottom_top) ||
+    imDynamicText(rawData?.content_top) ||
+    stringField(root, ["description"]).replace(/^\[?分享视频\]?\s*/, "") ||
+    titleFromHint;
   const detailParts = uniqueTextParts([
+    imDynamicText(rawData?.content_right_top),
     imDynamicText(rawData?.content_content_top),
     imDynamicText(rawData?.content_bottom_left),
     imDynamicText(rawData?.content_content),
     imDynamicText(rawData?.content_bottom_right),
   ]).filter((part) => part !== title);
-  const kind: SharedMessageCard["kind"] = isLocation ? "location" : isProduct ? "product" : "share";
-  const subtitlePrefix = kind === "location" ? "分享地点" : kind === "product" ? "分享商品" : "分享卡片";
+  const kind: SharedMessageCard["kind"] = isVideo ? "video" : isLocation ? "location" : isProduct ? "product" : "share";
+  const subtitlePrefix = kind === "video" ? "分享视频" : kind === "location" ? "分享地点" : kind === "product" ? "分享商品" : "分享卡片";
   const top = isRecord(rawData?.top) ? rawData.top : undefined;
   const coverUrl =
     firstUrl(top?.content) ||
     firstUrl(rawData?.top) ||
+    deepFirstUrl(root, ["cover_url", "aweme_info"]) ||
     deepFirstUrl(rawData || {}, ["cover_url", "content_cover", "image", "url"]);
   if (!title && !coverUrl && detailParts.length === 0) return null;
   return {
@@ -491,9 +499,13 @@ export function parseDynamicPatchCard(root: JsonRecord): SharedMessageCard | nul
     title: title || titleFromHint || subtitlePrefix,
     subtitle: uniqueTextParts([subtitlePrefix, ...detailParts]).join(" · "),
     coverUrl,
-    avatarUrl: "",
-    authorName: "",
-    itemId: "",
+    avatarUrl: firstUrl(rawData?.top_bottom_content_left),
+    authorName: imDynamicText(rawData?.top_bottom_content_right),
+    itemId: normalizeSharedItemId(
+      stringField(root, ["item_id", "itemId"]) ||
+      deepStringField(root, ["item_id", "itemId"]) ||
+      schema,
+    ),
   };
 }
 
