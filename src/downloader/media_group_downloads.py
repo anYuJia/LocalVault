@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from src.config.config import Config
+from src.downloader.progress import PROGRESS_EMIT_INTERVAL_SECONDS
 from src.utils.download_history_index import (
     remove_download_history_entries,
     upsert_download_history_entries,
@@ -261,7 +262,6 @@ class MediaGroupDownloads:
                     with open(filepath, "wb") as f:
                         downloaded_size = 0
                         last_emit_time = time.monotonic()
-                        last_emit_progress = (i / len(urls)) * 100
                         for chunk in response.iter_content(chunk_size=Config.CHUNK_SIZE):
                             self._wait_if_paused(pause_event, cancel_event)
                             # 检查取消信号
@@ -288,8 +288,7 @@ class MediaGroupDownloads:
                                 speed_bps = downloaded_size / elapsed
                                 eta_seconds = ((response_size - downloaded_size) / speed_bps) if response_size > 0 and speed_bps > 0 else None
                                 should_emit = (
-                                    now - last_emit_time >= 0.5 or
-                                    abs(progress - last_emit_progress) >= 1 or
+                                    now - last_emit_time >= PROGRESS_EMIT_INTERVAL_SECONDS or
                                     (response_size > 0 and downloaded_size >= response_size)
                                 )
                                 if should_emit:
@@ -310,7 +309,6 @@ class MediaGroupDownloads:
                                         file_type_display=file_type_display
                                     )
                                     last_emit_time = now
-                                    last_emit_progress = progress
                                 if self.debug_mode and downloaded_size % (Config.CHUNK_SIZE * 10) == 0:
                                     print(f"\033[93m[Downloader] 已下载: {downloaded_size/1024:.2f} KB\033[0m")
 

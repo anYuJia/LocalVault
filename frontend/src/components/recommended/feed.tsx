@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  VideoCard,
   VIDEO_CARD_BODY_CLASS,
   VIDEO_CARD_COVER_CLASS,
-  VIDEO_CARD_GRID_CLASS,
   VIDEO_CARD_HEIGHT_CLASS,
 } from "@/components/search/video-card";
 import { Sparkles, RefreshCw, Loader2 } from "lucide-react";
@@ -18,8 +16,9 @@ import { useSearchStore } from "@/stores/search-store";
 import { useRecommendedStore } from "@/stores/recommended-store";
 import type { RecommendedFeedType, VideoInfo } from "@/lib/tauri";
 import { videoAuthorToUserInfo } from "@/lib/video-author";
+import { VirtualVideoGrid } from "@/components/search/virtual-video-grid";
 
-const ORIGINAL_VIDEO_GRID_CLASS = VIDEO_CARD_GRID_CLASS;
+const ORIGINAL_VIDEO_GRID_CLASS = "grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-3";
 const FEED_PRELOAD_ROOT_MARGIN = "1800px 0px";
 
 export function RecommendedFeed() {
@@ -144,28 +143,18 @@ export function RecommendedFeed() {
         </motion.div>
       ) : (
         <>
-          <motion.div
-            className={ORIGINAL_VIDEO_GRID_CLASS}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.2 }}
-          >
-            {videos.map((video, i) => (
-              <VideoCard
-                key={video.aweme_id}
-                video={video}
-                index={i}
-                animate={false}
-                onSelect={openPlayer}
-                onDetail={setDetailVideo}
-                onDownload={(item) => void downloadVideo(item)}
-                onAuthor={(item) => void openAuthor(item)}
-                authorLoading={authorLoadingId === video.aweme_id}
-              />
-            ))}
-          </motion.div>
-
-          <div ref={loadMoreRef} className="h-px w-full" aria-hidden="true" />
+          <VirtualVideoGrid
+            videos={videos}
+            onSelect={openPlayer}
+            onDetail={setDetailVideo}
+            onDownload={(item) => void downloadVideo(item)}
+            onAuthor={(item) => void openAuthor(item)}
+            authorLoadingId={authorLoadingId}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+            onLoadMore={() => void loadMore()}
+            loadMoreRootMargin={FEED_PRELOAD_ROOT_MARGIN}
+          />
 
           {hasMore ? (
             <div className="flex justify-center mt-6">

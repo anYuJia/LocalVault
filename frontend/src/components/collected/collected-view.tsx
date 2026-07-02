@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { VideoCard } from "@/components/search/video-card";
+import { VirtualVideoGrid } from "@/components/search/virtual-video-grid";
 import { VideoDetailModal } from "@/components/modals/video-detail";
 import { FullscreenPlayer } from "@/components/player/fullscreen-player";
 import { useDownloads } from "@/hooks/use-downloads";
@@ -246,28 +246,17 @@ function CollectedVideosPanel() {
       ) : (
         <>
           {error && <InlineWarning message={error} />}
-          <motion.div
-            className={ORIGINAL_VIDEO_GRID_CLASS}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.2 }}
-          >
-            {videos.map((video, index) => (
-              <VideoCard
-                key={video.aweme_id}
-                video={video}
-                index={index}
-                animate={false}
-                onSelect={openPlayer}
-                onDetail={setDetailVideo}
-                onDownload={(item) => void downloadVideo(item)}
-                onAuthor={(item) => void openAuthor(item)}
-                authorLoading={authorLoadingId === video.aweme_id}
-              />
-            ))}
-          </motion.div>
-
-          <div ref={loadMoreRef} className="h-px w-full" aria-hidden="true" />
+          <VirtualVideoGrid
+            videos={videos}
+            onSelect={openPlayer}
+            onDetail={setDetailVideo}
+            onDownload={(item) => void downloadVideo(item)}
+            onAuthor={(item) => void openAuthor(item)}
+            authorLoadingId={authorLoadingId}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+            onLoadMore={() => void loadVideos(false)}
+          />
           <LoadMoreFooter hasMore={hasMore} loadingMore={loadingMore} label="收藏视频" onLoadMore={() => void loadVideos(false)} />
         </>
       )}
@@ -564,27 +553,17 @@ function MixVideosPanel({ mix, onBack }: { mix: CollectedMixItem; onBack: () => 
         <EmptyState title="合集内暂无视频" description="该合集没有返回可下载的视频" />
       ) : (
         <>
-          <motion.div
-            className={ORIGINAL_VIDEO_GRID_CLASS}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.2 }}
-          >
-            {videos.map((video, index) => (
-              <VideoCard
-                key={video.aweme_id}
-                video={video}
-                index={index}
-                animate={false}
-                onSelect={openPlayer}
-                onDetail={setDetailVideo}
-                onDownload={(item) => void downloadVideo(item)}
-                onAuthor={(item) => void openAuthor(item)}
-                authorLoading={authorLoadingId === video.aweme_id}
-              />
-            ))}
-          </motion.div>
-          <div ref={loadMoreRef} className="h-px w-full" aria-hidden="true" />
+          <VirtualVideoGrid
+            videos={videos}
+            onSelect={openPlayer}
+            onDetail={setDetailVideo}
+            onDownload={(item) => void downloadVideo(item)}
+            onAuthor={(item) => void openAuthor(item)}
+            authorLoadingId={authorLoadingId}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+            onLoadMore={() => void loadVideos(false)}
+          />
           <LoadMoreFooter hasMore={hasMore} loadingMore={loadingMore} label="合集视频" onLoadMore={() => void loadVideos(false)} />
         </>
       )}

@@ -3,13 +3,7 @@ import { motion } from "framer-motion";
 import { CheckSquare, Download, Grid3x3, Loader2, RefreshCw, Sparkles, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  VideoCard,
-  VIDEO_CARD_BODY_CLASS,
-  VIDEO_CARD_COVER_CLASS,
-  VIDEO_CARD_GRID_CLASS,
-  VIDEO_CARD_HEIGHT_CLASS,
-} from "./video-card";
+import { VideoGridSkeleton, VirtualVideoGrid } from "./virtual-video-grid";
 import { VideoDetailModal } from "@/components/modals/video-detail";
 import { FullscreenPlayer } from "@/components/player/fullscreen-player";
 import { useDownloads } from "@/hooks/use-downloads";
@@ -36,7 +30,6 @@ export function VideoGrid() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [authorLoadingId, setAuthorLoadingId] = useState<string | null>(null);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const showPlaceholder = currentUser && !loadingVideos && videos.length === 0;
   const totalVideosCount = currentUser?.aweme_count || videos.length;
@@ -120,23 +113,6 @@ export function VideoGrid() {
     });
   }, [videos]);
 
-  useEffect(() => {
-    if (!hasMore || loadingVideos || loadingMore || videos.length === 0) return;
-    const node = loadMoreRef.current;
-    if (!node) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          void loadMore();
-        }
-      },
-      { root: null, rootMargin: "520px 0px", threshold: 0.01 }
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [hasMore, loadMore, loadingMore, loadingVideos, videos.length]);
 
   if (!currentUser) return null;
 
@@ -190,25 +166,7 @@ export function VideoGrid() {
         </div>
 
         {loadingVideos && videos.length === 0 ? (
-          <div className={VIDEO_CARD_GRID_CLASS}>
-            {Array.from({ length: 8 }).map((_, index) => (
-              <div
-                key={index}
-                className={`${VIDEO_CARD_HEIGHT_CLASS} overflow-hidden rounded-[var(--radius-lg)] border border-border bg-surface-solid/70`}
-              >
-                <div className={`${VIDEO_CARD_COVER_CLASS} bg-white/[0.05] animate-pulse`} />
-                <div className={`${VIDEO_CARD_BODY_CLASS} p-3`}>
-                  <div className="h-4 rounded bg-white/[0.05] animate-pulse mb-2" />
-                  <div className="h-3 w-1/2 rounded bg-white/[0.05] animate-pulse mb-3" />
-                  <div className="mt-auto grid grid-cols-3 gap-1.5">
-                    <div className="h-7 rounded bg-white/[0.05] animate-pulse" />
-                    <div className="h-7 rounded bg-white/[0.05] animate-pulse" />
-                    <div className="h-7 rounded bg-white/[0.05] animate-pulse" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <VideoGridSkeleton />
         ) : showPlaceholder ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -236,28 +194,20 @@ export function VideoGrid() {
           </motion.div>
         ) : (
           <>
-          <motion.div
-            className={VIDEO_CARD_GRID_CLASS}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.2 }}
-          >
-              {videos.map((video, index) => (
-                <VideoCard
-                  key={video.aweme_id}
-                  video={video}
-                  index={index}
-                  onSelect={openPlayer}
-                  onDetail={setDetailVideo}
-                  onDownload={(item) => void downloadVideo(item)}
-                  onAuthor={(item) => void openAuthor(item)}
-                  authorLoading={authorLoadingId === video.aweme_id}
-                  selected={selectedIds.has(video.aweme_id)}
-                />
-              ))}
-            </motion.div>
+            <VirtualVideoGrid
+              videos={videos}
+              onSelect={openPlayer}
+              onDetail={setDetailVideo}
+              onDownload={(item) => void downloadVideo(item)}
+              onAuthor={(item) => void openAuthor(item)}
+              authorLoadingId={authorLoadingId}
+              selectedIds={selectedIds}
+              hasMore={hasMore}
+              loadingMore={loadingMore || loadingVideos}
+              onLoadMore={() => void loadMore()}
+            />
 
-            <div ref={loadMoreRef} className="h-px w-full" aria-hidden="true" />
+            <div className="h-px w-full" aria-hidden="true" />
 
             {hasMore && (
               <div className="flex justify-center mt-6">

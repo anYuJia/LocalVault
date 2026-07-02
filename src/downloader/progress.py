@@ -10,6 +10,8 @@ import time
 
 from src.config.config import Config
 
+PROGRESS_EMIT_INTERVAL_SECONDS = 0.65
+
 
 def _redact_headers(headers: dict) -> dict:
     redacted = dict(headers)
