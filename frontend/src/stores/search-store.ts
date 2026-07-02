@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   getUserDetail,
+  type UserDetailResponse,
   getUserVideos,
   searchUser,
   verifyCookie,
@@ -13,6 +14,84 @@ import { saveRecentSearchUser } from "@/lib/recent-searches";
 import { requestVerifyRecovery } from "@/lib/verify-recovery";
 
 const PAGE_SIZE = 18;
+const USER_DETAIL_CACHE_TTL_MS = 10 * 60 * 1000;
+const USER_DETAIL_CACHE_MAX_ITEMS = 200;
+
+type CachedUserDetail = {
+  response: UserDetailResponse;
+  expiresAt: number;
+  lastAccessedAt: number;
+};
+
+const userDetailCache = new Map<string, CachedUserDetail>();
+
+function normalizedUserToken(value: string | undefined): string {
+  return String(value || "").trim();
+}
+
+function userDetailCacheKey(user: Partial<UserInfo>): string {
+  const secUid = normalizedUserToken(user.sec_uid);
+  if (secUid) return `sec_uid:${secUid}`;
+
+  const uid = normalizedUserToken(user.uid);
+  if (uid) return `uid:${uid}`;
+
+  const nickname = normalizedUserToken(user.nickname);
+  return nickname && nickname.length >= 2 ? `nickname:${nickname}` : "";
+}
+
+function cloneUserDetailResponse(response: UserDetailResponse): UserDetailResponse {
+  return { ...response, user: response.user ? { ...response.user } : undefined };
+}
+
+function readCachedUserDetail(user: Partial<UserInfo>): UserDetailResponse | null {
+  const key = userDetailCacheKey(user);
+  if (!key) return null;
+
+  const cached = userDetailCache.get(key);
+  const now = Date.now();
+  if (!cached || cached.expiresAt <= now) {
+    userDetailCache.delete(key);
+    return null;
+  }
+
+  cached.lastAccessedAt = now;
+  return cloneUserDetailResponse(cached.response);
+}
+
+function writeCachedUserDetail(seed: Partial<UserInfo>, response: UserDetailResponse): void {
+  if (!response.success || !response.user || response.need_login || response.need_verify) return;
+
+  const key = userDetailCacheKey(response.user) || userDetailCacheKey(seed);
+  if (!key) return;
+
+  const now = Date.now();
+  userDetailCache.set(key, {
+    response: cloneUserDetailResponse(response),
+    expiresAt: now + USER_DETAIL_CACHE_TTL_MS,
+    lastAccessedAt: now,
+  });
+
+  if (userDetailCache.size <= USER_DETAIL_CACHE_MAX_ITEMS) return;
+  const oldest = [...userDetailCache.entries()].sort(
+    ([, left], [, right]) => left.lastAccessedAt - right.lastAccessedAt
+  )[0]?.[0];
+  if (oldest) userDetailCache.delete(oldest);
+}
+
+async function getCachedUserDetail(
+  user: Partial<UserInfo>,
+  options: { forceRefresh?: boolean } = {}
+): Promise<UserDetailResponse> {
+  if (!options.forceRefresh) {
+    const cached = readCachedUserDetail(user);
+    if (cached) return cached;
+  }
+
+  const detail = await getUserDetail(normalizedUserToken(user.sec_uid), normalizedUserToken(user.nickname));
+  writeCachedUserDetail(user, detail);
+  return detail;
+}
 
 // ... (utility functions)
 
@@ -59,8 +138,8 @@ interface SearchStoreState {
   search: (keyword: string) => Promise<void>;
   resumeVerifySearch: () => Promise<void>;
   dismissVerifySearch: () => void;
-  selectUser: (user: UserInfo) => Promise<void>;
-  openUser: (user: UserInfo, options?: { loadVideos?: boolean }) => Promise<void>;
+  selectUser: (user: UserInfo, options?: { forceRefresh?: boolean }) => Promise<void>;
+  openUser: (user: UserInfo, options?: { forceRefresh?: boolean; loadVideos?: boolean }) => Promise<void>;
   loadVideos: () => Promise<void>;
   loadMore: () => Promise<void>;
   clear: () => void;
@@ -210,7 +289,7 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
             const batch = candidates.slice(index, index + 3);
             await Promise.allSettled(
               batch.map(async (user) => {
-                const detail = await getUserDetail(user.sec_uid, user.nickname);
+                const detail = await getCachedUserDetail(user);
                 if (requestId !== latestSearchRequestId || !detail.success || !detail.user) return;
                 if (get().currentUser && isSameUser(get().currentUser!, user)) {
                   saveRecentSearchUser(mergeUserInfo(user, detail.user));
@@ -347,7 +426,7 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
     set({ pendingVerifySearch: null, error: null });
   },
 
-  selectUser: async (user) => {
+  selectUser: async (user, options = {}) => {
     const requestId = ++latestUserRequestId;
     latestSearchRequestId += 1;
     latestVideoRequestId += 1;
@@ -369,7 +448,7 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
     const loadingToastId = toast(`正在加载 ${user.nickname} 的详情`, "loading");
 
     try {
-      const detail = await getUserDetail(user.sec_uid, user.nickname);
+      const detail = await getCachedUserDetail(user, { forceRefresh: options.forceRefresh });
       useToastStore.getState().dismiss(loadingToastId);
       if (requestId !== latestUserRequestId) return;
 
@@ -386,7 +465,7 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
           verifyUrl: detail.verify_url,
           message,
           title: "用户详情需要验证",
-          onResume: () => void get().selectUser(user),
+          onResume: () => void get().selectUser(user, { forceRefresh: true }),
         });
         set({ loadingUser: false, error: message, currentUser: user });
         addLog(message, "warning");
@@ -430,7 +509,7 @@ export const useSearchStore = create<SearchStoreState>((set, get) => ({
   },
 
   openUser: async (user, options = {}) => {
-    const selection = get().selectUser(user);
+    const selection = get().selectUser(user, { forceRefresh: options.forceRefresh });
     useAppStore.getState().setView("user");
     await selection;
     if (options.loadVideos !== false) {
