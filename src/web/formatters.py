@@ -125,6 +125,26 @@ def user_detail_payload(user_info: dict, fallback_sec_uid: str = '', fallback_ni
 
 def format_comment_item(item: dict) -> dict:
     user = item.get('user') or {}
+    reply_to_user = (
+        item.get('reply_to_user')
+        or item.get('reply_user')
+        or item.get('reply_to_user_info')
+        or item.get('to_user')
+        or {}
+    )
+    reply_to_user_id = (
+        item.get('reply_to_userid')
+        or item.get('reply_to_uid')
+        or item.get('reply_to_user_id')
+        or (reply_to_user.get('uid') if isinstance(reply_to_user, dict) else '')
+        or ''
+    )
+    reply_to_user_name = (
+        item.get('reply_to_user_name')
+        or item.get('reply_to_nickname')
+        or (reply_to_user.get('nickname') if isinstance(reply_to_user, dict) else '')
+        or ''
+    )
     sticker = item.get('sticker') or {}
     sticker_url = safe_get_url(sticker.get('static_url') or {}) or safe_get_url(sticker.get('animate_url') or {})
     return {
@@ -142,6 +162,10 @@ def format_comment_item(item: dict) -> dict:
         'reply_comment_total': item.get('reply_comment_total', 0),
         # 保留根评论附带的 reply_comment 子数组（insert_ids 拉取时含目标子评论）。
         'sub_comments': [format_comment_item(sub) for sub in (item.get('reply_comment') or []) if isinstance(sub, dict)] or None,
+        'reply_id': item.get('reply_id') or item.get('comment_id') or item.get('parent_id') or '',
+        'reply_to_reply_id': item.get('reply_to_reply_id') or item.get('reply_to_cid') or item.get('reply_to_comment_id') or '',
+        'reply_to_user_id': str(reply_to_user_id),
+        'reply_to_user_name': str(reply_to_user_name),
         'status': item.get('status', 0),
         'ip_label': item.get('ip_label', ''),
         'sticker_url': sticker_url,

@@ -238,10 +238,14 @@ export function NoticesView() {
   const [playerOpen, setPlayerOpen] = useState(false);
   const [playerInitialComment, setPlayerInitialComment] = useState<{
     cid: string;
+    root_cid?: string;
+    is_sub?: boolean;
     text: string;
     digg_count: number;
     create_time: number;
     user: { uid: string; nickname: string; sec_uid: string; avatar: string };
+    reply_to_user?: { uid: string; nickname: string; sec_uid: string; avatar: string } | null;
+    reply_to_text?: string;
   } | null>(null);
   const [playerOpenComments, setPlayerOpenComments] = useState(false);
   const [jumpingId, setJumpingId] = useState("");
@@ -344,6 +348,8 @@ export function NoticesView() {
         if (notice.comment && notice.comment.cid && notice.comment.user) {
           setPlayerInitialComment({
             cid: notice.comment.cid,
+            root_cid: notice.comment.root_cid,
+            is_sub: notice.comment.is_sub,
             text: notice.comment.text,
             digg_count: notice.comment.digg_count,
             create_time: notice.comment.create_time,
@@ -353,6 +359,15 @@ export function NoticesView() {
               sec_uid: notice.comment.user.sec_uid,
               avatar: notice.comment.user.avatar,
             },
+            reply_to_user: notice.comment.reply_to_user
+              ? {
+                  uid: notice.comment.reply_to_user.uid,
+                  nickname: notice.comment.reply_to_user.nickname,
+                  sec_uid: notice.comment.reply_to_user.sec_uid,
+                  avatar: notice.comment.reply_to_user.avatar,
+                }
+              : null,
+            reply_to_text: notice.comment.reply_to_text || "",
           });
           setPlayerOpenComments(false);
         } else {

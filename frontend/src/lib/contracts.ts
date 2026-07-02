@@ -236,6 +236,10 @@ export interface CommentInfo {
   user_digged?: number;
   reply_comment_total: number;
   sub_comments?: CommentInfo[] | null;
+  reply_id?: string;
+  reply_to_reply_id?: string;
+  reply_to_user_id?: string;
+  reply_to_user_name?: string;
   status?: number;
   ip_label?: string;
   sticker_url?: string;
@@ -353,6 +357,8 @@ export interface NoticeComment {
   digg_count: number;
   create_time: number;
   user: NoticeUser;
+  reply_to_user?: NoticeUser | null;
+  reply_to_text?: string;
 }
 
 export interface NoticeItem {

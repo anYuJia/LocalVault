@@ -179,6 +179,16 @@ def _format_notice(item: dict) -> dict | None:
     elif isinstance(comment_wrap, dict):
         # 评论/回复类通知（type 31）：顶层 comment 是包装层，真实评论在
         # comment.comment（含 cid/text/user），根评论 cid 在 comment.parent_id。
+        reply_to_user: dict | None = None
+        reply_to_text = ''
+        reply = comment_wrap.get('reply_comment')
+        if isinstance(reply, dict):
+            reply_to_text = str(reply.get('text') or '').strip()
+            reply_user = reply.get('user')
+            if isinstance(reply_user, dict):
+                formatted = _format_user(reply_user)
+                if formatted.get('uid') or formatted.get('nickname'):
+                    reply_to_user = formatted
         inner = comment_wrap.get('comment')
         inner_cid = ''
         inner_user: dict | None = None
@@ -208,6 +218,8 @@ def _format_notice(item: dict) -> dict | None:
                 'digg_count': int(inner.get('digg_count') or 0) if isinstance(inner, dict) else 0,
                 'create_time': int(item.get('create_time') or 0),
                 'user': inner_user,
+                'reply_to_user': reply_to_user,
+                'reply_to_text': reply_to_text,
             }
         merge_count = int(comment_wrap.get('merge_count') or 0) or 0
         label_text = str(comment_wrap.get('label_text') or '').strip()
