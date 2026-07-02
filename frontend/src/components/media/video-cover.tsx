@@ -79,6 +79,11 @@ export function VideoCover({
 
   const scheduleCoverRetry = useCallback(() => {
     if (!coverProxyUrl || retryTimerRef.current !== null) return;
+    if (coverRetryKey >= COVER_MAX_RETRIES) {
+      markMediaFailure(coverProxyUrl);
+      setCoverFailed(true);
+      return;
+    }
     retryTimerRef.current = window.setTimeout(() => {
       retryTimerRef.current = null;
       setCoverRetryKey((value) => {
@@ -90,7 +95,7 @@ export function VideoCover({
         return value + 1;
       });
     }, COVER_RETRY_DELAY_MS);
-  }, [coverProxyUrl]);
+  }, [coverProxyUrl, coverRetryKey]);
 
   const handleImageNode = useCallback((node: HTMLImageElement | null) => {
     imageRef.current = node;
@@ -101,11 +106,10 @@ export function VideoCover({
         setCoverLoaded(true);
         setCoverFailed(false);
       } else {
-        markMediaFailure(coverProxyUrl);
-        setCoverFailed(true);
+        scheduleCoverRetry();
       }
     }
-  }, [coverUrl]);
+  }, [coverProxyUrl, coverUrl, scheduleCoverRetry]);
 
   useEffect(() => {
     const image = imageRef.current;
@@ -116,31 +120,10 @@ export function VideoCover({
         setCoverLoaded(true);
         setCoverFailed(false);
       } else {
-        markMediaFailure(coverProxyUrl);
-        setCoverFailed(true);
+        scheduleCoverRetry();
       }
     }
-  }, [coverUrl]);
-
-  useEffect(() => {
-    if (!coverUrl || coverLoaded || coverFailed || coverRetryKey >= COVER_MAX_RETRIES) return;
-    retryTimerRef.current = window.setTimeout(() => {
-      retryTimerRef.current = null;
-      const image = imageRef.current;
-      if (image?.complete && image.naturalWidth > 0) {
-        clearMediaFailure(coverProxyUrl);
-        setCoverLoaded(true);
-        return;
-      }
-      setCoverRetryKey((value) => Math.min(COVER_MAX_RETRIES, value + 1));
-    }, COVER_RETRY_DELAY_MS);
-    return () => {
-      if (retryTimerRef.current !== null) {
-        window.clearTimeout(retryTimerRef.current);
-        retryTimerRef.current = null;
-      }
-    };
-  }, [coverFailed, coverLoaded, coverProxyUrl, coverRetryKey, coverUrl]);
+  }, [coverProxyUrl, coverUrl, scheduleCoverRetry]);
 
   const skipCoverRequest = coverFailed || hasRecentMediaFailure(coverProxyUrl);
 
@@ -168,6 +151,10 @@ export function VideoCover({
             fetchPriority={priority ? "high" : "auto"}
             decoding="async"
             onLoad={() => {
+              if (retryTimerRef.current !== null) {
+                window.clearTimeout(retryTimerRef.current);
+                retryTimerRef.current = null;
+              }
               clearMediaFailure(coverProxyUrl);
               setCoverLoaded(true);
               setCoverFailed(false);
