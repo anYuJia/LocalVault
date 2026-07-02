@@ -271,6 +271,11 @@ class DouyinAPI:
         except requests.RequestException as e:
             if self.debug_mode:
                 print(f'\033[91m[API] 网络请求异常: {e}\033[0m')
+            try:
+                from src.config.config import Config
+                Config._flush_config_syncs()
+            except Exception:
+                pass
             return {
                 'status_code': -1,
                 'status_msg': '网络请求失败',

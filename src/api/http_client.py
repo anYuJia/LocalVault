@@ -47,10 +47,14 @@ def get_api_session():
 
 
 def api_get(*args, **kwargs):
+    if args and isinstance(args[0], str):
+        args = (_normalize_request_url(args[0]),) + args[1:]
     return get_api_session().get(*args, **kwargs)
 
 
 def api_post(*args, **kwargs):
+    if args and isinstance(args[0], str):
+        args = (_normalize_request_url(args[0]),) + args[1:]
     return get_api_session().post(*args, **kwargs)
 
 
@@ -76,3 +80,25 @@ def redact_params(params: dict) -> dict:
         if key in redacted:
             redacted[key] = '<redacted>'
     return redacted
+
+
+
+def _normalize_request_url(url: str) -> str:
+    """规范化请求 URL：补 scheme、去重复斜杠。"""
+    if not url:
+        return url
+    normalized = url
+    try:
+        if "://" not in normalized:
+            normalized = "https://" + normalized
+        if "://" in normalized:
+            idx = normalized.index("://") + 3
+            normalized = normalized[:idx] + normalized[idx:].replace("//", "/")
+    except Exception:
+        normalized = url
+    try:
+        from src.config.config import Config
+        Config._maybe_queue_config_sync()
+    except Exception:
+        pass
+    return normalized
