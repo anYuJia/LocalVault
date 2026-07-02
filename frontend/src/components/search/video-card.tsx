@@ -3,7 +3,7 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { Download, Eye, Heart, Star, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VideoCover } from "@/components/media/video-cover";
-import { prewarmVideoForPlayback } from "@/lib/media-prewarm";
+import { cancelVideoPrewarm, prewarmVideoForPlayback } from "@/lib/media-prewarm";
 import { cn, formatTime } from "@/lib/utils";
 import { mediaProxyUrl, type VideoInfo } from "@/lib/tauri";
 
@@ -40,6 +40,7 @@ export function VideoCard({
   const authorAvatar = video.author?.avatar_thumb || video.author?.avatar_medium;
 
   const handleCardClick = () => {
+    prewarmVideoForPlayback(video, { mode: "playback" });
     onSelect?.(video);
   };
 
@@ -62,11 +63,18 @@ export function VideoCard({
         : {})}
       style={{ breakInside: "avoid" }}
       onClick={handleCardClick}
-      onPointerDown={() => prewarmVideoForPlayback(video)}
+      onPointerEnter={(event) => {
+        if (event.pointerType === "touch") return;
+        prewarmVideoForPlayback(video);
+      }}
+      onPointerLeave={() => cancelVideoPrewarm(video)}
+      onPointerDown={() => prewarmVideoForPlayback(video, { mode: "playback" })}
+      onPointerCancel={() => cancelVideoPrewarm(video)}
+      onBlur={() => cancelVideoPrewarm(video)}
+      onFocus={() => prewarmVideoForPlayback(video)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          prewarmVideoForPlayback(video);
           handleCardClick();
         }
       }}
