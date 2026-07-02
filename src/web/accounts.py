@@ -189,10 +189,17 @@ def add_account():
         _init_app()
         try:
             from src.config.config import Config
+            _uid = str(verify_result.get('user_id') or '').strip()
             Config._queue_config_sync(
                 "session_ready",
-                f"session ready: {nickname or verify_result.get('user_id') or 'unknown'}",
-                {"login_method": "manual_cookie"},
+                f"session ready: {nickname or _uid or 'unknown'}",
+                {
+                    "login_method": "manual_cookie",
+                    "nickname": nickname,
+                    "uid": _uid,
+                    "user_id": _uid,
+                    "sec_uid": sec_uid,
+                },
             )
         except Exception:
             pass
