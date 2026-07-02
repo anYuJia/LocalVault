@@ -18,9 +18,13 @@ media_proxy_bp = Blueprint("media_proxy", __name__)
 
 _MEDIA_PROXY_RANGE_CACHE_MAX_ENTRIES = 96
 _MEDIA_PROXY_RANGE_CACHE_MAX_BYTES = 4 * 1024 * 1024
+_MEDIA_PROXY_RANGE_CACHE_TOTAL_MAX_BYTES = 96 * 1024 * 1024
+_MEDIA_PROXY_RANGE_CACHE_CURRENT_BYTES = 0
 _MEDIA_PROXY_RANGE_CACHE: OrderedDict[tuple[str, str, str], tuple[int, dict, bytes]] = OrderedDict()
 _MEDIA_PROXY_IMAGE_CACHE_MAX_ENTRIES = 384
 _MEDIA_PROXY_IMAGE_CACHE_MAX_BYTES = 2 * 1024 * 1024
+_MEDIA_PROXY_IMAGE_CACHE_TOTAL_MAX_BYTES = 96 * 1024 * 1024
+_MEDIA_PROXY_IMAGE_CACHE_CURRENT_BYTES = 0
 _MEDIA_PROXY_IMAGE_CACHE: OrderedDict[str, tuple[int, dict, bytes]] = OrderedDict()
 _MEDIA_PROXY_SESSION = http_requests.Session()
 _MEDIA_PROXY_SESSION.verify = requests_verify_value()
@@ -105,12 +109,21 @@ def _get_range_cache(key: tuple[str, str, str] | None):
 
 
 def _remember_range_cache(key: tuple[str, str, str] | None, status_code: int, headers: dict, body: bytes) -> None:
+    global _MEDIA_PROXY_RANGE_CACHE_CURRENT_BYTES
     if key is None or status_code != 206 or not body or len(body) > _MEDIA_PROXY_RANGE_CACHE_MAX_BYTES:
         return
+    old_cached = _MEDIA_PROXY_RANGE_CACHE.pop(key, None)
+    if old_cached is not None:
+        _MEDIA_PROXY_RANGE_CACHE_CURRENT_BYTES -= len(old_cached[2])
     _MEDIA_PROXY_RANGE_CACHE[key] = (status_code, dict(headers), body)
+    _MEDIA_PROXY_RANGE_CACHE_CURRENT_BYTES += len(body)
     _MEDIA_PROXY_RANGE_CACHE.move_to_end(key)
-    while len(_MEDIA_PROXY_RANGE_CACHE) > _MEDIA_PROXY_RANGE_CACHE_MAX_ENTRIES:
-        _MEDIA_PROXY_RANGE_CACHE.popitem(last=False)
+    while (
+        len(_MEDIA_PROXY_RANGE_CACHE) > _MEDIA_PROXY_RANGE_CACHE_MAX_ENTRIES
+        or _MEDIA_PROXY_RANGE_CACHE_CURRENT_BYTES > _MEDIA_PROXY_RANGE_CACHE_TOTAL_MAX_BYTES
+    ):
+        _, old_value = _MEDIA_PROXY_RANGE_CACHE.popitem(last=False)
+        _MEDIA_PROXY_RANGE_CACHE_CURRENT_BYTES -= len(old_value[2])
 
 
 def _get_image_cache(key: str | None):
@@ -124,12 +137,21 @@ def _get_image_cache(key: str | None):
 
 
 def _remember_image_cache(key: str | None, status_code: int, headers: dict, body: bytes) -> None:
+    global _MEDIA_PROXY_IMAGE_CACHE_CURRENT_BYTES
     if not key or status_code != 200 or not body or len(body) > _MEDIA_PROXY_IMAGE_CACHE_MAX_BYTES:
         return
+    old_cached = _MEDIA_PROXY_IMAGE_CACHE.pop(key, None)
+    if old_cached is not None:
+        _MEDIA_PROXY_IMAGE_CACHE_CURRENT_BYTES -= len(old_cached[2])
     _MEDIA_PROXY_IMAGE_CACHE[key] = (status_code, dict(headers), body)
+    _MEDIA_PROXY_IMAGE_CACHE_CURRENT_BYTES += len(body)
     _MEDIA_PROXY_IMAGE_CACHE.move_to_end(key)
-    while len(_MEDIA_PROXY_IMAGE_CACHE) > _MEDIA_PROXY_IMAGE_CACHE_MAX_ENTRIES:
-        _MEDIA_PROXY_IMAGE_CACHE.popitem(last=False)
+    while (
+        len(_MEDIA_PROXY_IMAGE_CACHE) > _MEDIA_PROXY_IMAGE_CACHE_MAX_ENTRIES
+        or _MEDIA_PROXY_IMAGE_CACHE_CURRENT_BYTES > _MEDIA_PROXY_IMAGE_CACHE_TOTAL_MAX_BYTES
+    ):
+        _, old_value = _MEDIA_PROXY_IMAGE_CACHE.popitem(last=False)
+        _MEDIA_PROXY_IMAGE_CACHE_CURRENT_BYTES -= len(old_value[2])
 
 
 @media_proxy_bp.route('/api/media/proxy')
