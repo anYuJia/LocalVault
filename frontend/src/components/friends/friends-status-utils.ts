@@ -504,11 +504,18 @@ export function parseSharedMessage(message: LocalChatMessage): SharedMessageCard
   const parsed = nested || root;
   const dynamicCard = parseDynamicPatchCard(parsed) || (nested ? parseDynamicPatchCard(root) : null);
   if (dynamicCard) return dynamicCard;
+  const aweType = Number(parsed.aweType || parsed.awe_type || 0);
   const inlineImageUrl = inlineImageDataUrl(deepStringField(parsed, ["inline_pic", "inlinePic"]));
-  const resourceImageUrl = deepFirstUrl(parsed, ["resource_url"]);
+  const resourceImageUrl = deepFirstUrl(parsed, ["resource_url", "url"]);
   const resource = isRecord(parsed.resource_url) ? parsed.resource_url : undefined;
   const imageSkey = stringField(resource, ["skey"]) || deepStringField(parsed, ["skey"]);
-  const isImageContent = Number(parsed.aweType || parsed.awe_type || 0) === 2702 || Boolean(resourceImageUrl || inlineImageUrl);
+  const emojiType = deepStringField(parsed, ["emoji_type", "emojiType"]);
+  const imageType = deepStringField(parsed, ["image_type", "imageType"]);
+  const isImageContent =
+    aweType === 2702 ||
+    aweType === 501 ||
+    Boolean(resourceImageUrl || inlineImageUrl) ||
+    Boolean(emojiType || imageType || parsed.sticker_type || parsed.stickerType);
   const itemId = normalizeSharedItemId(
     deepStringField(parsed, ["itemId", "item_id", "awemeId", "aweme_id"]) ||
     deepStringField(parsed, ["share_id"]),
@@ -532,6 +539,7 @@ export function parseSharedMessage(message: LocalChatMessage): SharedMessageCard
   ]);
   const hasCommentSignal = hasDeepField(parsed, [
     "comment_id",
+    "comment",
     "cid",
     "comment_content",
     "comment_text",
@@ -542,6 +550,8 @@ export function parseSharedMessage(message: LocalChatMessage): SharedMessageCard
     "origin_comment_content",
     "origin_comment_text",
   ]);
+  const commentUserName = deepStringField(parsed, ["comment_user_name", "commentUserName"]);
+  const awemeTitle = deepStringField(parsed, ["aweme_title", "awemeTitle", "item_title", "itemTitle"]);
   const hasShareSignal = Boolean(
     itemId ||
       hasCommentSignal ||
@@ -568,10 +578,15 @@ export function parseSharedMessage(message: LocalChatMessage): SharedMessageCard
     "content_author_name",
   ]);
   if (!title && !coverUrl) return null;
+  const commentSubtitle = uniqueTextParts([
+    "分享评论",
+    commentUserName ? `评论者：${commentUserName}` : "",
+    awemeTitle ? `作品：${awemeTitle}` : "",
+  ]).join(" · ");
   return {
     kind,
     title: title || (kind === "comment" ? "分享了一条评论" : kind === "image" ? "图片" : "分享了一条内容"),
-    subtitle: kind === "comment" ? "分享评论" : kind === "video" ? "分享视频" : kind === "image" ? "图片" : "分享内容",
+    subtitle: kind === "comment" ? commentSubtitle : kind === "video" ? "分享视频" : kind === "image" ? "图片" : "分享内容",
     coverUrl,
     skey: kind === "image" ? imageSkey : undefined,
     avatarUrl,
