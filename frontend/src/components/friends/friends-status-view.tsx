@@ -3,7 +3,7 @@ import { Activity, Loader2, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { FullscreenPlayer } from "@/components/player/fullscreen-player";
+import { FullscreenPlayer } from "@/components/player/lazy-fullscreen-player";
 import { useDownloads } from "@/hooks/use-downloads";
 import {
   getAccounts,

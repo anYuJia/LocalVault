@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, Loader2, RefreshCw, Heart, UserPlus, MessageSquare, AtSign, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FullscreenPlayer } from "@/components/player/fullscreen-player";
+import { FullscreenPlayer } from "@/components/player/lazy-fullscreen-player";
 import { getNotices, getVideoDetail, mediaProxyUrl, publishComment } from "@/lib/tauri";
 import type { NoticeItem, NoticeUser, VideoInfo } from "@/lib/contracts";
 import { cn } from "@/lib/utils";

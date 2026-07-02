@@ -22,7 +22,7 @@ import {
   VIDEO_CARD_HEIGHT_CLASS,
 } from "@/components/search/video-card";
 import { VideoDetailModal } from "@/components/modals/video-detail";
-import { FullscreenPlayer } from "@/components/player/fullscreen-player";
+import { FullscreenPlayer } from "@/components/player/lazy-fullscreen-player";
 import { useDownloads } from "@/hooks/use-downloads";
 import { useAppStore, useDownloadStore, useLogStore } from "@/stores/app-store";
 import { useSearchStore } from "@/stores/search-store";

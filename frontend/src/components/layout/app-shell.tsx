@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { Suspense, lazy, useLayoutEffect, useRef, type ReactNode } from "react";
 import { useAppStore } from "@/stores/app-store";
 import { Sidebar } from "./sidebar";
 import { BottomBar } from "./bottom-bar";
@@ -8,16 +8,26 @@ import { Hero } from "@/components/home/hero";
 import { SearchView } from "@/components/search/search-view";
 import { VideoGrid } from "@/components/search/video-grid";
 import { UserDetail } from "@/components/search/user-detail";
-import { LinkView } from "@/components/link/link-view";
-import { RecommendedFeed } from "@/components/recommended/feed";
-import { DownloadsView } from "@/components/downloads/downloads-view";
-import { SettingsView } from "@/components/settings/settings-view";
-import { LikedView } from "@/components/liked/liked-view";
-import { CollectedView } from "@/components/collected/collected-view";
-import { FriendsStatusView } from "@/components/friends/friends-status-view";
-import { NoticesView } from "@/components/notices/notices-view";
 import { AnimatePresence, motion } from "framer-motion";
-import { cn, easeConfig } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+
+const RecommendedFeed = lazy(() => import("@/components/recommended/feed").then((module) => ({ default: module.RecommendedFeed })));
+const DownloadsView = lazy(() => import("@/components/downloads/downloads-view").then((module) => ({ default: module.DownloadsView })));
+const SettingsView = lazy(() => import("@/components/settings/settings-view").then((module) => ({ default: module.SettingsView })));
+const LikedView = lazy(() => import("@/components/liked/liked-view").then((module) => ({ default: module.LikedView })));
+const CollectedView = lazy(() => import("@/components/collected/collected-view").then((module) => ({ default: module.CollectedView })));
+const FriendsStatusView = lazy(() => import("@/components/friends/friends-status-view").then((module) => ({ default: module.FriendsStatusView })));
+const NoticesView = lazy(() => import("@/components/notices/notices-view").then((module) => ({ default: module.NoticesView })));
+
+function ViewFallback({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={cn("animate-pulse", compact ? "h-full w-full" : "min-h-[360px] rounded-[var(--radius-xl)] border border-border/50 bg-surface-solid/40")} />
+  );
+}
+
+function LazyView({ children, compact = false }: { children: ReactNode; compact?: boolean }) {
+  return <Suspense fallback={<ViewFallback compact={compact} />}>{children}</Suspense>;
+}
 
 export function AppShell() {
   const currentView = useAppStore((s) => s.currentView);
@@ -112,43 +122,57 @@ function renderView(view: string) {
     case "recommended":
       return (
         <motion.div key="recommended" {...variants} transition={transition} className="p-6">
-          <RecommendedFeed />
+          <LazyView>
+            <RecommendedFeed />
+          </LazyView>
         </motion.div>
       );
     case "downloads":
       return (
         <motion.div key="downloads" {...variants} transition={transition} className="p-6">
-          <DownloadsView />
+          <LazyView>
+            <DownloadsView />
+          </LazyView>
         </motion.div>
       );
     case "liked":
       return (
         <motion.div key="liked" {...variants} transition={transition} className="p-6">
-          <LikedView />
+          <LazyView>
+            <LikedView />
+          </LazyView>
         </motion.div>
       );
     case "collected":
       return (
         <motion.div key="collected" {...variants} transition={transition} className="p-6">
-          <CollectedView />
+          <LazyView>
+            <CollectedView />
+          </LazyView>
         </motion.div>
       );
     case "friends-status":
       return (
         <motion.div key="friends-status" {...variants} transition={transition} className="box-border h-full min-h-0 pt-2 pb-0 px-4">
-          <FriendsStatusView />
+          <LazyView compact>
+            <FriendsStatusView />
+          </LazyView>
         </motion.div>
       );
     case "notices":
       return (
         <motion.div key="notices" {...variants} transition={transition} className="box-border h-full min-h-0 pt-2 pb-0 px-4">
-          <NoticesView />
+          <LazyView compact>
+            <NoticesView />
+          </LazyView>
         </motion.div>
       );
     case "settings":
       return (
         <motion.div key="settings" {...variants} transition={transition}>
-          <SettingsView />
+          <LazyView>
+            <SettingsView />
+          </LazyView>
         </motion.div>
       );
     default:

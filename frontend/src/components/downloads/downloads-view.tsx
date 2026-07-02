@@ -5,7 +5,7 @@ import { TaskCard } from "./task-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { FullscreenPlayer } from "@/components/player/fullscreen-player";
+import { FullscreenPlayer } from "@/components/player/lazy-fullscreen-player";
 import {
   Select,
   SelectTrigger,

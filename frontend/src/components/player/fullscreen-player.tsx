@@ -123,7 +123,7 @@ function buildAudioDownloadVideo(video: VideoInfo, audioUrl: string): VideoInfo 
   };
 }
 
-interface FullscreenPlayerProps {
+export interface FullscreenPlayerProps {
   videos: VideoInfo[];
   initialIndex?: number;
   initialMediaIndex?: number;

@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { VirtualVideoGrid } from "@/components/search/virtual-video-grid";
 import { VideoDetailModal } from "@/components/modals/video-detail";
-import { FullscreenPlayer } from "@/components/player/fullscreen-player";
+import { FullscreenPlayer } from "@/components/player/lazy-fullscreen-player";
 import { useDownloads } from "@/hooks/use-downloads";
 import { useAppStore, useLogStore } from "@/stores/app-store";
 import { useSearchStore } from "@/stores/search-store";

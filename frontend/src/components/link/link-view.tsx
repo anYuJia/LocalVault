@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { CompletionInput, type CompletionInputOption } from "@/components/ui/completion-input";
 import { VideoCard, VIDEO_CARD_GRID_CLASS } from "@/components/search/video-card";
 import { VideoDetailModal } from "@/components/modals/video-detail";
-import { FullscreenPlayer } from "@/components/player/fullscreen-player";
+import { FullscreenPlayer } from "@/components/player/lazy-fullscreen-player";
 import { useDownloads } from "@/hooks/use-downloads";
 import { useAlertStore } from "@/stores/app-store";
 import { useLinkStore } from "@/stores/link-store";

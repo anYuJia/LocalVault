@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRecommended } from "@/hooks/use-recommended";
 import { useDownloads } from "@/hooks/use-downloads";
 import { VideoDetailModal } from "@/components/modals/video-detail";
-import { FullscreenPlayer } from "@/components/player/fullscreen-player";
+import { FullscreenPlayer } from "@/components/player/lazy-fullscreen-player";
 import { useSearchStore } from "@/stores/search-store";
 import { useRecommendedStore } from "@/stores/recommended-store";
 import type { RecommendedFeedType, VideoInfo } from "@/lib/tauri";
