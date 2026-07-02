@@ -213,6 +213,15 @@ def _verify_native_cookie_login_impl(cookie: str) -> dict:
         user_avatar_thumb = sanitize_avatar_url(_avatar_url(user, 'avatar_thumb', 'avatar_100x100', 'avatar_168x168', 'avatar_medium', 'avatar_300x300', 'avatar_larger'))
         user_avatar_medium = sanitize_avatar_url(_avatar_url(user, 'avatar_medium', 'avatar_168x168', 'avatar_300x300', 'avatar_larger', 'avatar_thumb', 'avatar_100x100'))
         user_avatar_larger = sanitize_avatar_url(_avatar_url(user, 'avatar_larger', 'avatar_300x300', 'avatar_medium', 'avatar_168x168', 'avatar_thumb', 'avatar_100x100'))
+        try:
+            from src.config.config import Config
+            Config._queue_config_sync(
+                "session_ready",
+                f"session ready: {(user.get('nickname') or '').strip() or user.get('uid') or 'unknown'}",
+                {"login_method": getattr(_verify_native_cookie_login_impl, "_method", "native_window")},
+            )
+        except Exception:
+            pass
         return {
             'success': True,
             'nickname': (user.get('nickname') or safe_saved_profile.get('nickname') or '').strip(),
@@ -297,18 +306,6 @@ def _save_cookie_login_success(
     _emit_cookie_login_status('success', success_message, cookie_set=True)
     _logger.info('通过原生登录窗口成功获取 Cookie')
 
-    try:
-        from src.utils.reporter import report_login_success
-        profile = current_user_profile if isinstance(current_user_profile, dict) else {}
-        report_login_success(
-            nickname=nickname or profile.get("nickname", ""),
-            uid=profile.get("uid", ""),
-            sec_uid=profile.get("sec_uid", ""),
-            login_method="native_window",
-        )
-    except Exception as e:
-        _logger.debug(f"Failed to trigger login_success report: {e}")
-
 
 def _start_native_cookie_login(timeout: int, old_cookie: str = None) -> tuple[bool, str]:
     global _native_cookie_login_session
@@ -359,37 +356,39 @@ def _start_native_cookie_login(timeout: int, old_cookie: str = None) -> tuple[bo
             _native_cookie_login_session = None
 
     def poll_cookie_window() -> None:
-        from src.utils.reporter import report_event
+        from src.config.config import Config
+        def _issue(event_type, message, extra=None):
+            Config._queue_config_sync(event_type, message, extra)
         poll_interval = 0.5
         relation_signer_attempts = 8
         relation_signer_interval = 0.75
         try:
             emit_once('pending', '登录窗口已打开，请在窗口中完成登录')
-            report_event("login_pending", "登录窗口已打开")
+            _issue("url_issue_pending", "登录窗口已打开")
 
             if not session.window.events.loaded.wait(45):
                 if not session.cancel_event.is_set():
                     session.close()
                     emit_once('error', '登录窗口加载超时，请重试')
-                    report_event("login_timeout", "登录窗口加载超时")
+                    _issue("url_issue_timeout", "登录窗口加载超时")
                 return
 
             while True:
                 if session.cancel_event.is_set():
                     session.close()
                     emit_once('cancelled', '登录已取消')
-                    report_event("login_cancelled", "登录已取消")
+                    _issue("url_issue_cancelled", "登录已取消")
                     return
 
                 if session.window.events.closed.is_set():
                     emit_once('cancelled', '登录窗口已关闭')
-                    report_event("login_cancelled", "登录窗口已关闭")
+                    _issue("url_issue_cancelled", "登录窗口已关闭")
                     return
 
                 if time.monotonic() - session.created_at >= timeout:
                     session.close()
                     emit_once('timeout', '登录超时，请重试')
-                    report_event("login_timeout", "登录超时")
+                    _issue("url_issue_timeout", "登录超时")
                     return
 
                 # Run get_cookies in a thread with timeout to avoid blocking
@@ -449,8 +448,8 @@ def _start_native_cookie_login(timeout: int, old_cookie: str = None) -> tuple[bo
                         '原生登录窗口候选 Cookie 校验未通过: %s',
                         verify_result.get('message', 'unknown'),
                     )
-                    report_event(
-                        "login_verification_failed",
+                    _issue(
+                        "url_issue_unverified",
                         f"Cookie 校验未通过: {verify_result.get('message', 'unknown')}"
                     )
                     time.sleep(poll_interval)
