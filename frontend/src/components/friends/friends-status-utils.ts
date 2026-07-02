@@ -833,17 +833,33 @@ export function collectRecordsBySecUid(value: unknown) {
   return map;
 }
 
+export function normalizeServerMessageAt(value: number) {
+  if (!value) return 0;
+  return value > 1_000_000_000_000 ? value : value * 1000;
+}
+
 export function mapResponse(response: FriendOnlineStatusResponse): FriendStatusItem[] {
   const nowSeconds = responseNowSeconds(response);
   const users = collectRecordsBySecUid(response.user_info);
   const statuses = collectRecordsBySecUid(response.active_status);
-  const ids = Array.from(new Set([...statuses.keys(), ...users.keys(), ...(response.sec_user_ids || [])]));
+  const recentInteractions = collectRecordsBySecUid(response.recent_interactions);
+  const ids = Array.from(new Set([
+    ...statuses.keys(),
+    ...users.keys(),
+    ...(response.sec_user_ids || []),
+  ]));
 
   return ids
     .map((secUid) => {
       const user = users.get(secUid);
       const status = statuses.get(secUid);
+      const recentInteraction = recentInteractions.get(secUid);
       const lastActiveTime = numberField(status, ["last_active_time", "active_time", "last_seen"]);
+      const serverLatestMessageAt = normalizeServerMessageAt(numberField(recentInteraction, [
+        "last_share_timestamp",
+        "timestamp",
+        "latestMessageAt",
+      ]));
       const online =
         lastActiveTime > 0 &&
         nowSeconds - lastActiveTime >= 0 &&
@@ -860,6 +876,7 @@ export function mapResponse(response: FriendOnlineStatusResponse): FriendStatusI
         statusText: online ? "在线" : lastActiveTime > 0 ? "最近活跃" : "未显示",
         lastActive: formatLastActive(lastActiveTime),
         lastActiveTime,
+        serverLatestMessageAt,
       };
     });
 }

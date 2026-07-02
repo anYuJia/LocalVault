@@ -267,6 +267,7 @@ export interface PublishCommentResponse extends ApiResponse {
 export interface FriendOnlineStatusResponse extends ApiResponse {
   sec_user_ids?: string[];
   all_sec_user_ids?: string[];
+  recent_interactions?: unknown;
   offset?: number;
   limit?: number;
   next_offset?: number;

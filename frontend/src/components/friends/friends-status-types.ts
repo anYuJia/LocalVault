@@ -9,6 +9,7 @@ export interface FriendStatusItem {
   statusText: string;
   lastActive: string;
   lastActiveTime: number;
+  serverLatestMessageAt?: number;
 }
 
 export type JsonRecord = Record<string, unknown>;

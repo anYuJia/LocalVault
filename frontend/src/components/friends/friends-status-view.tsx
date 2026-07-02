@@ -199,7 +199,11 @@ export function FriendsStatusView() {
       return {
         ...friend,
         latestMessage: displayMessage,
-        latestMessageAt: Math.max(latestMessage?.createdAt || 0, persistedSummary?.latestMessageAt || 0),
+        latestMessageAt: Math.max(
+          latestMessage?.createdAt || 0,
+          persistedSummary?.latestMessageAt || 0,
+          friend.serverLatestMessageAt || 0,
+        ),
         previewText,
         unreadCount: Math.max(unreadCounts[friend.secUid] || 0, persistedSummary?.unreadCount || 0),
       };

@@ -40,6 +40,50 @@ def collect_spotlight_sec_user_ids(response: dict, include_all_users: bool, limi
     return ids[:limit]
 
 
+def collect_spotlight_recent_interactions(response: dict) -> list[dict]:
+    interactions: dict[str, dict] = {}
+
+    def remember(item):
+        if not isinstance(item, dict):
+            return
+        sec_uid = str(item.get('sec_uid') or item.get('sec_user_id') or '').strip()
+        if not sec_uid:
+            return
+        try:
+            timestamp = int(item.get('last_share_timestamp') or item.get('timestamp') or 0)
+        except Exception:
+            timestamp = 0
+        if timestamp <= 0:
+            return
+        current = interactions.get(sec_uid) or {}
+        if timestamp < int(current.get('last_share_timestamp') or 0):
+            return
+        entry = {
+            'sec_uid': sec_uid,
+            'last_share_timestamp': timestamp,
+            'is_recent_share': True,
+        }
+        if item.get('uid'):
+            entry['uid'] = str(item.get('uid'))
+        if item.get('conv_id'):
+            entry['conv_id'] = str(item.get('conv_id'))
+        if item.get('conv_type') is not None:
+            entry['conv_type'] = int(item.get('conv_type') or 0)
+        if item.get('share_day_cnt') is not None:
+            entry['share_day_count'] = int(item.get('share_day_cnt') or 0)
+        interactions[sec_uid] = entry
+
+    for key in ('mix_recent_share_day_sort', 'mix_recent_share_users', 'single_recent_share_users'):
+        for item in response.get(key) or []:
+            remember(item)
+    recent_share_users = response.get('recent_share_users')
+    if isinstance(recent_share_users, dict):
+        for item in recent_share_users.get('data') or []:
+            remember(item)
+
+    return list(interactions.values())
+
+
 def collect_sec_uid_records(value) -> list[dict]:
     records = []
     seen = set()

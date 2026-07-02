@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from flask import Blueprint, jsonify
+from src.api.im_formatters import collect_spotlight_recent_interactions
 
 friend_im_bp = Blueprint("friend_im", __name__)
 
@@ -90,6 +91,7 @@ def get_friend_online_status_api():
                 bool(getattr(_Config, 'IM_FRIEND_INCLUDE_ALL_USERS', False)),
             )
         )
+        recent_interactions = collect_spotlight_recent_interactions(auto_response if isinstance(auto_response, dict) else {})
         if auto_success:
             sec_user_ids = _Config.normalize_sec_user_ids(fetched_ids)
             if sec_user_ids != getattr(_Config, 'IM_FRIEND_SEC_USER_IDS', []):
@@ -172,6 +174,7 @@ def get_friend_online_status_api():
             'message': '获取好友在线状态成功',
             'sec_user_ids': page_sec_user_ids,
             'all_sec_user_ids': all_sec_user_ids,
+            'recent_interactions': recent_interactions,
             'offset': page_offset,
             'limit': limit,
             'next_offset': next_offset,
