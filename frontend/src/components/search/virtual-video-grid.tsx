@@ -9,6 +9,38 @@ const CARD_HEIGHT = 412;
 const ROW_HEIGHT = CARD_HEIGHT + GRID_GAP;
 const OVERSCAN_ROWS = 2;
 
+function findScrollParent(node: HTMLElement | null): HTMLElement | Window {
+  let current = node?.parentElement || null;
+  while (current) {
+    const style = window.getComputedStyle(current);
+    const overflowY = style.overflowY;
+    if (overflowY === "auto" || overflowY === "scroll") {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return window;
+}
+
+function readScrollParentViewport(node: HTMLElement, scrollParent: HTMLElement | Window) {
+  const rect = node.getBoundingClientRect();
+  if (scrollParent === window) {
+    return {
+      top: Math.max(0, -rect.top),
+      height: window.innerHeight || 900,
+      width: rect.width,
+    };
+  }
+
+  const parent = scrollParent as HTMLElement;
+  const parentRect = parent.getBoundingClientRect();
+  return {
+    top: Math.max(0, parentRect.top - rect.top),
+    height: parent.clientHeight || 900,
+    width: rect.width,
+  };
+}
+
 interface VirtualVideoGridProps {
   videos: VideoInfo[];
   onSelect: (video: VideoInfo) => void;
@@ -46,23 +78,19 @@ export const VirtualVideoGrid = memo(function VirtualVideoGrid({
     const updateViewport = () => {
       const node = containerRef.current;
       if (!node) return;
-      const rect = node.getBoundingClientRect();
-      setViewport({
-        top: Math.max(0, -rect.top),
-        height: window.innerHeight || 900,
-        width: rect.width,
-      });
+      setViewport(readScrollParentViewport(node, findScrollParent(node)));
     };
 
     updateViewport();
     const resizeObserver = new ResizeObserver(updateViewport);
     if (containerRef.current) resizeObserver.observe(containerRef.current);
-    window.addEventListener("scroll", updateViewport, { passive: true });
+    const scrollParent = findScrollParent(containerRef.current);
+    scrollParent.addEventListener("scroll", updateViewport, { passive: true });
     window.addEventListener("resize", updateViewport);
 
     return () => {
       resizeObserver.disconnect();
-      window.removeEventListener("scroll", updateViewport);
+      scrollParent.removeEventListener("scroll", updateViewport);
       window.removeEventListener("resize", updateViewport);
     };
   }, []);
@@ -82,12 +110,17 @@ export const VirtualVideoGrid = memo(function VirtualVideoGrid({
     if (!hasMore || loadingMore || !onLoadMore || videos.length === 0) return;
     const node = loadMoreRef.current;
     if (!node) return;
+    const scrollParent = findScrollParent(containerRef.current);
 
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) onLoadMore();
       },
-      { root: null, rootMargin: loadMoreRootMargin, threshold: 0.01 }
+      {
+        root: scrollParent instanceof HTMLElement ? scrollParent : null,
+        rootMargin: loadMoreRootMargin,
+        threshold: 0.01,
+      }
     );
 
     observer.observe(node);
