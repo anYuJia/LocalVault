@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Loader2, Users, Wifi, WifiOff } from "lucide-react";
 import type { FriendListItem, FriendStatusItem } from "./friends-status-types";
 import { FriendRow, Metric } from "./friends-status-components";
@@ -9,12 +10,31 @@ interface FriendListPanelProps {
   onlineCount: number;
   offlineCount: number;
   isInitialLoading: boolean;
+  isLoadingMore: boolean;
+  hasMore: boolean;
   idsLength: number;
   selectFriend: (friend: FriendStatusItem) => void;
   openFriendProfile: (friend: FriendStatusItem) => Promise<void>;
+  onLoadMore: () => void;
 }
 
-export function FriendListPanel({ friends, friendItems, selectedFriendId, onlineCount, offlineCount, isInitialLoading, idsLength, selectFriend, openFriendProfile }: FriendListPanelProps) {
+export function FriendListPanel({ friends, friendItems, selectedFriendId, onlineCount, offlineCount, isInitialLoading, isLoadingMore, hasMore, idsLength, selectFriend, openFriendProfile, onLoadMore }: FriendListPanelProps) {
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const triggerIndex = Math.max(0, friendItems.length - 10);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !hasMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) onLoadMore();
+      },
+      { root: target.closest("[data-friend-scroll]"), rootMargin: "160px 0px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [friendItems.length, hasMore, onLoadMore]);
+
   return (
     <section className="flex min-h-0 flex-col rounded-[var(--radius-lg)] border border-border bg-surface-solid/70 p-3 shadow-[var(--shadow-sm)]">
       <div className="mb-3 flex items-center justify-between shrink-0 px-0.5">
@@ -37,8 +57,18 @@ export function FriendListPanel({ friends, friendItems, selectedFriendId, online
           <p className="mt-1 text-[0.75rem] text-text-muted">点刷新自动获取；若没有返回列表，可展开备用输入缓存一次</p>
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 content-start gap-1.5 overflow-y-auto pr-1">
-          {friendItems.map((friend) => (<FriendRow key={friend.secUid} friend={friend} selected={friend.secUid === selectedFriendId} onSelect={selectFriend} onOpenProfile={openFriendProfile} />))}
+        <div data-friend-scroll className="grid min-h-0 flex-1 content-start gap-1.5 overflow-y-auto pr-1">
+          {friendItems.map((friend, index) => (
+            <div key={friend.secUid} ref={hasMore && index === triggerIndex ? loadMoreRef : undefined}>
+              <FriendRow friend={friend} selected={friend.secUid === selectedFriendId} onSelect={selectFriend} onOpenProfile={openFriendProfile} />
+            </div>
+          ))}
+          {isLoadingMore && (
+            <div className="flex items-center justify-center py-2 text-[0.72rem] text-text-muted">
+              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+              正在加载更多联系人
+            </div>
+          )}
         </div>
       )}
     </section>

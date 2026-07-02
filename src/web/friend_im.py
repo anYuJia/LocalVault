@@ -67,6 +67,8 @@ def get_friend_online_status_api():
         _ensure_im_message_listener()
         provided_ids = data.get('sec_user_ids') or data.get('secUserIds') or []
         conv_ids = data.get('conv_ids') or data.get('convIds') or []
+        offset = _coerce_int(data.get('offset'), 0, 0)
+        limit = _coerce_int(data.get('limit'), 20, 1, 100)
         sec_user_ids = _sanitize_sec_user_ids(provided_ids)
         has_provided_ids = bool(sec_user_ids)
 
@@ -125,14 +127,20 @@ def get_friend_online_status_api():
                 'message': '没有获取到 IM 好友关系；Cookie 可用，但 spotlight relation 和关注列表都没有返回可用 sec_user_id。',
             })
 
+        all_sec_user_ids = list(sec_user_ids)
+        total_count = len(all_sec_user_ids)
+        page_offset = min(offset, total_count)
+        page_sec_user_ids = all_sec_user_ids[page_offset:page_offset + limit]
+        next_offset = page_offset + len(page_sec_user_ids)
+
         user_info_data = []
         active_status_data = []
         user_info_extra = None
         active_status_extra = None
         conv_ids = [str(value).strip() for value in conv_ids if str(value).strip()] if isinstance(conv_ids, list) else []
 
-        for index in range(0, len(sec_user_ids), 20):
-            chunk = sec_user_ids[index:index + 20]
+        for index in range(0, len(page_sec_user_ids), 20):
+            chunk = page_sec_user_ids[index:index + 20]
             user_info, user_success = _run_async(api.get_im_user_info(chunk))
             if not user_success:
                 return jsonify({
@@ -162,7 +170,13 @@ def get_friend_online_status_api():
         return jsonify({
             'success': True,
             'message': '获取好友在线状态成功',
-            'sec_user_ids': sec_user_ids,
+            'sec_user_ids': page_sec_user_ids,
+            'all_sec_user_ids': all_sec_user_ids,
+            'offset': page_offset,
+            'limit': limit,
+            'next_offset': next_offset,
+            'total_count': total_count,
+            'has_more': next_offset < total_count,
             'user_info': {
                 'data': user_info_data,
                 'extra': user_info_extra,

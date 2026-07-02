@@ -71,6 +71,36 @@ import {
 import { ChatWorkspace } from "./friends-status-components";
 import { FriendListPanel } from "./friends-list-panel";
 
+const CONTACT_PAGE_SIZE = 20;
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function dataArray(value: unknown) {
+  return isPlainRecord(value) && Array.isArray(value.data) ? value.data : [];
+}
+
+function mergeFriendStatusResponse(
+  current: FriendOnlineStatusResponse | null,
+  result: FriendOnlineStatusResponse,
+  append: boolean,
+) {
+  if (!append || !current) return result;
+  const mergeSection = (left: unknown, right: unknown) => ({
+    ...(isPlainRecord(left) ? left : {}),
+    ...(isPlainRecord(right) ? right : {}),
+    data: [...dataArray(left), ...dataArray(right)],
+  });
+  return {
+    ...result,
+    sec_user_ids: Array.from(new Set([...(current.sec_user_ids || []), ...(result.sec_user_ids || [])])),
+    all_sec_user_ids: result.all_sec_user_ids || current.all_sec_user_ids,
+    user_info: mergeSection(current.user_info, result.user_info),
+    active_status: mergeSection(current.active_status, result.active_status),
+  };
+}
+
 export function FriendsStatusView() {
   const setView = useAppStore((state) => state.setView);
   const setFriendUnreadCount = useAppStore((state) => state.setFriendUnreadCount);
@@ -103,9 +133,16 @@ export function FriendsStatusView() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(0);
   const [error, setError] = useState("");
   const [response, setResponse] = useState<FriendOnlineStatusResponse | null>(null);
+  const [contactHasMore, setContactHasMore] = useState(false);
+  const [contactNextOffset, setContactNextOffset] = useState(0);
+  const [contactPageLoading, setContactPageLoading] = useState(false);
   const savedIdsRef = useRef<string[]>([]);
   const idsRef = useRef<string[]>([]);
+  const lastQueryIdsRef = useRef<string[]>([]);
   const queryInFlightRef = useRef(false);
+  const contactPageLoadingRef = useRef(false);
+  const contactHasMoreRef = useRef(false);
+  const contactNextOffsetRef = useRef(0);
   const pendingBackgroundQueryRef = useRef(false);
   const lastQueryStartedAtRef = useRef(0);
   const pendingBackgroundTimerRef = useRef<number | null>(null);
@@ -723,6 +760,18 @@ export function FriendsStatusView() {
   }, [savedIds]);
 
   useEffect(() => {
+    contactPageLoadingRef.current = contactPageLoading;
+  }, [contactPageLoading]);
+
+  useEffect(() => {
+    contactHasMoreRef.current = contactHasMore;
+  }, [contactHasMore]);
+
+  useEffect(() => {
+    contactNextOffsetRef.current = contactNextOffset;
+  }, [contactNextOffset]);
+
+  useEffect(() => {
     if (friends.length === 0) {
       setSelectedFriendId("");
       return;
@@ -738,8 +787,9 @@ export function FriendsStatusView() {
     }
   }, [clearUnread, selectedFriend]);
 
-  const query = useCallback(async (overrideIds?: string[], options?: { background?: boolean; retryCookie?: boolean }) => {
+  const query = useCallback(async (overrideIds?: string[], options?: { background?: boolean; retryCookie?: boolean; append?: boolean; offset?: number }) => {
     const background = Boolean(options?.background);
+    const append = Boolean(options?.append);
     if (background && Date.now() - lastQueryStartedAtRef.current < MIN_BACKGROUND_REFRESH_INTERVAL_MS) {
       return;
     }
@@ -750,9 +800,12 @@ export function FriendsStatusView() {
     const retryCookie = options?.retryCookie !== false;
     const baseIds = overrideIds ?? savedIdsRef.current;
     const queryIds = Array.from(new Set([...baseIds, ...idsRef.current]));
+    const offset = append ? Math.max(0, Number(options?.offset ?? contactNextOffsetRef.current) || 0) : 0;
     queryInFlightRef.current = true;
     lastQueryStartedAtRef.current = Date.now();
-    if (!background) {
+    if (append) {
+      setContactPageLoading(true);
+    } else if (!background) {
       setError("");
       setLoading(true);
     } else {
@@ -760,22 +813,31 @@ export function FriendsStatusView() {
     }
     try {
       localStorage.setItem(STORAGE_KEY, queryIds.join("\n"));
-      const result = await getFriendOnlineStatus(queryIds);
+      const result = await getFriendOnlineStatus(queryIds, [], { offset, limit: CONTACT_PAGE_SIZE });
+      const pageFriends = mapResponse(result);
       const hasUsableData = Boolean(
         result.success ||
         (Array.isArray(result.sec_user_ids) && result.sec_user_ids.length > 0) ||
-        mapResponse(result).length > 0,
+        pageFriends.length > 0,
       );
       if (hasUsableData) {
-        setResponse(result);
+        setResponse((current) => mergeFriendStatusResponse(current, result, append));
+        setContactHasMore(Boolean(result.has_more));
+        setContactNextOffset(Number(result.next_offset || 0) || 0);
+        lastQueryIdsRef.current = queryIds;
         setLastUpdatedAt(Date.now());
         setError("");
       }
-      if (hasUsableData && Array.isArray(result.sec_user_ids)) {
-        setSavedIds(result.sec_user_ids);
-        setSavedCount(result.sec_user_ids.length);
-        setInput(result.sec_user_ids.join("\n"));
-        localStorage.setItem(STORAGE_KEY, result.sec_user_ids.join("\n"));
+      const allSecUserIds = Array.isArray(result.all_sec_user_ids)
+        ? result.all_sec_user_ids
+        : !append && Array.isArray(result.sec_user_ids)
+          ? result.sec_user_ids
+          : [];
+      if (hasUsableData && allSecUserIds.length > 0) {
+        setSavedIds(allSecUserIds);
+        setSavedCount(Number(result.total_count || allSecUserIds.length) || allSecUserIds.length);
+        setInput(allSecUserIds.join("\n"));
+        localStorage.setItem(STORAGE_KEY, allSecUserIds.join("\n"));
       }
       if (!hasUsableData && !background) {
         const message = result.message || "获取好友在线状态失败";
@@ -820,7 +882,9 @@ export function FriendsStatusView() {
       }
     } finally {
       queryInFlightRef.current = false;
-      if (background) {
+      if (append) {
+        setContactPageLoading(false);
+      } else if (background) {
         setBackgroundRefreshing(false);
       } else {
         setLoading(false);
@@ -837,6 +901,11 @@ export function FriendsStatusView() {
       }
     }
   }, []);
+
+  const loadMoreContacts = useCallback(() => {
+    if (queryInFlightRef.current || contactPageLoadingRef.current || !contactHasMoreRef.current) return;
+    void query(lastQueryIdsRef.current, { append: true, offset: contactNextOffsetRef.current });
+  }, [query]);
 
   useEffect(() => () => {
     if (cookieRetryTimerRef.current !== null) {
@@ -1086,9 +1155,12 @@ export function FriendsStatusView() {
         onlineCount={onlineCount}
         offlineCount={offlineCount}
         isInitialLoading={isInitialLoading}
+        isLoadingMore={contactPageLoading}
+        hasMore={contactHasMore}
         idsLength={ids.length}
         selectFriend={selectFriend}
         openFriendProfile={openFriendProfile}
+        onLoadMore={loadMoreContacts}
       />
 
       <ChatWorkspace
@@ -1118,4 +1190,3 @@ export function FriendsStatusView() {
     </div>
   );
 }
-
