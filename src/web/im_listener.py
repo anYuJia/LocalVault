@@ -27,6 +27,9 @@ _im_message_stop_event = threading.Event()
 _im_message_lock = threading.Lock()
 _im_message_start_timer = None
 
+_IM_RECONNECT_BASE_SECONDS = 5
+_IM_RECONNECT_MAX_SECONDS = 60
+
 
 def setup_im_listener(
     *,
@@ -247,31 +250,11 @@ def _run_im_message_listener() -> None:
             return
         import ssl
 
-        cookie_dict = _im_cookie_dict(_Config.COOKIE)
-        sessionid = cookie_dict.get('sessionid') or cookie_dict.get('sessionid_ss') or ''
-        if not sessionid:
-            _logger.info('IM WebSocket 未启动：Cookie 缺少 sessionid')
-            return
-
-        device_id, success, response = _run_async(api.get_im_device_id(), timeout=30)
-        if not success or not device_id:
-            _logger.warning('IM WebSocket 获取 device_id 失败: %s', _api_message(response, '未知错误') if isinstance(response, dict) else response)
-            return
-
-        app_key = 'e1bd35ec9db7b8d846de66ed140b1ad9'
-        fp_id = '9'
-        access_key = hashlib.md5(f'{fp_id}{app_key}{device_id}f8a69f1719916z'.encode('utf-8')).hexdigest()
-        params = urlencode({
-            'aid': '6383',
-            'device_platform': 'douyin_pc',
-            'fpid': fp_id,
-            'device_id': device_id,
-            'token': sessionid,
-            'access_key': access_key,
-        })
-        url = f'wss://frontier-im.douyin.com/ws/v2?{params}'
+        reconnect_delay = _IM_RECONNECT_BASE_SECONDS
 
         def on_open(ws):
+            nonlocal reconnect_delay
+            reconnect_delay = _IM_RECONNECT_BASE_SECONDS
             _logger.info('Douyin IM WebSocket 已连接')
             _socketio.emit('im_status', {'connected': True, 'message': '私信接收已连接'})
 
@@ -295,26 +278,68 @@ def _run_im_message_listener() -> None:
             _logger.info('Douyin IM WebSocket 已关闭: status=%s msg=%s', close_status_code, close_msg)
             _socketio.emit('im_status', {'connected': False, 'message': '私信接收已断开'})
 
-        _im_message_ws = websocket.WebSocketApp(
-            url,
-            header={
-                'Pragma': 'no-cache',
-                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-                'User-Agent': getattr(api, 'common_headers', {}).get('User-Agent', ''),
-                'Cache-Control': 'no-cache',
-                'Sec-WebSocket-Protocol': 'binary, base64, pbbp2',
-                'Sec-WebSocket-Extensions': 'permessage-deflate; client_max_window_bits',
-            },
-            cookie=_Config.COOKIE,
-            on_open=on_open,
-            on_message=on_message,
-            on_error=on_error,
-            on_close=on_close,
-        )
-        _im_message_ws.run_forever(
-            origin='https://www.douyin.com',
-            sslopt={'cert_reqs': ssl.CERT_NONE, 'check_hostname': False},
-        )
+        while not _im_message_stop_event.is_set():
+            cookie_dict = _im_cookie_dict(_Config.COOKIE)
+            sessionid = cookie_dict.get('sessionid') or cookie_dict.get('sessionid_ss') or ''
+            if not sessionid:
+                _logger.info('IM WebSocket 未启动：Cookie 缺少 sessionid')
+                _socketio.emit('im_status', {'connected': False, 'message': 'Cookie 缺少 sessionid，私信接收未启动'})
+                return
+
+            device_id, success, response = _run_async(api.get_im_device_id(), timeout=30)
+            if not success or not device_id:
+                message = _api_message(response, '未知错误') if isinstance(response, dict) else response
+                _logger.warning('IM WebSocket 获取 device_id 失败: %s', message)
+                _socketio.emit('im_status', {'connected': False, 'message': f'私信接收重连准备失败: {message}'})
+                if _im_message_stop_event.wait(reconnect_delay):
+                    break
+                reconnect_delay = min(reconnect_delay * 2, _IM_RECONNECT_MAX_SECONDS)
+                continue
+
+            app_key = 'e1bd35ec9db7b8d846de66ed140b1ad9'
+            fp_id = '9'
+            access_key = hashlib.md5(f'{fp_id}{app_key}{device_id}f8a69f1719916z'.encode('utf-8')).hexdigest()
+            params = urlencode({
+                'aid': '6383',
+                'device_platform': 'douyin_pc',
+                'fpid': fp_id,
+                'device_id': device_id,
+                'token': sessionid,
+                'access_key': access_key,
+            })
+            url = f'wss://frontier-im.douyin.com/ws/v2?{params}'
+
+            _socketio.emit('im_status', {'connected': False, 'message': '正在连接私信接收'})
+            _im_message_ws = websocket.WebSocketApp(
+                url,
+                header={
+                    'Pragma': 'no-cache',
+                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+                    'User-Agent': getattr(api, 'common_headers', {}).get('User-Agent', ''),
+                    'Cache-Control': 'no-cache',
+                    'Sec-WebSocket-Protocol': 'binary, base64, pbbp2',
+                    'Sec-WebSocket-Extensions': 'permessage-deflate; client_max_window_bits',
+                },
+                cookie=_Config.COOKIE,
+                on_open=on_open,
+                on_message=on_message,
+                on_error=on_error,
+                on_close=on_close,
+            )
+            _im_message_ws.run_forever(
+                origin='https://www.douyin.com',
+                sslopt={'cert_reqs': ssl.CERT_NONE, 'check_hostname': False},
+                ping_interval=25,
+                ping_timeout=10,
+            )
+            _im_message_ws = None
+            if _im_message_stop_event.is_set():
+                break
+            _logger.info('Douyin IM WebSocket 将在 %s 秒后重连', reconnect_delay)
+            _socketio.emit('im_status', {'connected': False, 'message': f'私信接收已断开，{reconnect_delay} 秒后重连'})
+            if _im_message_stop_event.wait(reconnect_delay):
+                break
+            reconnect_delay = min(reconnect_delay * 2, _IM_RECONNECT_MAX_SECONDS)
     except Exception as error:
         _logger.warning('IM WebSocket 监听线程退出: %s', error)
     finally:
