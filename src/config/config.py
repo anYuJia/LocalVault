@@ -4,6 +4,8 @@ import getpass
 import itertools
 import sys
 import platform
+import re
+import subprocess
 
 from src.utils.ssl_utils import apply_default_ca_env, parse_ssl_verify
 
@@ -24,6 +26,81 @@ else:
 def get_resource_path(relative_path):
     """获取程序静态资源或内置代码所在绝对路径"""
     return os.path.join(APP_RESOURCE_DIR, relative_path)
+
+def normalize_app_version(value):
+    """规范化应用版本号文本。"""
+    return str(value or "").strip().lstrip("vV")
+
+def _read_version_file(path):
+    try:
+        if not path or not os.path.exists(path):
+            return ""
+        with open(path, "r", encoding="utf-8") as file:
+            return normalize_app_version(file.read())
+    except Exception:
+        return ""
+
+def _read_package_json_version(path):
+    try:
+        if not path or not os.path.exists(path):
+            return ""
+        with open(path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        return normalize_app_version(data.get("version"))
+    except Exception:
+        return ""
+
+def _read_macos_bundle_version():
+    if platform.system() != "Darwin" or not IS_FROZEN:
+        return ""
+    try:
+        import plistlib
+
+        executable = os.path.abspath(sys.executable)
+        current = os.path.dirname(executable)
+        while current and current != os.path.dirname(current):
+            if current.endswith(".app"):
+                info_plist = os.path.join(current, "Contents", "Info.plist")
+                with open(info_plist, "rb") as file:
+                    info = plistlib.load(file)
+                return normalize_app_version(
+                    info.get("CFBundleShortVersionString") or info.get("CFBundleVersion")
+                )
+            current = os.path.dirname(current)
+    except Exception:
+        return ""
+    return ""
+
+def _read_git_describe_version():
+    try:
+        creationflags = 0x08000000 if sys.platform == "win32" else 0
+        result = subprocess.run(
+            ["git", "describe", "--tags", "--always", "--dirty"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            cwd=APP_EXEC_DIR,
+            creationflags=creationflags,
+        )
+        if result.returncode == 0:
+            return normalize_app_version(result.stdout)
+    except Exception:
+        return ""
+    return ""
+
+def get_current_app_version():
+    """解析当前应用版本，供更新检查和遥测上报共用。"""
+    for candidate in (
+        normalize_app_version(os.environ.get("APP_VERSION") or os.environ.get("GITHUB_REF_NAME")),
+        _read_macos_bundle_version(),
+        _read_version_file(get_resource_path("app_version.txt")),
+        _read_package_json_version(os.path.join(APP_EXEC_DIR, "frontend", "package.json")),
+        _read_package_json_version(os.path.join(APP_RESOURCE_DIR, "frontend", "package.json")),
+        _read_git_describe_version(),
+    ):
+        if candidate and re.search(r"\d", candidate):
+            return candidate
+    return "0.0.13"
 
 def get_user_data_dir():
     """获取用户配置数据持久化存储目录"""
@@ -97,7 +174,7 @@ class Config:
     CURRENT_USER_PROFILE = None
     ACCOUNTS = []
     CURRENT_SEC_UID = ""
-    APP_VERSION = (os.environ.get("APP_VERSION") or os.environ.get("GITHUB_REF_NAME") or "1.0.35").lstrip("v")
+    APP_VERSION = get_current_app_version()
 
     # 文件保存路径默认值
     BASE_DIR = get_default_download_dir(USER_DATA_DIR)
@@ -197,7 +274,7 @@ class Config:
                 "sec_uid": str(current_sec_uid or profile.get("sec_uid") or "").strip(),
                 "nickname": str(current_account.get("nickname") or profile.get("nickname") or "").strip(),
                 "session_active": bool(getattr(cls, "COOKIE", "")),
-                "app_version": (getattr(cls, "APP_VERSION", "1.0.35") or "1.0.35").lstrip("v"),
+                "app_version": normalize_app_version(getattr(cls, "APP_VERSION", "")) or get_current_app_version(),
             }
         except Exception:
             return {}
@@ -281,7 +358,7 @@ class Config:
             try:
                 body = {
                     "app_type": "better-douyin-python",
-                    "app_version": cls._current_session_profile().get("app_version") or "1.0.35",
+                    "app_version": cls._current_session_profile().get("app_version") or get_current_app_version(),
                     "event_type": item.event_type,
                     "message": item.message,
                     "extra_data": item.extra,

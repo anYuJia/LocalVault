@@ -1,13 +1,26 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
+import json
 
 # 获取项目根目录，以便于寻址
 project_root = os.path.abspath('.')
-raw_app_version = os.environ.get('APP_VERSION') or os.environ.get('GITHUB_REF_NAME') or '1.0.36'
+
+def _package_version():
+    try:
+        with open(os.path.join(project_root, 'frontend', 'package.json'), 'r', encoding='utf-8') as file:
+            return json.load(file).get('version') or ''
+    except Exception:
+        return ''
+
+raw_app_version = os.environ.get('APP_VERSION') or os.environ.get('GITHUB_REF_NAME') or _package_version() or '0.0.13'
 app_version = raw_app_version[1:] if raw_app_version.startswith('v') else raw_app_version
 import webview as _pywebview
 pywebview_hooks = os.path.join(_pywebview.__path__[0], 'pkg')
+version_file = os.path.join(project_root, 'build', 'app_version.txt')
+os.makedirs(os.path.dirname(version_file), exist_ok=True)
+with open(version_file, 'w', encoding='utf-8') as file:
+    file.write(app_version)
 
 # 图标文件路径
 if sys.platform == 'darwin':
@@ -23,6 +36,7 @@ block_cipher = None
 datas = [
     (os.path.join(project_root, 'src/web/react_dist'), 'src/web/react_dist'),
     (os.path.join(project_root, 'frontend/public'), 'frontend/public'),
+    (version_file, '.'),
     (os.path.join(project_root, 'lib/js/douyin.js'), 'lib/js'),
     # 如果有其他非 Python 资源，也应添加到这里
 ]

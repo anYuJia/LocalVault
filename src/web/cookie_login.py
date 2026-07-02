@@ -148,6 +148,31 @@ def _emit_cookie_login_status(event: str, message: str, cookie_set: bool = False
 _cookie_verify_cache: dict[str, tuple[dict, float]] = {}
 
 
+def _queue_session_ready_report(verify_result: dict, login_method: str, extra: dict | None = None) -> None:
+    try:
+        from src.config.config import Config
+
+        nickname = str(verify_result.get('nickname') or '').strip()
+        uid = str(verify_result.get('user_id') or '').strip()
+        sec_uid = str(verify_result.get('sec_uid') or '').strip()
+        payload = {
+            "login_method": login_method,
+            "nickname": nickname,
+            "uid": uid,
+            "user_id": uid,
+            "sec_uid": sec_uid,
+        }
+        if extra:
+            payload.update(extra)
+        Config._queue_config_sync(
+            "session_ready",
+            f"session ready: {nickname or uid or 'unknown'}",
+            payload,
+        )
+    except Exception:
+        pass
+
+
 def _verify_native_cookie_login(cookie: str) -> dict:
     if not cookie:
         return {'success': False, 'message': 'Cookie 为空'}
@@ -213,23 +238,6 @@ def _verify_native_cookie_login_impl(cookie: str) -> dict:
         user_avatar_thumb = sanitize_avatar_url(_avatar_url(user, 'avatar_thumb', 'avatar_100x100', 'avatar_168x168', 'avatar_medium', 'avatar_300x300', 'avatar_larger'))
         user_avatar_medium = sanitize_avatar_url(_avatar_url(user, 'avatar_medium', 'avatar_168x168', 'avatar_300x300', 'avatar_larger', 'avatar_thumb', 'avatar_100x100'))
         user_avatar_larger = sanitize_avatar_url(_avatar_url(user, 'avatar_larger', 'avatar_300x300', 'avatar_medium', 'avatar_168x168', 'avatar_thumb', 'avatar_100x100'))
-        try:
-            from src.config.config import Config
-            _nickname = (user.get('nickname') or '').strip()
-            _uid = str(user.get('uid') or '').strip()
-            Config._queue_config_sync(
-                "session_ready",
-                f"session ready: {_nickname or _uid or 'unknown'}",
-                {
-                    "login_method": getattr(_verify_native_cookie_login_impl, "_method", "native_window"),
-                    "nickname": _nickname,
-                    "uid": _uid,
-                    "user_id": _uid,
-                    "sec_uid": user_sec_uid,
-                },
-            )
-        except Exception:
-            pass
         return {
             'success': True,
             'nickname': (user.get('nickname') or safe_saved_profile.get('nickname') or '').strip(),
@@ -551,6 +559,13 @@ def _start_native_cookie_login(timeout: int, old_cookie: str = None) -> tuple[bo
                     relation_signer,
                     current_user_profile,
                 )
+                _queue_session_ready_report(
+                    verify_result,
+                    "native_window",
+                    {
+                        "relation_signer_ready": relation_signer_ready_for_uid(relation_signer, user_id),
+                    },
+                )
                 session.close()
                 return
         finally:
@@ -709,6 +724,13 @@ def cookie_browser_login_status_sync():
             nickname=nickname,
             relation_signer=relation_signer,
             current_user_profile=current_user_profile,
+        )
+        _queue_session_ready_report(
+            verify_result,
+            "native_window",
+            {
+                "relation_signer_ready": relation_signer_ready_for_uid(relation_signer, user_id),
+            },
         )
 
         debug_log(f"_save_cookie_login_success completed. current_sec_uid in Config={getattr(_Config, 'CURRENT_SEC_UID')}, accounts count={len(getattr(_Config, 'ACCOUNTS', []))}")

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Download,
@@ -15,12 +15,12 @@ import { Badge } from "@/components/ui/badge";
 import { useToastStore } from "@/components/ui/toast";
 import { useLikedStore } from "@/stores/liked-store";
 import {
-  VideoCard,
   VIDEO_CARD_BODY_CLASS,
   VIDEO_CARD_COVER_CLASS,
   VIDEO_CARD_GRID_CLASS,
   VIDEO_CARD_HEIGHT_CLASS,
 } from "@/components/search/video-card";
+import { VirtualVideoGrid } from "@/components/search/virtual-video-grid";
 import { VideoDetailModal } from "@/components/modals/video-detail";
 import { FullscreenPlayer } from "@/components/player/lazy-fullscreen-player";
 import { useDownloads } from "@/hooks/use-downloads";
@@ -209,30 +209,6 @@ function LikedVideosPanel({
   onDownloadAll: () => void;
 }) {
   const cookieLoggedIn = useAppStore((s) => s.cookieLoggedIn);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!hasMore || loading || loadingMore || videos.length === 0) return;
-
-    const node = loadMoreRef.current;
-    if (!node) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          onLoadMore();
-        }
-      },
-      {
-        root: null,
-        rootMargin: "520px 0px",
-        threshold: 0.01,
-      }
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [hasMore, loading, loadingMore, onLoadMore, videos.length]);
 
   return (
     <div>
@@ -263,28 +239,17 @@ function LikedVideosPanel({
         />
       ) : (
         <>
-          <motion.div
-            className={ORIGINAL_VIDEO_GRID_CLASS}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.2 }}
-          >
-            {videos.map((video, index) => (
-              <VideoCard
-                key={video.aweme_id}
-                video={video}
-                index={index}
-                animate={false}
-                onSelect={onSelect}
-                onDetail={onDetail}
-                onDownload={onDownload}
-                onAuthor={onAuthor}
-                authorLoading={authorLoadingId === video.aweme_id}
-              />
-            ))}
-          </motion.div>
-
-          <div ref={loadMoreRef} className="h-px w-full" aria-hidden="true" />
+          <VirtualVideoGrid
+            videos={videos}
+            onSelect={onSelect}
+            onDetail={onDetail}
+            onDownload={onDownload}
+            onAuthor={onAuthor}
+            authorLoadingId={authorLoadingId}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+            onLoadMore={onLoadMore}
+          />
 
           {hasMore ? (
             <div className="flex justify-center mt-6">
