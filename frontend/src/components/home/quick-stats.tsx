@@ -119,12 +119,14 @@ export function QuickStats() {
         <button
           key={s.label}
           onClick={() => void handleStatClick(s)}
-          className="group relative flex flex-col items-center gap-1.5 py-3 px-2 rounded-[var(--radius-lg)] bg-surface/40 border border-border/50 hover:bg-surface-raised hover:border-border-strong transition-[background-color,border-color,box-shadow] cursor-pointer text-center"
+          className="group relative flex min-h-[88px] flex-col items-center justify-center gap-1.5 overflow-hidden rounded-[var(--radius-lg)] bg-surface-solid/45 px-2.5 py-3.5 text-center shadow-[inset_0_0_0_1px_var(--color-border),0_10px_28px_rgba(0,0,0,0.06)] transition-[background-color,box-shadow,transform] duration-[var(--duration-fast)] ease-[var(--ease-spring)] hover:bg-surface-raised hover:shadow-[inset_0_0_0_1px_var(--color-border-strong),0_16px_34px_rgba(0,0,0,0.10)] active:scale-[0.96] cursor-pointer"
         >
-          <s.icon className={`w-4 h-4 ${s.color} opacity-70`} />
-          <span className="text-[0.78rem] font-bold text-text tabular-nums">{s.value}</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-[11px] bg-surface-raised shadow-[inset_0_0_0_1px_var(--color-border)] transition-transform duration-[var(--duration-base)] ease-[var(--ease-spring)] group-hover:-translate-y-0.5">
+            <s.icon className={`w-4 h-4 ${s.color} opacity-80`} />
+          </span>
+          <span className="max-w-full truncate text-[0.82rem] font-bold text-text tabular-nums">{s.value}</span>
           <span className="text-[0.6rem] text-text-muted">{s.label}</span>
-          <span className="absolute right-2 top-2 flex items-center gap-0.5 text-[0.56rem] text-text-muted opacity-0 transition-opacity group-hover:opacity-100">
+          <span className="absolute right-2 top-2 flex items-center gap-0.5 rounded-full bg-background/40 px-1.5 py-0.5 text-[0.56rem] text-text-muted opacity-0 shadow-[inset_0_0_0_1px_var(--color-border)] transition-[opacity,transform] duration-[var(--duration-fast)] group-hover:translate-x-0 group-hover:opacity-100">
             {s.hint}
             <ArrowUpRight className="w-2.5 h-2.5" />
           </span>

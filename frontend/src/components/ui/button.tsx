@@ -4,18 +4,18 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-[0.85rem] font-bold transition-[background-color,color,border-color,box-shadow,transform,opacity] duration-200 ease-[var(--ease-spring)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 disabled:pointer-events-none disabled:opacity-40 cursor-pointer select-none active:scale-[0.96]",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-[0.85rem] font-bold transition-[background-color,color,border-color,box-shadow,transform,opacity] duration-200 ease-[var(--ease-spring)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 disabled:pointer-events-none disabled:opacity-40 cursor-pointer select-none active:scale-[0.96]",
   {
     variants: {
       variant: {
         default:
           "bg-accent text-white shadow-lg shadow-accent/20 hover:bg-accent-hover hover:shadow-accent/30",
         secondary:
-          "bg-white/[0.05] text-text border border-white/[0.05] hover:bg-white/[0.1]",
+          "bg-surface-raised text-text shadow-[inset_0_0_0_1px_var(--color-border)] hover:bg-surface-solid hover:shadow-[inset_0_0_0_1px_var(--color-border-strong),0_10px_24px_rgba(0,0,0,0.08)]",
         outline:
-          "border border-border bg-transparent text-text-secondary hover:text-text hover:bg-white/[0.05] hover:border-border-strong",
+          "bg-transparent text-text-secondary shadow-[inset_0_0_0_1px_var(--color-border)] hover:text-text hover:bg-surface-raised hover:shadow-[inset_0_0_0_1px_var(--color-border-strong)]",
         ghost:
-          "text-text-secondary hover:text-text hover:bg-white/[0.05]",
+          "text-text-secondary hover:text-text hover:bg-surface-raised",
         danger:
           "bg-danger text-white shadow-lg shadow-danger/20 hover:brightness-110",
         "danger-outline":
@@ -32,7 +32,7 @@ const buttonVariants = cva(
         sm: "h-9 px-4 text-[0.78rem] rounded-[10px]",
         lg: "h-12 px-8 text-[0.95rem] rounded-[14px]",
         icon: "h-10 w-10 rounded-[12px]",
-        "icon-sm": "h-8 w-8 rounded-[8px]",
+        "icon-sm": "h-9 w-9 rounded-[10px]",
       },
     },
     defaultVariants: {
