@@ -1,9 +1,11 @@
+import { memo } from "react";
 import { motion } from "framer-motion";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, easeConfig, formatBytes } from "@/lib/utils";
 import { Ban, Clock3, FolderOpen, Pause, Play, RotateCw, X, CheckCircle2, AlertCircle, Loader2, Gauge, HardDrive } from "lucide-react";
+import { useDownloadStore } from "@/stores/app-store";
 import type { DownloadTask, DownloadStatus } from "@/types";
 
 interface TaskCardProps {
@@ -26,7 +28,7 @@ const statusConfig: Record<DownloadStatus, { icon: React.ElementType; label: str
   cancelled: { icon: Ban, label: "已取消", color: "text-text-muted" },
 };
 
-export function TaskCard({
+export const TaskCard = memo(function TaskCard({
   task,
   animateOnMount = false,
   onCancel,
@@ -228,7 +230,33 @@ export function TaskCard({
       </div>
     </motion.div>
   );
-}
+});
+
+export const DownloadTaskCardById = memo(function DownloadTaskCardById({
+  taskId,
+  animateOnMount = false,
+  onCancel,
+  onPause,
+  onResume,
+  onRetry,
+  onOpen,
+  onRemove,
+}: Omit<TaskCardProps, "task"> & { taskId: string }) {
+  const task = useDownloadStore((state) => state.tasks[taskId]);
+  if (!task) return null;
+  return (
+    <TaskCard
+      task={task}
+      animateOnMount={animateOnMount}
+      onCancel={onCancel}
+      onPause={onPause}
+      onResume={onResume}
+      onRetry={onRetry}
+      onOpen={onOpen}
+      onRemove={onRemove}
+    />
+  );
+});
 
 function formatDurationLabel(seconds: number) {
   const safeSeconds = Math.max(0, Math.floor(seconds));

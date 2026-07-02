@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAlertStore, useDownloadStore, useLogStore } from "@/stores/app-store";
-import { TaskCard } from "./task-card";
+import { DownloadTaskCardById } from "./task-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -58,7 +58,8 @@ import { DownloadRecordsModal } from "../modals/download-records-modal";
 
 
 export function DownloadsView() {
-  const tasks = useDownloadStore((s) => s.tasks);
+  const taskIds = useDownloadStore((s) => s.taskIds);
+  const taskListVersion = useDownloadStore((s) => s.listVersion);
   const clearCompleted = useDownloadStore((s) => s.clearCompleted);
   const addLog = useLogStore((s) => s.addLog);
   const showAlert = useAlertStore((s) => s.showAlert);
@@ -200,7 +201,10 @@ export function DownloadsView() {
   }, [deferredSearchQuery, typeFilter]);
 
   const tasksList = useMemo(() => {
-    const sorted = Object.values(tasks)
+    const tasks = useDownloadStore.getState().tasks;
+    const sorted = taskIds
+      .map((id) => tasks[id])
+      .filter((task): task is NonNullable<typeof task> => Boolean(task))
       .filter(taskMatchesFilters)
       .sort((a, b) => {
         if (sortBy === "date_asc") {
@@ -215,7 +219,7 @@ export function DownloadsView() {
         return (b.startTime || b.finishedTime || 0) - (a.startTime || a.finishedTime || 0);
       });
     return sorted;
-  }, [tasks, taskMatchesFilters, sortBy]);
+  }, [taskIds, taskListVersion, taskMatchesFilters, sortBy]);
 
   const mergedFiles = useMemo(() => {
     return mergeDownloadFileItems(diskFiles, historyItems);
@@ -593,9 +597,9 @@ export function DownloadsView() {
           <div className="flex flex-col gap-1.5">
             <AnimatePresence initial={false}>
               {activeTasks.map((task) => (
-                <TaskCard
+                <DownloadTaskCardById
                   key={task.id}
-                  task={task}
+                  taskId={task.id}
                   onCancel={cancelDownload}
                   onPause={pauseTask}
                   onResume={resumeTask}
@@ -617,9 +621,9 @@ export function DownloadsView() {
           <div className="flex flex-col gap-1.5">
             <AnimatePresence initial={false}>
               {completedTasks.map((task) => (
-                <TaskCard
+                <DownloadTaskCardById
                   key={task.id}
-                  task={task}
+                  taskId={task.id}
                   onOpen={openTaskLocation}
                   onRemove={removeTask}
                 />
@@ -659,9 +663,9 @@ export function DownloadsView() {
           <div className="flex flex-col gap-1.5">
             <AnimatePresence initial={false}>
               {stoppedTasks.map((task) => (
-                <TaskCard
+                <DownloadTaskCardById
                   key={task.id}
-                  task={task}
+                  taskId={task.id}
                   onRetry={retryDownload}
                   onOpen={openTaskLocation}
                   onRemove={removeTask}

@@ -235,6 +235,8 @@ export const useUpdateStore = create<UpdateState>((set) => ({
 
 interface DownloadStore {
   tasks: Record<string, DownloadTask>;
+  taskIds: string[];
+  listVersion: number;
   activeCount: number;
   updateTask: (task: Partial<DownloadTask> & { id: string }) => void;
   replaceTaskId: (fromId: string, toId: string, patch?: Partial<DownloadTask>) => void;
@@ -254,6 +256,27 @@ const countActiveTasks = (tasks: Record<string, DownloadTask>) =>
   Object.values(tasks).filter(
     (t) => t.status === "downloading" || t.status === "pending" || t.status === "paused"
   ).length;
+
+const isActiveDownloadStatus = (status: DownloadTask["status"]) =>
+  status === "downloading" || status === "pending" || status === "paused";
+
+const taskAffectsListShape = (existing: DownloadTask | undefined, updated: DownloadTask, taskExisted: boolean) => {
+  if (!taskExisted || !existing) return true;
+  return (
+    existing.status !== updated.status ||
+    existing.filename !== updated.filename ||
+    existing.awemeId !== updated.awemeId ||
+    existing.savePath !== updated.savePath ||
+    existing.filePath !== updated.filePath ||
+    existing.mediaType !== updated.mediaType ||
+    existing.totalBytes !== updated.totalBytes ||
+    existing.startTime !== updated.startTime ||
+    existing.finishedTime !== updated.finishedTime ||
+    existing.isBatch !== updated.isBatch
+  );
+};
+
+const nextListVersion = (version: number) => version + 1;
 
 const deriveTaskProgress = (task: DownloadTask, patch: Partial<DownloadTask>) => {
   if (!task.isBatch || !task.fileTotal || task.fileTotal <= 0 || task.fileIndex === undefined) {
@@ -296,24 +319,41 @@ const preservePausedProgressSnapshot = (
 
 export const useDownloadStore = create<DownloadStore>((set) => ({
   tasks: {},
+  taskIds: [],
+  listVersion: 0,
   activeCount: 0,
   updateTask: (task) =>
     set((s) => {
-      const existing = s.tasks[task.id] || createEmptyTask(task.id);
+      const existingTask = s.tasks[task.id];
+      const taskExisted = Boolean(existingTask);
+      const existing = existingTask || createEmptyTask(task.id);
       const definedPatch = Object.fromEntries(
         Object.entries(task).filter(([, value]) => value !== undefined && value !== "")
       ) as Partial<DownloadTask> & { id: string };
       const merged = preservePausedProgressSnapshot(existing, definedPatch, { ...existing, ...definedPatch });
       const updated = { ...merged, progress: deriveTaskProgress(merged, definedPatch) };
-      const newTasks = { ...s.tasks, [task.id]: updated };
-      return { tasks: newTasks, activeCount: countActiveTasks(newTasks) };
+      const previousActive = taskExisted ? isActiveDownloadStatus(existing.status) : false;
+      const nextActive = isActiveDownloadStatus(updated.status);
+      const tasks = { ...s.tasks, [task.id]: updated };
+      const taskIds = taskExisted ? s.taskIds : [...s.taskIds, task.id];
+      return {
+        tasks,
+        taskIds,
+        listVersion: taskAffectsListShape(existingTask, updated, taskExisted)
+          ? nextListVersion(s.listVersion)
+          : s.listVersion,
+        activeCount: previousActive === nextActive
+          ? s.activeCount
+          : s.activeCount + (nextActive ? 1 : -1),
+      };
     }),
   replaceTaskId: (fromId, toId, patch = {}) =>
     set((s) => {
       if (fromId === toId) {
         const existing = s.tasks[toId] || createEmptyTask(toId);
         const tasks = { ...s.tasks, [toId]: { ...existing, ...patch, id: toId } };
-        return { tasks, activeCount: countActiveTasks(tasks) };
+        const taskIds = s.taskIds.includes(toId) ? s.taskIds : [...s.taskIds, toId];
+        return { tasks, taskIds, activeCount: countActiveTasks(tasks), listVersion: nextListVersion(s.listVersion) };
       }
 
       const source = s.tasks[fromId];
@@ -348,12 +388,21 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
         tasks[toId] = replacement;
       }
 
-      return { tasks, activeCount: countActiveTasks(tasks) };
+      const taskIds = s.taskIds.map((id) => id === fromId ? toId : id).filter((id, index, ids) => ids.indexOf(id) === index);
+      if (!taskIds.includes(toId)) taskIds.push(toId);
+
+      return { tasks, taskIds, activeCount: countActiveTasks(tasks), listVersion: nextListVersion(s.listVersion) };
     }),
   removeTask: (id) =>
     set((s) => {
+      if (!s.tasks[id]) return s;
       const { [id]: _, ...rest } = s.tasks;
-      return { tasks: rest, activeCount: countActiveTasks(rest) };
+      return {
+        tasks: rest,
+        taskIds: s.taskIds.filter((taskId) => taskId !== id),
+        activeCount: countActiveTasks(rest),
+        listVersion: nextListVersion(s.listVersion),
+      };
     }),
   clearCompleted: () =>
     set((s) => {
@@ -362,7 +411,8 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
           ([, t]) => t.status !== "completed" && t.status !== "cancelled" && t.status !== "error"
         )
       );
-      return { tasks, activeCount: countActiveTasks(tasks) };
+      const taskIds = s.taskIds.filter((id) => Boolean(tasks[id]));
+      return { tasks, taskIds, activeCount: countActiveTasks(tasks), listVersion: nextListVersion(s.listVersion) };
     }),
 }));
 

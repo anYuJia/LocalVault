@@ -3,7 +3,7 @@ import { useAppStore, useDownloadStore, useLogStore } from "@/stores/app-store";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { TaskCard } from "@/components/downloads/task-card";
+import { DownloadTaskCardById } from "@/components/downloads/task-card";
 import { ChevronUp, Trash2, ArrowDown, FolderOpen } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,7 @@ export function BottomBar() {
   const setExpanded = useAppStore((s) => s.setBottomBarExpanded);
   const toggleExpanded = useAppStore((s) => s.toggleBottomBar);
   const activeCount = useDownloadStore((s) => s.activeCount);
-  const tasks = useDownloadStore((s) => s.tasks);
+  const taskIds = useDownloadStore((s) => s.taskIds);
   const logs = useLogStore((s) => s.logs);
   const clearLogs = useLogStore((s) => s.clearLogs);
   const [activeTab, setActiveTab] = useState("progress");
@@ -28,7 +28,6 @@ export function BottomBar() {
     openTaskLocation,
   } = useDownloads();
 
-  const tasksList = Object.values(tasks);
   const visibleLogs = useMemo(() => logs.slice(-300), [logs]);
   const hiddenLogCount = Math.max(0, logs.length - visibleLogs.length);
   const hasActiveTasks = activeCount > 0;
@@ -136,17 +135,17 @@ export function BottomBar() {
             {/* Progress Panel */}
             {activeTab === "progress" && (
               <ScrollArea className="h-full">
-                {tasksList.length === 0 ? (
+                {taskIds.length === 0 ? (
                   <div className="flex items-center justify-center h-full text-[0.8125rem] text-text-muted">
                     暂无下载任务
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2 py-2">
                     <AnimatePresence initial={false}>
-                      {tasksList.map((task) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
+                      {taskIds.map((taskId) => (
+                        <DownloadTaskCardById
+                          key={taskId}
+                          taskId={taskId}
                           onCancel={cancelDownload}
                           onPause={pauseTask}
                           onResume={resumeTask}
