@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Clock, Film, Heart, MessageCircle, Play, Share2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  clearMediaFailure,
+  hasRecentMediaFailure,
+  markMediaFailure,
+} from "@/lib/media-failure-cache";
 import { cn, formatDuration, formatNumber } from "@/lib/utils";
 import { mediaProxyUrl, type VideoInfo } from "@/lib/tauri";
 import {
@@ -44,6 +49,7 @@ export function VideoCover({
     return `${coverProxyUrl}${coverProxyUrl.includes("?") ? "&" : "?"}cover_retry=${coverRetryKey}`;
   }, [coverProxyUrl, coverRetryKey]);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const retryTimerRef = useRef<number | null>(null);
   const [coverLoaded, setCoverLoaded] = useState(false);
   const [coverFailed, setCoverFailed] = useState(false);
   const mediaItems = useMemo(() => collectVideoMedia(video), [video]);
@@ -54,9 +60,36 @@ export function VideoCover({
   const stats = video.statistics;
 
   useEffect(() => {
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
     setCoverRetryKey(0);
     setCoverLoaded(false);
-    setCoverFailed(false);
+    setCoverFailed(hasRecentMediaFailure(coverProxyUrl));
+  }, [coverProxyUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current !== null) {
+        window.clearTimeout(retryTimerRef.current);
+      }
+    };
+  }, []);
+
+  const scheduleCoverRetry = useCallback(() => {
+    if (!coverProxyUrl || retryTimerRef.current !== null) return;
+    retryTimerRef.current = window.setTimeout(() => {
+      retryTimerRef.current = null;
+      setCoverRetryKey((value) => {
+        if (value >= COVER_MAX_RETRIES) {
+          markMediaFailure(coverProxyUrl);
+          setCoverFailed(true);
+          return value;
+        }
+        return value + 1;
+      });
+    }, COVER_RETRY_DELAY_MS);
   }, [coverProxyUrl]);
 
   const handleImageNode = useCallback((node: HTMLImageElement | null) => {
@@ -64,9 +97,11 @@ export function VideoCover({
     if (!node || !coverUrl) return;
     if (node.complete) {
       if (node.naturalWidth > 0) {
+        clearMediaFailure(coverProxyUrl);
         setCoverLoaded(true);
         setCoverFailed(false);
       } else {
+        markMediaFailure(coverProxyUrl);
         setCoverFailed(true);
       }
     }
@@ -77,9 +112,11 @@ export function VideoCover({
     if (!coverUrl || !image) return;
     if (image.complete) {
       if (image.naturalWidth > 0) {
+        clearMediaFailure(coverProxyUrl);
         setCoverLoaded(true);
         setCoverFailed(false);
       } else {
+        markMediaFailure(coverProxyUrl);
         setCoverFailed(true);
       }
     }
@@ -87,20 +124,29 @@ export function VideoCover({
 
   useEffect(() => {
     if (!coverUrl || coverLoaded || coverFailed || coverRetryKey >= COVER_MAX_RETRIES) return;
-    const timer = window.setTimeout(() => {
+    retryTimerRef.current = window.setTimeout(() => {
+      retryTimerRef.current = null;
       const image = imageRef.current;
       if (image?.complete && image.naturalWidth > 0) {
+        clearMediaFailure(coverProxyUrl);
         setCoverLoaded(true);
         return;
       }
       setCoverRetryKey((value) => Math.min(COVER_MAX_RETRIES, value + 1));
     }, COVER_RETRY_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [coverFailed, coverLoaded, coverRetryKey, coverUrl]);
+    return () => {
+      if (retryTimerRef.current !== null) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+  }, [coverFailed, coverLoaded, coverProxyUrl, coverRetryKey, coverUrl]);
+
+  const skipCoverRequest = coverFailed || hasRecentMediaFailure(coverProxyUrl);
 
   return (
     <div className={cn("relative isolate overflow-hidden bg-surface", className)}>
-      {coverUrl && !coverFailed ? (
+      {coverUrl && !skipCoverRequest ? (
         <>
           <div
             className={cn(
@@ -121,8 +167,19 @@ export function VideoCover({
             loading={priority ? "eager" : "lazy"}
             fetchPriority={priority ? "high" : "auto"}
             decoding="async"
-            onLoad={() => setCoverLoaded(true)}
-            onError={() => setCoverFailed(true)}
+            onLoad={() => {
+              clearMediaFailure(coverProxyUrl);
+              setCoverLoaded(true);
+              setCoverFailed(false);
+            }}
+            onError={() => {
+              if (coverRetryKey < COVER_MAX_RETRIES) {
+                scheduleCoverRetry();
+                return;
+              }
+              markMediaFailure(coverProxyUrl);
+              setCoverFailed(true);
+            }}
           />
         </>
       ) : allowVideoFallback && fallbackMedia && isVideoLikeMedia(fallbackMedia) ? (
