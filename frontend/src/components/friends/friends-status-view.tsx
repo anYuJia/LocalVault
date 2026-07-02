@@ -208,9 +208,6 @@ export function FriendsStatusView() {
       if (a.latestMessageAt || b.latestMessageAt) {
         return b.latestMessageAt - a.latestMessageAt;
       }
-      if (a.lastActiveTime || b.lastActiveTime) {
-        return b.lastActiveTime - a.lastActiveTime;
-      }
       return 0;
     }), [chatMessages, chatSummaries, friends, unreadCounts]);
   const selectedFriend = useMemo(

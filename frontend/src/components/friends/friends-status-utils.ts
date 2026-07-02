@@ -861,12 +861,6 @@ export function mapResponse(response: FriendOnlineStatusResponse): FriendStatusI
         lastActive: formatLastActive(lastActiveTime),
         lastActiveTime,
       };
-    })
-    .sort((a, b) => {
-      if (!a.lastActiveTime && !b.lastActiveTime) return 0;
-      if (!a.lastActiveTime) return 1;
-      if (!b.lastActiveTime) return -1;
-      return b.lastActiveTime - a.lastActiveTime;
     });
 }
 
