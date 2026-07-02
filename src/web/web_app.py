@@ -184,6 +184,11 @@ def set_gui_queue(queue):
     _gui_queue = queue
     from src.web import cookie_login
     cookie_login.set_gui_queue(queue)
+    try:
+        from src.web import verify_routes
+        verify_routes.set_gui_queue(queue)
+    except Exception:
+        pass
 
 updater.setup_updater(
     logger=logger,

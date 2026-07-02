@@ -226,6 +226,11 @@ if __name__ == '__main__':
                 'cancel_event': threading.Event(),
                 'finished_event': threading.Event(),
             }
+            verify_session_info = {
+                'window': None,
+                'cancel_event': threading.Event(),
+                'finished_event': threading.Event(),
+            }
 
             def status_sync(event, message=None, cookies=None):
                 payload = {
@@ -241,6 +246,21 @@ if __name__ == '__main__':
                     debug_log(f"status_sync response: {res.status_code}, {res.text}")
                 except Exception as e:
                     debug_log(f"status_sync failed: {e}")
+
+            def verify_status_sync(event, message=None, cookies=None):
+                payload = {
+                    'event': event,
+                }
+                if message:
+                    payload['message'] = message
+                if cookies is not None:
+                    payload['cookies'] = cookies
+                debug_log(f"Sending verify_status_sync event: {event}, cookies count: {len(cookies) if cookies else 0}")
+                try:
+                    res = requests.post(f"http://127.0.0.1:{p}/api/verify_browser/status_sync", json=payload, timeout=2)
+                    debug_log(f"verify_status_sync response: {res.status_code}, {res.text}")
+                except Exception as e:
+                    debug_log(f"verify_status_sync failed: {e}")
 
             while True:
                 try:
@@ -367,6 +387,112 @@ if __name__ == '__main__':
                             target=poll,
                             args=(login_window, session_info['cancel_event'], session_info['finished_event'], timeout),
                             daemon=True
+                        ).start()
+
+                    elif action == 'open_verify':
+                        target_url = args.get('target_url') or 'https://www.douyin.com/'
+                        initial_url = args.get('initial_url') or target_url
+                        cookie = args.get('cookie') or ''
+
+                        from src.api.native_cookie_login import (
+                            apply_cookie_to_window,
+                            create_native_douyin_window,
+                            normalize_cookie_entries,
+                        )
+
+                        verify_session_info['cancel_event'].set()
+                        if verify_session_info['window'] is not None:
+                            try:
+                                debug_log("Destroying existing verify window before creating a new one")
+                                verify_session_info['window'].destroy()
+                            except Exception as ex:
+                                debug_log(f"Failed to destroy existing verify window: {ex}")
+
+                        verify_session_info['cancel_event'] = threading.Event()
+                        verify_session_info['finished_event'] = threading.Event()
+
+                        try:
+                            debug_log(f"Creating verify window: initial_url={initial_url}, target_url={target_url}")
+                            verify_window = create_native_douyin_window('抖音验证', initial_url, width=1100, height=750)
+                            verify_session_info['window'] = verify_window
+                        except Exception as e:
+                            debug_log(f"Failed to create verify window: {e}")
+                            verify_status_sync('error', message=f'创建验证窗口失败: {e}')
+                            continue
+
+                        if cookie:
+                            debug_log("Applying cookie to verify window")
+                            apply_cookie_to_window(verify_window, cookie, reload_after_apply=True, force=True, post_load_delay=1.2)
+
+                        if initial_url != target_url:
+                            def _navigate_verify_target(win, url):
+                                try:
+                                    time.sleep(2.2)
+                                    if win and not win.events.closed.is_set():
+                                        win.load_url(url)
+                                except Exception as ex:
+                                    debug_log(f"Failed to navigate verify window target: {ex}")
+
+                            threading.Thread(target=_navigate_verify_target, args=(verify_window, target_url), daemon=True).start()
+
+                        def poll_verify(win, cancel_ev, finished_ev):
+                            try:
+                                verify_status_sync('pending', message='验证窗口已打开，请在窗口中完成验证')
+                                if not win.events.loaded.wait(45):
+                                    if not cancel_ev.is_set():
+                                        debug_log("Verify window loaded event timed out (45s)")
+                                        verify_status_sync('error', message='验证窗口加载超时，请重试')
+                                    finished_ev.set()
+                                    return
+
+                                start_time = time.monotonic()
+                                while True:
+                                    if cancel_ev.is_set():
+                                        finished_ev.set()
+                                        return
+                                    if win.events.closed.is_set():
+                                        verify_status_sync('window_closed')
+                                        finished_ev.set()
+                                        return
+                                    if time.monotonic() - start_time >= 10 * 60:
+                                        verify_status_sync('timeout')
+                                        finished_ev.set()
+                                        return
+
+                                    cookie_result = [None]
+                                    cookie_error = [None]
+
+                                    def _fetch_cookies():
+                                        try:
+                                            cookie_result[0] = win.get_cookies() or []
+                                        except Exception as e:
+                                            cookie_error[0] = e
+
+                                    t = threading.Thread(target=_fetch_cookies, daemon=True)
+                                    t.start()
+                                    t.join(timeout=2.0)
+                                    if t.is_alive():
+                                        debug_log("verify win.get_cookies() timed out (hung)")
+                                        time.sleep(1)
+                                        continue
+                                    if cookie_error[0]:
+                                        debug_log(f"verify win.get_cookies() error: {cookie_error[0]}")
+                                        time.sleep(1)
+                                        continue
+
+                                    normalized = normalize_cookie_entries(cookie_result[0])
+                                    if normalized:
+                                        verify_status_sync('cookies_polled', cookies=normalized)
+                                    time.sleep(1)
+                            except Exception as ex:
+                                debug_log(f"Exception in verify poll thread: {ex}")
+                                verify_status_sync('error', message=f'验证异常: {ex}')
+                                finished_ev.set()
+
+                        threading.Thread(
+                            target=poll_verify,
+                            args=(verify_window, verify_session_info['cancel_event'], verify_session_info['finished_event']),
+                            daemon=True,
                         ).start()
 
                     elif action == 'cancel_login' or action == 'close_window':

@@ -27,6 +27,7 @@ VERIFY_COOKIE_SYNC_TIMEOUT = 10 * 60
 
 _native_verify_window = None
 _native_verify_window_session = None
+_gui_queue = None
 
 # 注入的依赖
 _logger = None
@@ -59,6 +60,31 @@ def setup_verify_routes(
     _verify_native_cookie_login = verify_native_cookie_login
     _core_login_cookie_signature = core_login_cookie_signature
     _save_cookie_login_success = save_cookie_login_success
+
+
+def set_gui_queue(queue) -> None:
+    """注入 Windows 主进程 GUI 队列，用于在 UI 线程创建验证窗口。"""
+    global _gui_queue
+    _gui_queue = queue
+
+
+def _save_verify_cookie_entries(raw_cookies) -> bool:
+    entries = normalize_cookie_entries(raw_cookies or [])
+    if not has_login_cookie(entries):
+        return False
+
+    cookie_string = serialize_cookie_entries(entries)
+    if not cookie_string:
+        return False
+
+    core_signature = _core_login_cookie_signature(cookie_string)
+    current_config_signature = _core_login_cookie_signature(_Config.COOKIE or '')
+    if not core_signature or core_signature == current_config_signature:
+        return False
+
+    _save_cookie_login_success(cookie_string)
+    _logger.info('验证窗口 Cookie 已同步到后端')
+    return True
 
 
 def _start_native_verify_cookie_sync(window):
@@ -259,6 +285,17 @@ def open_verify_browser():
         target_url = (data.get('target_url') or '').strip() or 'https://www.douyin.com/'
         initial_url = 'https://www.douyin.com/' if 'douyin.com/jingxuan/search/' in target_url else target_url
 
+        if _gui_queue is not None:
+            _gui_queue.put((
+                'open_verify',
+                {
+                    'target_url': target_url,
+                    'initial_url': initial_url,
+                    'cookie': _Config.COOKIE or '',
+                },
+            ))
+            return jsonify({'success': True, 'message': '已打开验证窗口，请完成验证', 'open_url': target_url})
+
         if not is_native_cookie_login_available():
             webbrowser.open(target_url)
             return jsonify({
@@ -304,6 +341,22 @@ def open_verify_browser():
     except Exception as e:
         _logger.error(f"打开验证窗口失败：{str(e)}")
         return jsonify({'success': False, 'message': f'无法打开验证窗口：{str(e)}'}), 500
+
+
+@verify_routes_bp.route('/api/verify_browser/status_sync', methods=['POST'])
+def verify_browser_status_sync():
+    """接收 Windows 主进程验证窗口的状态和 Cookie 同步。"""
+    try:
+        data = _request_json()
+        event = data.get('event')
+        if event == 'cookies_polled':
+            _save_verify_cookie_entries(data.get('cookies') or [])
+        elif event == 'error':
+            _logger.warning('验证窗口异常: %s', data.get('message') or 'unknown')
+        return jsonify({'success': True})
+    except Exception as error:
+        _logger.warning('同步验证窗口状态失败: %s', error)
+        return jsonify({'success': False, 'message': str(error)}), 500
 
 
 @verify_routes_bp.route('/api/verify_cookie', methods=['GET'])
