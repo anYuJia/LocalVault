@@ -13,7 +13,8 @@ from src.config.config import Config
 from src.downloader.progress import PROGRESS_EMIT_INTERVAL_SECONDS
 from src.downloader.downloader import _is_dash_video_only_url
 from src.utils.download_history_index import remove_download_history_entries, upsert_download_history_entries
-from src.utils.ssl_utils import aiohttp_ssl_context
+
+DOWNLOAD_SESSION_TIMEOUT = aiohttp.ClientTimeout(sock_connect=10, sock_read=120)
 
 
 def _response_size(headers) -> int:
@@ -44,14 +45,14 @@ def _cancelled(cancel_event=None) -> bool:
     return bool(cancel_event and cancel_event.is_set())
 
 
-async def _open_response(session: aiohttp.ClientSession, urls: Iterable[str], headers: dict):
+async def _open_response(session: aiohttp.ClientSession, urls: Iterable[str], headers: dict, proxy: str | None = None):
     last_error = None
     for candidate_url in urls:
         candidate_url = str(candidate_url or '').strip()
         if not candidate_url or _is_dash_video_only_url(candidate_url):
             continue
         try:
-            response = await session.get(candidate_url, headers=headers, timeout=aiohttp.ClientTimeout(sock_connect=10, sock_read=120))
+            response = await session.get(candidate_url, headers=headers, timeout=DOWNLOAD_SESSION_TIMEOUT, proxy=proxy)
             if response.status >= 400:
                 text = await response.text()
                 response.release()
@@ -84,13 +85,13 @@ async def download_video_async(
         return False
 
     headers = downloader._get_download_headers()
+    proxy = downloader.async_download_proxy()
     candidate_urls = [url, *(fallback_urls or [])]
     response = None
     filepath = ''
     try:
-        connector = aiohttp.TCPConnector(ssl=aiohttp_ssl_context())
-        async with aiohttp.ClientSession(auto_decompress=False, connector=connector) as session:
-            response, selected_url = await _open_response(session, candidate_urls, headers)
+        async with downloader.download_session() as session:
+            response, selected_url = await _open_response(session, candidate_urls, headers, proxy)
             response_size = _response_size(response.headers)
             file_started_at = time.monotonic()
 
@@ -214,6 +215,7 @@ async def download_media_group_async(
         return False
 
     headers = downloader._get_download_headers()
+    proxy = downloader.async_download_proxy()
     user_path = os.path.join(downloader.download_dir, user_dir)
     os.makedirs(user_path, exist_ok=True)
     media_types = {str(item.get('type') or '') for item in urls if isinstance(item, dict)}
@@ -226,8 +228,7 @@ async def download_media_group_async(
     downloaded_files: list[str] = []
 
     try:
-        connector = aiohttp.TCPConnector(ssl=aiohttp_ssl_context())
-        async with aiohttp.ClientSession(auto_decompress=False, connector=connector) as session:
+        async with downloader.download_session() as session:
             for index, url_info in enumerate(urls):
                 await _wait_if_paused(pause_event, cancel_event)
                 if _cancelled(cancel_event):
@@ -252,7 +253,7 @@ async def download_media_group_async(
                 response = None
                 try:
                     candidate_urls = [url, *(url_info.get('fallback_urls') or [])]
-                    response, selected_url = await _open_response(session, candidate_urls, headers)
+                    response, selected_url = await _open_response(session, candidate_urls, headers, proxy)
                     response_size = _response_size(response.headers)
 
                     if use_live_pair_stems and file_type in live_pair_positions:

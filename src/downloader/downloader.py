@@ -2,10 +2,13 @@ import os
 import json
 import re
 import threading
+import asyncio
+import atexit
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from typing import List, Optional
+from contextlib import asynccontextmanager
 
 from src.config.config import Config
 from src.api.api import DouyinAPI
@@ -78,8 +81,89 @@ class DouyinDownloader:
         self._progress: Progress | None = None
         # 媒体下载实现服务（延迟初始化）
         self._media_downloads = None
+        # 异步下载会复用同一个 aiohttp session/connector，减少批量下载重复建连。
+        self._async_session = None
+        self._async_session_key = None
+        self._async_session_lock = None
+        self._async_session_lock_loop = None
+        atexit.register(self.close)
 
         self._ensure_download_dirs()
+
+    def _async_download_session_key(self) -> tuple[str, bool]:
+        return (str(getattr(Config, 'PROXY', '') or '').strip(), bool(getattr(Config, 'SSL_VERIFY', True)))
+
+    def async_download_proxy(self) -> str | None:
+        proxy = str(getattr(Config, 'PROXY', '') or '').strip()
+        return proxy or None
+
+    async def _close_async_download_session(self):
+        session = self._async_session
+        self._async_session = None
+        self._async_session_key = None
+        if session and not session.closed:
+            await session.close()
+
+    async def _get_async_download_session(self):
+        current_loop = asyncio.get_running_loop()
+        if self._async_session_lock is None or self._async_session_lock_loop is not current_loop:
+            self._async_session_lock = asyncio.Lock()
+            self._async_session_lock_loop = current_loop
+
+        key = self._async_download_session_key()
+        session = self._async_session
+        session_loop = getattr(session, '_loop', None) if session is not None else None
+        if session is not None and not session.closed and self._async_session_key == key and session_loop is current_loop:
+            return session
+
+        async with self._async_session_lock:
+            key = self._async_download_session_key()
+            session = self._async_session
+            session_loop = getattr(session, '_loop', None) if session is not None else None
+            if session is not None and not session.closed and self._async_session_key == key and session_loop is current_loop:
+                return session
+
+            await self._close_async_download_session()
+            import aiohttp
+            from src.utils.ssl_utils import aiohttp_ssl_context
+
+            connector = aiohttp.TCPConnector(
+                ssl=aiohttp_ssl_context(),
+                limit=max(10, int(getattr(Config, 'MAX_CONCURRENT', 3) or 3) * 4),
+                limit_per_host=max(4, int(getattr(Config, 'MAX_CONCURRENT', 3) or 3) * 2),
+                keepalive_timeout=75,
+            )
+            self._async_session = aiohttp.ClientSession(auto_decompress=False, connector=connector)
+            self._async_session_key = key
+            return self._async_session
+
+    @asynccontextmanager
+    async def download_session(self):
+        session = await self._get_async_download_session()
+        try:
+            yield session
+        finally:
+            pass
+
+    async def aclose(self):
+        await self._close_async_download_session()
+
+    def close(self):
+        session = self._async_session
+        if not session or session.closed:
+            return
+        loop = getattr(session, '_loop', None)
+        if loop and loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(self._close_async_download_session(), loop)
+            try:
+                future.result(timeout=3)
+            except Exception:
+                pass
+        else:
+            try:
+                asyncio.run(self._close_async_download_session())
+            except RuntimeError:
+                pass
 
     @property
     def records(self) -> DownloadRecords:
