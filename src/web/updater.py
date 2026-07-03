@@ -622,27 +622,47 @@ def _stage_windows_update(file_path: Path, install_mode: str, paths: dict) -> No
     log_path = _get_update_download_dir() / 'update-helper.log'
     stage_dir = Path(tempfile.gettempdir()) / f'better-douyin-update-{uuid.uuid4().hex}'
     current_pid = os.getpid()
+    parent_pid = os.getppid()
     target_root = paths['target_root']
     target_exe = paths['executable']
     package = file_path
 
     script = f"""$ErrorActionPreference = 'Stop'
-$pidToWait = {current_pid}
-$package = {_ps_quote(package)}
-$targetRoot = {_ps_quote(target_root)}
-$targetExe = {_ps_quote(target_exe)}
-$stage = {_ps_quote(stage_dir)}
-$log = {_ps_quote(log_path)}
-function Write-UpdateLog($message) {{
-  try {{ Add-Content -LiteralPath $log -Value ("[{0}] {1}" -f (Get-Date -Format s), $message) }} catch {{}}
-}}
-try {{
-  Write-UpdateLog "killing app process tree $pidToWait"
-  taskkill /T /F /PID $pidToWait 2>$null
-  Start-Sleep -Seconds 2
+	$pidToWait = {current_pid}
+	$parentPidToWait = {parent_pid}
+	$package = {_ps_quote(package)}
+	$targetRoot = {_ps_quote(target_root)}
+	$targetExe = {_ps_quote(target_exe)}
+	$stage = {_ps_quote(stage_dir)}
+	$log = {_ps_quote(log_path)}
+	function Write-UpdateLog($message) {{
+	  try {{ Add-Content -LiteralPath $log -Value ("[{{0}}] {{1}}" -f (Get-Date -Format s), $message) }} catch {{}}
+	}}
+	function Wait-OrStopProcess($processId, $label, $timeoutSeconds) {{
+	  if (-not $processId -or $processId -le 0) {{ return }}
+	  $currentPid = $PID
+	  if ($processId -eq $currentPid) {{ return }}
+	  $deadline = (Get-Date).AddSeconds($timeoutSeconds)
+	  Write-UpdateLog "waiting for $label process $processId"
+	  while ((Get-Date) -lt $deadline) {{
+	    $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
+	    if (-not $proc) {{ return }}
+	    Start-Sleep -Milliseconds 300
+	  }}
+	  $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
+	  if ($proc) {{
+	    Write-UpdateLog "force stopping $label process $processId"
+	    Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+	    Start-Sleep -Milliseconds 1200
+	  }}
+	}}
+	try {{
+	  Wait-OrStopProcess $pidToWait "backend" 20
+	  Wait-OrStopProcess $parentPidToWait "main" 12
+	  Start-Sleep -Milliseconds 800
 
-  if ($package.ToLower().EndsWith('.zip')) {{
-    Write-UpdateLog "extracting portable update"
+	  if ($package.ToLower().EndsWith('.zip')) {{
+	    Write-UpdateLog "extracting portable update"
     if (Test-Path -LiteralPath $stage) {{
       Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
     }}
@@ -655,16 +675,16 @@ try {{
     Write-UpdateLog "copying portable update from $sourceRoot to $targetRoot"
     robocopy $sourceRoot $targetRoot /E /R:3 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
     if ($LASTEXITCODE -ge 8) {{ throw "robocopy failed with code $LASTEXITCODE" }}
-  }} elseif ($package.ToLower().EndsWith('.exe')) {{
-    Write-UpdateLog "running installer silently"
-    $args = @('/S', "/D=$targetRoot")
-    Start-Process -FilePath $package -ArgumentList $args -Verb RunAs -Wait
+	  }} elseif ($package.ToLower().EndsWith('.exe')) {{
+	    Write-UpdateLog "running installer silently"
+	    $args = @('/S', "/D=$targetRoot")
+	    Start-Process -FilePath $package -ArgumentList $args -Verb RunAs -Wait
   }} else {{
     throw "Unsupported Windows update package: $package"
   }}
 
-  Write-UpdateLog "starting updated app"
-  Start-Process -FilePath $targetExe -WorkingDirectory $targetRoot
+	  Write-UpdateLog "starting updated app"
+	  Start-Process -FilePath $targetExe -WorkingDirectory $targetRoot
 }} catch {{
   Write-UpdateLog $_.Exception.ToString()
   try {{ Start-Process -FilePath $package }} catch {{}}
@@ -676,8 +696,9 @@ try {{
     Remove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue
   }} catch {{}}
 }}
-"""
+	"""
     script_path = _write_update_script('windows-update-helper', script, '.ps1')
+    creationflags = 0x08000000 | 0x00000008 | 0x00000200
     subprocess.Popen(
         [
             'powershell.exe',
@@ -690,7 +711,7 @@ try {{
             str(script_path),
         ],
         close_fds=True,
-        creationflags=0x08000000,
+        creationflags=creationflags,
     )
 
 
