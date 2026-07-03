@@ -446,6 +446,36 @@ def _verify_update_signature(file_path: Path, signature_text: str) -> None:
         raise ValueError('更新包签名校验失败，请稍后重试') from exc
 
 
+def _replace_download_file(partial: Path, destination: Path) -> None:
+    """Move a completed download into place, tolerating brief Windows file locks."""
+    attempts = 12 if _IS_WINDOWS else 3
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            os.replace(partial, destination)
+            return
+        except PermissionError as exc:
+            last_error = exc
+            if attempt + 1 >= attempts:
+                break
+            time.sleep(min(0.25 * (attempt + 1), 1.5))
+        except OSError as exc:
+            last_error = exc
+            if getattr(exc, 'winerror', None) != 32 or attempt + 1 >= attempts:
+                break
+            time.sleep(min(0.25 * (attempt + 1), 1.5))
+
+    try:
+        partial.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    raise RuntimeError(
+        f"更新包写入失败：文件可能仍被浏览器、杀毒软件或另一个更新任务占用，请稍后重试。"
+        f"（{last_error}）"
+    ) from last_error
+
+
 def download_update_asset(
     download_url: str,
     asset_name: str,
@@ -458,7 +488,7 @@ def download_update_asset(
 
     filename = _safe_update_filename(asset_name, release_version, download_url)
     destination = _get_update_download_dir() / filename
-    partial = destination.with_suffix(destination.suffix + '.part')
+    partial = destination.with_name(f"{destination.name}.{uuid.uuid4().hex}.part")
 
     headers = {
         'Accept': 'application/octet-stream',
@@ -513,7 +543,7 @@ def download_update_asset(
                     })
                     last_emit = now
 
-    os.replace(partial, destination)
+    _replace_download_file(partial, destination)
 
     normalized_digest = expected_digest.strip().lower()
     if normalized_digest.startswith('sha256:'):
