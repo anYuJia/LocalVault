@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="200" height="200">
+  <defs>
+    <style>
+      .cyan-fill { fill: #25F4EE; }
+      .red-fill { fill: #FE2C55; }
+      .core-fill { fill: #1C1C1E; }
+
+      .cyan-stroke { stroke: #25F4EE; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .red-stroke { stroke: #FE2C55; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .core-stroke { stroke: #1C1C1E; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+      /* Auto dark mode support for READMEs */
+      @media (prefers-color-scheme: dark) {
+        .core-fill { fill: #FFFFFF; }
+        .core-stroke { stroke: #FFFFFF; }
+      }
+
+      /* 1. Smooth floating for the logo */
+      .float-logo {
+        animation: float 4s ease-in-out infinite;
+      }
+      @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-3px); }
+      }
+
+      /* 2. Elegant dropping flow for the arrow */
+      .arrow-drop {
+        animation: drop 2.5s infinite cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      @keyframes drop {
+        0% { transform: translateY(-4px); opacity: 0; }
+        30% { transform: translateY(0); opacity: 1; }
+        70% { transform: translateY(4px); opacity: 1; }
+        100% { transform: translateY(8px); opacity: 0; }
+      }
+
+      /* 3. Subtle tray response pulse */
+      .tray-pulse {
+        animation: pulse 2.5s infinite ease-in-out;
+        transform-origin: 50px 90px;
+      }
+      @keyframes pulse {
+        0%, 60%, 100% { transform: scaleX(1); stroke-width: 3; }
+        80% { transform: scaleX(1.06); stroke-width: 3.5; }
+      }
+    </style>
+  </defs>
+
+  <!-- DOUYIN LOGO: Floating smoothly -->
+  <g class="float-logo">
+    <!-- Cyan Layer (Top Left) -->
+    <g transform="translate(29.7, 8.5) scale(0.08)">
+      <path class="cyan-fill" d="M448,209.91a210.06,210.06,0,0,1-122.77-39.25V349.38A162.55,162.55,0,1,1,185,188.31V278.2a74.62,74.62,0,1,0,52.23,71.18V0l88,0a121.18,121.18,0,0,0,1.86,22.17h0A122.18,122.18,0,0,0,381,102.39a121.43,121.43,0,0,0,67,20.14Z"/>
+    </g>
+
+    <!-- Red Layer (Bottom Right) -->
+    <g transform="translate(32.7, 11.5) scale(0.08)">
+      <path class="red-fill" d="M448,209.91a210.06,210.06,0,0,1-122.77-39.25V349.38A162.55,162.55,0,1,1,185,188.31V278.2a74.62,74.62,0,1,0,52.23,71.18V0l88,0a121.18,121.18,0,0,0,1.86,22.17h0A122.18,122.18,0,0,0,381,102.39a121.43,121.43,0,0,0,67,20.14Z"/>
+    </g>
+
+    <!-- Core Layer (Center) -->
+    <g transform="translate(31.2, 10) scale(0.08)">
+      <path class="core-fill" d="M448,209.91a210.06,210.06,0,0,1-122.77-39.25V349.38A162.55,162.55,0,1,1,185,188.31V278.2a74.62,74.62,0,1,0,52.23,71.18V0l88,0a121.18,121.18,0,0,0,1.86,22.17h0A122.18,122.18,0,0,0,381,102.39a121.43,121.43,0,0,0,67,20.14Z"/>
+    </g>
+  </g>
+
+  <!-- ELEGANT DOWNLOAD ARROW -->
+  <g class="arrow-drop">
+    <!-- Cyan Shadow -->
+    <g transform="translate(-1.5, -1.5)">
+      <path class="cyan-stroke" stroke-width="3" d="M 50 60 L 50 74 M 43 67 L 50 74 L 57 67" />
+    </g>
+    <!-- Red Shadow -->
+    <g transform="translate(1.5, 1.5)">
+      <path class="red-stroke" stroke-width="3" d="M 50 60 L 50 74 M 43 67 L 50 74 L 57 67" />
+    </g>
+    <!-- Core Arrow -->
+    <g>
+      <path class="core-stroke" stroke-width="3" d="M 50 60 L 50 74 M 43 67 L 50 74 L 57 67" />
+    </g>
+  </g>
+
+  <!-- ELEGANT TRAY -->
+  <g class="tray-pulse">
+    <!-- Cyan Shadow -->
+    <g transform="translate(-1.5, -1.5)">
+      <path class="cyan-stroke" stroke-width="3" d="M 34 84 L 34 87 C 34 90 37 92 40 92 L 60 92 C 63 92 66 90 66 87 L 66 84" />
+    </g>
+    <!-- Red Shadow -->
+    <g transform="translate(1.5, 1.5)">
+      <path class="red-stroke" stroke-width="3" d="M 34 84 L 34 87 C 34 90 37 92 40 92 L 60 92 C 63 92 66 90 66 87 L 66 84" />
+    </g>
+    <!-- Core Tray -->
+    <g>
+      <path class="core-stroke" stroke-width="3" d="M 34 84 L 34 87 C 34 90 37 92 40 92 L 60 92 C 63 92 66 90 66 87 L 66 84" />
+    </g>
+  </g>
+</svg>

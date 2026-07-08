@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="10" y1="8" x2="55" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#181821"/>
+      <stop offset="1" stop-color="#09090E"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="17" y1="12" x2="47" y2="50" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF5A7D"/>
+      <stop offset="1" stop-color="#FE2C55"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="34" y1="19" x2="49" y2="40" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6CFFF8"/>
+      <stop offset="1" stop-color="#25F4EE"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#bg)"/>
+  <rect x="5" y="5" width="54" height="54" rx="15" stroke="rgba(255,255,255,0.08)"/>
+
+  <path d="M22 15C22 12.7909 23.7909 11 26 11H38C43.5228 11 48 15.4772 48 21V43C48 45.2091 46.2091 47 44 47H31C26.0294 47 22 42.9706 22 38V15Z" fill="url(#accent)"/>
+  <path d="M29 21.5C29 19.567 31.1071 18.3639 32.7744 19.3428L41.1978 24.2864C42.8414 25.2512 42.8414 27.6288 41.1978 28.5936L32.7744 33.5372C31.1071 34.5161 29 33.313 29 31.38V21.5Z" fill="white"/>
+  <path d="M19 43.5C19 41.567 21.1071 40.3639 22.7744 41.3428L29.1978 45.0864C30.8414 46.0512 30.8414 48.4288 29.1978 49.3936L22.7744 53.1372C21.1071 54.1161 19 52.913 19 50.98V43.5Z" fill="url(#shine)"/>
+  <circle cx="47" cy="18" r="3" fill="#25F4EE"/>
+</svg>

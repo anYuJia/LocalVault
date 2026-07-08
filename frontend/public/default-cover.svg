@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <rect width="200" height="200" fill="#f8f9fa"/>
+  <rect x="60" y="60" width="80" height="60" rx="8" fill="#dee2e6"/>
+  <polygon points="85,85 85,105 105,95" fill="#6c757d"/>
+  <text x="100" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#6c757d">暂无封面</text>
+</svg>

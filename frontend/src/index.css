@@ -1,0 +1,236 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════
+   DESIGN TOKENS — Premium Desktop Tool
+   ═══════════════════════════════════════════════════════ */
+
+@theme {
+  --color-background: #0e0e14;
+  --color-background-soft: #0a0a0f;
+  --color-surface: rgba(255, 255, 255, 0.04);
+  --color-surface-solid: #16161e;
+  --color-surface-raised: rgba(255, 255, 255, 0.07);
+
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.14);
+  --image-outline: rgba(255, 255, 255, 0.1);
+
+  --color-text: #e8e8ed;
+  --color-text-secondary: #9b9baa;
+  --color-text-muted: #7a7a8e;
+
+  --color-setting-card: rgba(255, 255, 255, 0.04);
+  --color-subtle-bg: rgba(255, 255, 255, 0.06);
+  --color-toggle-track: rgba(255, 255, 255, 0.12);
+
+  --color-accent: #FE2C55;
+  --color-accent-soft: rgba(254, 44, 85, 0.1);
+  --color-accent-ring: rgba(254, 44, 85, 0.22);
+  --color-accent-hover: #ff4d73;
+
+  --color-success: #00d68f;
+  --color-success-soft: rgba(0, 214, 143, 0.1);
+  --color-info: #7c5cfc;
+  --color-info-soft: rgba(124, 92, 252, 0.1);
+  --color-warning: #ffaa00;
+  --color-warning-soft: rgba(255, 170, 0, 0.1);
+  --color-danger: #ff4757;
+  --color-danger-soft: rgba(255, 71, 87, 0.1);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25), 0 10px 30px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 18px 55px rgba(0, 0, 0, 0.12), 0 4px 14px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 30px 90px rgba(0, 0, 0, 0.18), 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-glow: 0 0 0 1px rgba(254, 44, 85, 0.22), 0 10px 30px rgba(254, 44, 85, 0.15);
+
+  --ease-spring: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 400ms;
+
+  --sidebar-width: 240px;
+  --bottombar-height: 42px;
+  --bottombar-expanded: 320px;
+}
+
+/* ── Advanced Design Utilities ── */
+@layer utilities {
+  .glass-premium {
+    @apply bg-surface-solid/70 backdrop-blur-3xl border border-white/[0.08] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.4)];
+  }
+  .glass-glow-accent {
+    @apply shadow-[0_0_40px_-12px_rgba(254,44,85,0.35)];
+  }
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2.5s infinite;
+  }
+}
+
+/* ── Premium Keyframes ── */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes orb-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(40px, -30px) scale(1.1); }
+  50% { transform: translate(-20px, 40px) scale(0.9); }
+  75% { transform: translate(30px, 15px) scale(1.05); }
+}
+
+@keyframes nebula-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.4; filter: blur(40px); }
+  50% { transform: scale(1.2); opacity: 0.6; filter: blur(60px); }
+}
+
+@keyframes loader-spin-custom {
+  0% { transform: rotate(0deg); border-top-color: var(--color-accent); }
+  33% { border-top-color: var(--color-info); }
+  66% { border-top-color: var(--color-success); }
+  100% { transform: rotate(360deg); border-top-color: var(--color-accent); }
+}
+
+/* ── Light Theme ── */
+[data-theme="light"] {
+  --color-background: #f5f5f7;
+  --color-background-soft: #efeff1;
+  --color-surface: rgba(255, 255, 255, 0.88);
+  --color-surface-solid: #ffffff;
+  --color-surface-raised: rgba(255, 255, 255, 0.94);
+  --color-border: rgba(0, 0, 0, 0.1);
+  --color-border-strong: rgba(0, 0, 0, 0.18);
+  --image-outline: rgba(0, 0, 0, 0.1);
+  --color-text: #1d1d1f;
+  --color-text-secondary: #6e6e73;
+  --color-text-muted: #86868b;
+  --color-setting-card: rgba(0, 0, 0, 0.03);
+  --color-subtle-bg: rgba(0, 0, 0, 0.04);
+  --color-toggle-track: rgba(0, 0, 0, 0.12);
+  --shadow-sm: 0 1px 2px rgba(18, 18, 24, 0.06), 0 10px 30px rgba(18, 18, 24, 0.06);
+  --shadow-md: 0 18px 55px rgba(18, 18, 24, 0.12), 0 4px 14px rgba(18, 18, 24, 0.06);
+  --shadow-lg: 0 30px 90px rgba(18, 18, 24, 0.14), 0 8px 24px rgba(18, 18, 24, 0.06);
+}
+
+/* ── Global ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans SC", sans-serif;
+  background: var(--color-background);
+  color: var(--color-text);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+aside, button, [role="button"], .select-none {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input, textarea, [contenteditable="true"], .select-text, .selectable {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+::selection {
+  background: rgba(254, 44, 85, 0.22);
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.12); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.25); }
+
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.08); }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.15); }
+
+* { scrollbar-width: thin; scrollbar-color: rgba(128, 128, 128, 0.12) transparent; }
+[data-theme="light"] * { scrollbar-color: rgba(0, 0, 0, 0.08) transparent; }
+
+.share-friends-scroll {
+  scrollbar-width: none !important;
+  scrollbar-color: transparent transparent !important;
+}
+
+.share-friends-scroll::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-border-strong);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+div[role="dialog"],
+[role="dialog"],
+.glass-premium {
+  outline: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+code, kbd, pre {
+  font-family: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* ── Ambient orb animation ── */
+@keyframes orb-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(40px, -30px) scale(1.1); }
+  50% { transform: translate(-20px, 40px) scale(0.9); }
+  75% { transform: translate(30px, 15px) scale(1.05); }
+}
+
+/* ── Command input: kill all focus outlines/rings ── */
+.command-input,
+.command-input:focus,
+.command-input:focus-visible,
+.command-input:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.completion-input,
+.completion-input:focus,
+.completion-input:focus-visible,
+.completion-option,
+.completion-option:focus,
+.completion-option:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
