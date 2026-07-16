@@ -12,6 +12,20 @@ export type FontSizeMode = "small" | "medium" | "large" | "xlarge";
 
 export type DownloadStatus = "pending" | "downloading" | "completed" | "error" | "paused" | "cancelled";
 
+export interface CurrentDownloadItem {
+  awemeId: string;
+  name: string;
+  progress: number;
+  slot: number;
+  status?: string;
+  speed?: number;
+  bytesDownloaded?: number;
+  bytesTotal?: number;
+  fileIndex?: number;
+  fileTotal?: number;
+  updatedAt: number;
+}
+
 export interface AppState {
   currentView: ViewType;
   setView: (view: ViewType) => void;
@@ -60,6 +74,7 @@ export interface DownloadTask {
   awemeId?: string;
   currentAwemeId?: string;
   currentName?: string;
+  currentDownloads?: Record<string, CurrentDownloadItem>;
   savePath?: string;
   filePath?: string;
   mediaType?: string;
@@ -70,9 +85,12 @@ export interface DownloadTask {
   completedCount?: number;
   skippedCount?: number;
   failedCount?: number;
+  succeededCount?: number;
   etaSeconds?: number;
   totalBytes?: number;
   downloadedBytes?: number;
+  capacityTotalBytes?: number;
+  capacityDownloadedBytes?: number;
   startTime?: number;
   finishedTime?: number;
   errorMessage?: string;

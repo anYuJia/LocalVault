@@ -95,7 +95,19 @@ export function Sidebar() {
   const [allAccounts, setAllAccounts] = useState<AccountInfo[]>([]);
   const [currentSecUid, setCurrentSecUid] = useState("");
   const [collapsed, setCollapsed] = useState(readSidebarCollapsed);
+  const [compactViewport, setCompactViewport] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches
+  );
   const [showPopover, setShowPopover] = useState(false);
+  const isCollapsed = collapsed || compactViewport;
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 720px)");
+    const syncViewport = () => setCompactViewport(media.matches);
+    syncViewport();
+    media.addEventListener("change", syncViewport);
+    return () => media.removeEventListener("change", syncViewport);
+  }, []);
 
   const fetchActiveAccount = useCallback(async () => {
     try {
@@ -167,19 +179,19 @@ export function Sidebar() {
     <motion.aside
       className="relative z-20 flex h-full shrink-0 flex-col overflow-visible bg-surface-solid/60 backdrop-blur-2xl shadow-[1px_0_0_0_var(--color-border),16px_0_40px_rgba(0,0,0,0.04)]"
       initial={false}
-      animate={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH }}
+      animate={{ width: isCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH }}
       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
     >
       <div
         className={cn(
           "pywebview-drag-region flex items-center gap-3 pb-5",
-          collapsed ? "justify-center px-3" : "px-4",
+          isCollapsed ? "justify-center px-3" : "px-4",
           brandTopPadding
         )}
         onDoubleClick={toggleWindowMaximize}
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties & { WebkitAppRegion: string }}
       >
-        {collapsed ? (
+        {isCollapsed ? (
           <button
             type="button"
             aria-label="展开侧边栏"
@@ -199,7 +211,7 @@ export function Sidebar() {
         <div
           className={cn(
             "flex min-w-0 flex-col overflow-hidden transition-opacity duration-100",
-            collapsed ? "w-0 opacity-0" : "flex-1 opacity-100"
+            isCollapsed ? "w-0 opacity-0" : "flex-1 opacity-100"
           )}
         >
           <span className="truncate text-[0.9rem] font-[780] tracking-tight text-text">
@@ -215,11 +227,11 @@ export function Sidebar() {
       <nav
         className={cn(
           "flex-1 flex flex-col gap-1 overflow-visible px-[14px]",
-          collapsed && "items-center"
+          isCollapsed && "items-center"
         )}
       >
-        <div className={cn("mb-2 flex h-8 shrink-0 items-center", collapsed ? "justify-center" : "justify-between px-[3px]")}>
-          {collapsed ? (
+        <div className={cn("mb-2 flex h-8 shrink-0 items-center", isCollapsed ? "justify-center" : "justify-between px-[3px]")}>
+          {isCollapsed ? (
             <button
               type="button"
               aria-label="展开侧边栏"
@@ -259,35 +271,35 @@ export function Sidebar() {
               aria-label={item.label}
               className={cn(
                 "group relative flex h-[42px] items-center rounded-[14px] text-left transition-[background-color,color,box-shadow,transform] duration-[var(--duration-fast)] ease-[var(--ease-spring)] cursor-pointer",
-                collapsed ? "w-[44px] justify-center px-0" : "w-full gap-3 px-[13px]",
+                isCollapsed ? "w-[44px] justify-center px-0" : "w-full gap-3 px-[13px]",
                 isActive
                   ? "bg-accent-soft text-accent shadow-[0_8px_24px_rgba(254,44,85,0.10)]"
                   : "text-text-muted hover:text-text hover:bg-surface-raised"
               )}
             >
               <Icon className="w-[18px] h-[18px] shrink-0" />
-              {collapsed && <SidebarHint>{item.label}</SidebarHint>}
+              {isCollapsed && <SidebarHint>{item.label}</SidebarHint>}
               <span
                 className={cn(
                   "min-w-0 truncate text-[0.8125rem] font-semibold transition-opacity duration-100",
-                  collapsed ? "w-0 opacity-0" : "flex-1 opacity-100"
+                  isCollapsed ? "w-0 opacity-0" : "flex-1 opacity-100"
                 )}
               >
                 {item.label}
               </span>
 
               {item.id === "downloads" && activeCount > 0 && (
-                <Badge variant="default" size="sm" className={cn(collapsed ? "absolute -right-1 -top-1" : "ml-auto")}>
+                <Badge variant="default" size="sm" className={cn(isCollapsed ? "absolute -right-1 -top-1" : "ml-auto")}>
                   {activeCount}
                 </Badge>
               )}
               {item.id === "friends-status" && friendUnreadCount > 0 && (
-                <Badge variant="default" size="sm" className={cn(collapsed ? "absolute -right-1 -top-1" : "ml-auto")}>
+                <Badge variant="default" size="sm" className={cn(isCollapsed ? "absolute -right-1 -top-1" : "ml-auto")}>
                   {friendUnreadCount > 99 ? "99+" : friendUnreadCount}
                 </Badge>
               )}
               {item.id === "notices" && noticeUnreadCount > 0 && (
-                <Badge variant="default" size="sm" className={cn(collapsed ? "absolute -right-1 -top-1" : "ml-auto")}>
+                <Badge variant="default" size="sm" className={cn(isCollapsed ? "absolute -right-1 -top-1" : "ml-auto")}>
                   {noticeUnreadCount > 99 ? "99+" : noticeUnreadCount}
                 </Badge>
               )}
@@ -300,7 +312,7 @@ export function Sidebar() {
       <div 
         onMouseEnter={() => setShowPopover(true)}
         onMouseLeave={() => setShowPopover(false)}
-        className={cn("relative px-[14px] py-3", collapsed && "flex justify-center")}
+        className={cn("relative px-[14px] py-3", isCollapsed && "flex justify-center")}
       >
         <AnimatePresence>
           {showPopover && (
@@ -311,7 +323,7 @@ export function Sidebar() {
               transition={{ duration: 0.15, ease: "easeOut" }}
               className={cn(
                 "absolute bottom-[calc(100%-4px)] left-[14px] z-50 rounded-2xl border border-white/[0.08] bg-surface-solid/95 p-3.5 shadow-[0_12px_36px_rgba(0,0,0,0.3)] backdrop-blur-xl text-left flex flex-col gap-3",
-                collapsed ? "w-[220px]" : "w-[172px]"
+                isCollapsed ? "w-[220px]" : "w-[172px]"
               )}
             >
               {cookieLoggedIn && activeAccount ? (
@@ -381,7 +393,7 @@ export function Sidebar() {
           onClick={() => setView("settings")}
           className={cn(
             "group relative flex h-[48px] items-center rounded-[14px] hover:bg-surface-raised active:scale-95 transition-[background-color,transform] cursor-pointer",
-            collapsed ? "w-[44px] justify-center px-0" : "w-full gap-3 px-[13px]"
+            isCollapsed ? "w-[44px] justify-center px-0" : "w-full gap-3 px-[13px]"
           )}
           title={cookieLoggedIn && activeAccount ? `当前账号: ${activeAccount.nickname} (点击进入设置)` : "需要登录 Cookie"}
         >
@@ -390,11 +402,11 @@ export function Sidebar() {
               <div className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center border border-accent/20 shrink-0">
                 <AccountAvatar account={activeAccount} className="h-full w-full" />
               </div>
-              {collapsed && <SidebarHint>{activeAccount.nickname}</SidebarHint>}
+              {isCollapsed && <SidebarHint>{activeAccount.nickname}</SidebarHint>}
               <div
                 className={cn(
                   "flex min-w-0 items-center gap-1.5 overflow-hidden transition-opacity duration-100",
-                  collapsed ? "w-0 opacity-0" : "flex-1 opacity-100"
+                  isCollapsed ? "w-0 opacity-0" : "flex-1 opacity-100"
                 )}
               >
                 <span className="text-[0.72rem] font-semibold text-text truncate max-w-[100px]">
@@ -408,11 +420,11 @@ export function Sidebar() {
               <div className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center border border-white/10 bg-white/5 shrink-0">
                 <UserRound className="w-4 h-4 text-text-muted" />
               </div>
-              {collapsed && <SidebarHint>需要登录 Cookie</SidebarHint>}
+              {isCollapsed && <SidebarHint>需要登录 Cookie</SidebarHint>}
               <div
                 className={cn(
                   "flex min-w-0 items-center gap-1.5 overflow-hidden transition-opacity duration-100",
-                  collapsed ? "w-0 opacity-0" : "flex-1 opacity-100"
+                  isCollapsed ? "w-0 opacity-0" : "flex-1 opacity-100"
                 )}
               >
                 <span className="text-[0.72rem] font-medium text-text-muted truncate max-w-[100px]">

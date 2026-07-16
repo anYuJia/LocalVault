@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, Loader2, RefreshCw, Heart, UserPlus, MessageSquare, AtSign, Send, Clock3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { InlineStatus } from "@/components/common/page-state";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FullscreenPlayer } from "@/components/player/lazy-fullscreen-player";
@@ -519,15 +520,15 @@ export function NoticesView() {
       </div>
 
       {error && (
-        <div className="rounded-[var(--radius-sm)] border border-white/[0.06] bg-danger-soft px-3 py-2 text-[0.78rem] text-danger">
+        <InlineStatus tone="danger">
           {error}
-        </div>
+        </InlineStatus>
       )}
 
       {jumpError && (
-        <div className="rounded-[var(--radius-sm)] border border-white/[0.06] bg-danger-soft px-3 py-2 text-[0.78rem] text-danger">
+        <InlineStatus tone="danger">
           {jumpError}
-        </div>
+        </InlineStatus>
       )}
 
       {!cookieLoggedIn && (

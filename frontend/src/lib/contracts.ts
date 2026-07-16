@@ -31,9 +31,50 @@ export interface AppConfig {
   im_friend_include_all_users?: boolean;
   im_friend_refresh_interval_seconds?: number;
   ai_interaction?: AiInteractionConfig;
+  mcp?: McpConfig;
   theme: string;
   language: string;
   cookie_set?: boolean;
+}
+
+export interface McpConfig {
+  enabled: boolean;
+  preferred_port: number;
+  allow_write_actions: boolean;
+  require_confirmation: boolean;
+  token?: string;
+  token_set?: boolean;
+  log_retention: number;
+}
+
+export interface McpStatus {
+  enabled: boolean;
+  running: boolean;
+  port?: number | null;
+  endpoint?: string | null;
+  started_at?: string | null;
+  last_error?: string | null;
+  tool_count: number;
+}
+
+export interface McpLogEntry {
+  timestamp: string;
+  transport: string;
+  client_name: string;
+  tool_name: string;
+  category: "read" | "write" | string;
+  argument_summary: string;
+  success: boolean;
+  elapsed_ms: number;
+  error_code?: string | null;
+  message: string;
+}
+
+export interface McpConnectionInfo {
+  endpoint?: string | null;
+  token: string;
+  running: boolean;
+  port?: number | null;
 }
 
 export interface AiInteractionConfig {
@@ -89,6 +130,7 @@ export interface AiInteractionSuggestPayload {
   tone?: "friendly" | "professional" | "warm" | "playful" | "concise";
   language?: string;
   max_suggestions?: number;
+  test_connection?: boolean;
 }
 
 export interface AiInteractionSuggestResponse extends ApiResponse {
@@ -110,6 +152,11 @@ export interface AiInteractionSuggestResponse extends ApiResponse {
   warnings?: string[];
   generated_at?: number;
   provider_error?: string;
+  connection_test?: boolean;
+  provider?: string;
+  model?: string;
+  api_base?: string;
+  provider_latency_ms?: number;
 }
 
 export interface AuthorInfo {

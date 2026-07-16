@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { Surface } from "@/components/common/surface";
 import { cn } from "@/lib/utils";
 import type { SettingStatus } from "./settings-utils";
 
@@ -17,7 +18,7 @@ export function SettingGroup({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("p-4 rounded-[12px] bg-white/[0.02] border border-white/[0.04]", className)}>
+    <Surface density="default" tone="muted" className={cn("rounded-[12px] border-white/[0.06]", className)}>
       <div className="flex items-center justify-between gap-3 mb-3">
         <label className="flex items-center gap-2 text-[0.8rem] font-semibold text-text">
           <Icon className="w-4 h-4 text-text-muted" />
@@ -26,7 +27,7 @@ export function SettingGroup({
         {status && <SettingStatusPill status={status} />}
       </div>
       {children}
-    </div>
+    </Surface>
   );
 }
 

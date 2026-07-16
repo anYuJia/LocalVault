@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
 import { CheckSquare, Download, Grid3x3, Loader2, RefreshCw, Sparkles, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageState } from "@/components/common/page-state";
 import { VideoGridSkeleton, VirtualVideoGrid } from "./virtual-video-grid";
 import { VideoDetailModal } from "@/components/modals/video-detail";
 import { FullscreenPlayer } from "@/components/player/lazy-fullscreen-player";
@@ -168,30 +168,18 @@ export function VideoGrid() {
         {loadingVideos && videos.length === 0 ? (
           <VideoGridSkeleton />
         ) : showPlaceholder ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center min-h-[400px] rounded-[var(--radius-xl)] bg-surface-solid/40 border border-border/50 p-12 text-center"
-          >
-            <div className="w-16 h-16 rounded-[20px] bg-accent-soft flex items-center justify-center mb-6">
-              <Sparkles className="w-8 h-8 text-accent" />
-            </div>
-            <h3 className="text-[1.1rem] font-bold text-text mb-2">
-              开启你的精彩发现
-            </h3>
-            <p className="text-[0.82rem] text-text-muted mb-8 max-w-[280px] leading-relaxed">
-              尚未加载作品列表。点击下方按钮或从用户卡片中进入以开始浏览。
-            </p>
-            <Button
-              variant="default"
-              size="lg"
-              className="gap-2 rounded-[14px] px-8"
-              onClick={() => void loadVideos()}
-            >
-              <Grid3x3 className="w-4 h-4" />
-              立即加载作品
-            </Button>
-          </motion.div>
+          <PageState
+            title="开启你的精彩发现"
+            description="尚未加载作品列表。点击下方按钮或从用户卡片中进入以开始浏览。"
+            icon={Sparkles}
+            action={{
+              label: "立即加载作品",
+              icon: Grid3x3,
+              onClick: () => void loadVideos(),
+              variant: "default",
+            }}
+            className="min-h-[400px]"
+          />
         ) : (
           <>
             <VirtualVideoGrid

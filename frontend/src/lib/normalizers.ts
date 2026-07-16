@@ -146,6 +146,43 @@ function extractUrl(value: unknown): string {
   return "";
 }
 
+function extractUrls(value: unknown): string[] {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  const push = (url: unknown) => {
+    const text = typeof url === "string" ? url.trim() : "";
+    if (text && !seen.has(text)) {
+      seen.add(text);
+      urls.push(text);
+    }
+  };
+
+  if (!value) return urls;
+  if (typeof value === "string") {
+    push(value);
+    return urls;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      for (const url of extractUrls(item)) push(url);
+    }
+    return urls;
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["url_list", "url", "main_url", "backup_url", "fallback_url", "play_addr", "play_url", "download_addr", "download_url", "display_url"]) {
+      const nested = record[key];
+      if (nested === undefined || nested === value) continue;
+      for (const url of extractUrls(nested)) push(url);
+    }
+  }
+  return urls;
+}
+
+function numericField(record: Record<string, unknown>, key: string): number {
+  return Number(record[key] || 0) || 0;
+}
+
 function normalizeBitRates(value: unknown): BitRateInfo[] | null {
   if (!Array.isArray(value)) return null;
 
@@ -153,6 +190,8 @@ function normalizeBitRates(value: unknown): BitRateInfo[] | null {
     .map((item) => {
       if (!item || typeof item !== "object") return null;
       const record = item as Record<string, unknown>;
+      const playAddrRecord = record.play_addr && typeof record.play_addr === "object" ? record.play_addr as Record<string, unknown> : {};
+      const h264AddrRecord = record.play_addr_h264 && typeof record.play_addr_h264 === "object" ? record.play_addr_h264 as Record<string, unknown> : {};
       const playAddr = extractUrl(record.play_addr);
       const playAddrH264 = extractUrl(record.play_addr_h264);
       if (!playAddr && !playAddrH264) return null;
@@ -161,11 +200,13 @@ function normalizeBitRates(value: unknown): BitRateInfo[] | null {
         bit_rate: Number(record.bit_rate || 0),
         quality_type: Number(record.quality_type || 0),
         is_h265: Boolean(record.is_h265),
-        data_size: Number(record.data_size || 0),
-        width: Number(record.width || 0),
-        height: Number(record.height || 0),
+        data_size: numericField(record, "data_size") || numericField(playAddrRecord, "data_size") || numericField(h264AddrRecord, "data_size"),
+        width: numericField(record, "width") || numericField(playAddrRecord, "width") || numericField(h264AddrRecord, "width"),
+        height: numericField(record, "height") || numericField(playAddrRecord, "height") || numericField(h264AddrRecord, "height"),
         play_addr: playAddr || null,
         play_addr_h264: playAddrH264 || null,
+        play_addr_candidates: extractUrls(record.play_addr),
+        play_addr_h264_candidates: extractUrls(record.play_addr_h264),
       };
     })
     .filter(Boolean) as BitRateInfo[];
@@ -415,8 +456,8 @@ export function normalizeVideo(video: unknown): VideoInfo | null {
     "";
   const cover = String(
     source.cover_url ||
-      videoRecord.cover ||
       videoRecord.origin_cover ||
+      videoRecord.cover ||
       videoRecord.dynamic_cover ||
       imageUrls[0] ||
       livePhotoUrls[0] ||

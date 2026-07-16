@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, Loader2, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { InlineStatus } from "@/components/common/page-state";
 import { Textarea } from "@/components/ui/textarea";
 import { FullscreenPlayer } from "@/components/player/lazy-fullscreen-player";
 import { useDownloads } from "@/hooks/use-downloads";
@@ -1192,9 +1193,9 @@ export function FriendsStatusView() {
       </div>
 
       {error && (
-        <div className="rounded-[var(--radius-sm)] border border-white/[0.06] bg-danger-soft px-3 py-2 text-[0.78rem] text-danger">
+        <InlineStatus tone="danger">
           {error}
-        </div>
+        </InlineStatus>
       )}
 
       <div className="grid min-h-0 flex-1 gap-3 overflow-hidden lg:grid-cols-[380px_minmax(0,1fr)] xl:grid-cols-[420px_minmax(0,1fr)]">

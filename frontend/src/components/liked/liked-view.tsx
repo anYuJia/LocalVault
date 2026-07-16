@@ -7,11 +7,11 @@ import {
   RefreshCw,
   Sparkles,
   Users,
-  Key,
-  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ErrorState as SharedErrorState, LoginRequiredState } from "@/components/common/page-state";
+import { Surface, surfaceClassName } from "@/components/common/surface";
 import { useToastStore } from "@/components/ui/toast";
 import { useLikedStore } from "@/stores/liked-store";
 import {
@@ -415,7 +415,7 @@ function LikedAuthorsPanel({
       {loading && authors.length === 0 ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="rounded-[16px] border border-border bg-surface-solid/70 p-4">
+            <Surface key={index} density="default" className="rounded-[16px]">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 rounded-full bg-white/[0.05] animate-pulse" />
                 <div className="flex-1">
@@ -434,7 +434,7 @@ function LikedAuthorsPanel({
                 <div className="h-9 rounded-[12px] bg-white/[0.05] animate-pulse" />
                 <div className="h-9 rounded-[12px] bg-white/[0.05] animate-pulse" />
               </div>
-            </div>
+            </Surface>
           ))}
         </div>
       ) : error && authors.length === 0 ? (
@@ -451,7 +451,11 @@ function LikedAuthorsPanel({
                 key={author.sec_uid}
                 initial={false}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-[18px] border border-border bg-surface-solid/80 p-4"
+                className={surfaceClassName({
+                  density: "default",
+                  tone: "solid",
+                  className: "rounded-[18px]",
+                })}
               >
                 <div className="flex items-center gap-3 mb-3">
                   <img
@@ -543,72 +547,9 @@ function LoadingGrid() {
 }
 
 function EmptyState({ title, description, icon: Icon = Heart, loggedIn = false }: { title: string; description: string; icon?: React.ElementType; loggedIn?: boolean }) {
-  const setView = useAppStore((s) => s.setView);
-  return (
-    <motion.div
-      initial={false}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex min-h-[360px] flex-col items-center justify-center rounded-[var(--radius-xl)] border border-border/50 bg-surface-solid/40 p-12 text-center"
-    >
-      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-[20px] border border-accent/10 bg-accent-soft shadow-[0_8px_20px_rgba(254,44,85,0.1)]">
-        <Icon className="h-8 w-8 text-accent" />
-      </div>
-      <h3 className="mb-2 text-[1.05rem] font-bold text-text">{title}</h3>
-      <p className="mb-8 max-w-[280px] text-[0.82rem] leading-relaxed text-text-muted">{description}</p>
-      {!loggedIn && (
-        <Button
-          variant="outline"
-          size="lg"
-          onClick={() => setView("settings")}
-          className="gap-2 rounded-[14px] border-accent/20 px-8 hover:bg-accent-soft hover:text-accent"
-        >
-          <Key className="h-4 w-4" />
-          前往登录 Cookie
-        </Button>
-      )}
-    </motion.div>
-  );
+  return <LoginRequiredState title={title} description={description} icon={Icon} loggedIn={loggedIn} />;
 }
 
 function ErrorState({ message }: { message: string }) {
-  const setView = useAppStore((s) => s.setView);
-  const needsLogin = /请登录后获取|请先设置\s*Cookie|未登录|登录态|decoding response body/i.test(message);
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.98 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="flex flex-col items-center justify-center min-h-[300px] rounded-[var(--radius-xl)] bg-danger-soft border border-danger/20 p-12 text-center"
-    >
-      <div className="w-14 h-14 rounded-[18px] bg-danger/10 flex items-center justify-center mb-5">
-        <AlertCircle className="w-7 h-7 text-danger" />
-      </div>
-      <h3 className="text-[1rem] font-bold text-danger mb-2">读取失败</h3>
-      <p className="text-[0.78rem] text-text-secondary mb-6 max-w-[320px]">
-        {message}
-      </p>
-      {needsLogin ? (
-        <Button
-          variant="default"
-          size="sm"
-          onClick={() => setView("settings")}
-          className="rounded-[10px]"
-        >
-          <Key className="w-3.5 h-3.5 mr-2" />
-          去登录
-        </Button>
-      ) : (
-        <Button
-          variant="danger-outline"
-          size="sm"
-          onClick={() => {
-            window.location.reload();
-          }}
-          className="rounded-[10px]"
-        >
-          <RefreshCw className="w-3.5 h-3.5 mr-2" />
-          重试
-        </Button>
-      )}
-    </motion.div>
-  );
+  return <SharedErrorState message={message} retry={() => window.location.reload()} />;
 }

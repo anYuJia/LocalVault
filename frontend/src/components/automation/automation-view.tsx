@@ -17,6 +17,7 @@ import {
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SectionSurface } from "@/components/common/surface";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAppStore, useLogStore } from "@/stores/app-store";
 import { getConfig, saveConfig, type AiInteractionConfig } from "@/lib/tauri";
@@ -296,7 +297,7 @@ export function AutomationView() {
       </div>
 
       <div className="mb-3 grid gap-3 lg:grid-cols-[1.02fr_0.98fr]">
-        <section className="rounded-[var(--radius-lg)] border border-border bg-surface-solid/55 p-3 shadow-[var(--shadow-sm)] lg:col-span-2">
+        <SectionSurface density="compact" tone="muted" className="lg:col-span-2">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <PanelTitle icon={RefreshCw} title="推荐流自动刷视频" detail={feedAutomationRunning ? "运行中" : "已停止"} />
@@ -320,9 +321,9 @@ export function AutomationView() {
               {feedAutomationRunning ? "停止" : "开始"}
             </Button>
           </div>
-        </section>
+        </SectionSurface>
 
-        <section className="rounded-[var(--radius-lg)] border border-border bg-surface-solid/55 p-3 shadow-[var(--shadow-sm)]">
+        <SectionSurface density="compact" tone="muted">
           <PanelTitle icon={Activity} title="监控状态" detail="后台任务" />
           <div className="divide-y divide-border">
             {channels.map(({ title, description, active, icon: Icon }) => (
@@ -342,9 +343,9 @@ export function AutomationView() {
               </div>
             ))}
           </div>
-        </section>
+        </SectionSurface>
 
-        <section className="rounded-[var(--radius-lg)] border border-border bg-surface-solid/55 p-3 shadow-[var(--shadow-sm)]">
+        <SectionSurface density="compact" tone="muted">
           <PanelTitle icon={Filter} title="规则摘要" detail="过滤与限流" />
           <div className="divide-y divide-border">
             <LineItem label="扫描间隔" value={`${config?.auto_scan_interval_seconds ?? 30}s`} />
@@ -368,10 +369,10 @@ export function AutomationView() {
               }
             />
           </div>
-        </section>
+        </SectionSurface>
       </div>
 
-      <section className="rounded-[var(--radius-lg)] border border-border bg-surface-solid/55 p-3 shadow-[var(--shadow-sm)]">
+      <SectionSurface density="compact" tone="muted">
         <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <PanelTitle icon={Search} title="监测日志" detail={`${automationLogs.length} 条`} />
           <div className="flex flex-wrap items-center gap-2">
@@ -415,7 +416,7 @@ export function AutomationView() {
             )}
           </div>
         </ScrollArea>
-      </section>
+      </SectionSurface>
 
       <AutomationSettingsDialog
         open={settingsOpen}

@@ -25,6 +25,9 @@ import type {
   LikedAuthorsResponse,
   LikedVideosResponse,
   LinkParseResponse,
+  McpConnectionInfo,
+  McpLogEntry,
+  McpStatus,
   MixVideosResponse,
   NoticesResponse,
   PublishCommentResponse,
@@ -207,8 +210,8 @@ const defaultAi: AiInteractionConfig = {
   system_prompt: "用自然、克制、友好的中文生成可编辑草稿。",
   provider_presets: [
     { id: "openai_compatible", label: "OpenAI Compatible", api_base: "https://api.openai.com/v1", default_model: "gpt-4o-mini", format: "openai_chat" },
-    { id: "anthropic", label: "Anthropic", api_base: "https://api.anthropic.com/v1", default_model: "claude-3-5-haiku-latest", format: "anthropic_messages" },
-    { id: "gemini", label: "Google Gemini", api_base: "https://generativelanguage.googleapis.com/v1beta", default_model: "gemini-1.5-flash", format: "gemini_generate_content" },
+    { id: "anthropic", label: "Anthropic", api_base: "https://api.anthropic.com/v1", default_model: "claude-haiku-4-5-20251001", format: "anthropic_messages" },
+    { id: "gemini", label: "Google Gemini", api_base: "https://generativelanguage.googleapis.com/v1beta", default_model: "gemini-2.5-flash", format: "gemini_generate_content" },
   ],
   auto_send_comments: false,
   auto_send_private_messages: false,
@@ -755,6 +758,58 @@ export async function saveRecentSearchUsersToBackend<T>(users: T[]): Promise<T[]
   return users;
 }
 
+export async function getMcpStatus(): Promise<McpStatus> {
+  const port = state.config.mcp?.preferred_port || 39144;
+  return {
+    enabled: Boolean(state.config.mcp?.enabled),
+    running: false,
+    port,
+    endpoint: `http://127.0.0.1:${port}/mcp`,
+    started_at: null,
+    last_error: "Public shell uses a mock MCP bridge.",
+    tool_count: 0,
+  };
+}
+
+export async function getMcpLogs(_limit = 50): Promise<McpLogEntry[]> {
+  return [
+    {
+      timestamp: new Date().toISOString(),
+      transport: "demo",
+      client_name: "public-shell",
+      tool_name: "mcp_demo",
+      category: "read",
+      argument_summary: "{}",
+      success: true,
+      elapsed_ms: 0,
+      error_code: null,
+      message: "Public shell MCP demo is disabled. Private builds provide the local MCP runtime.",
+    },
+  ];
+}
+
+export async function getMcpConnectionInfo(): Promise<McpConnectionInfo> {
+  const port = state.config.mcp?.preferred_port || 39144;
+  return {
+    endpoint: `http://127.0.0.1:${port}/mcp`,
+    token: "",
+    running: false,
+    port,
+  };
+}
+
+export async function regenerateMcpToken(): Promise<{ success: boolean; token: string; token_preview?: string; message?: string }> {
+  return { success: true, token: "", token_preview: undefined, message: "Public shell does not manage MCP tokens." };
+}
+
+export async function restartMcpServer(): Promise<{ success: boolean; message?: string }> {
+  return { success: true, message: "Public shell MCP runtime is mock-only." };
+}
+
+export async function clearMcpLogs(): Promise<{ success: boolean; message?: string }> {
+  return { success: true, message: "Public shell MCP logs cleared." };
+}
+
 export function normalizeBrowserTask(value: unknown) {
   return value;
 }
@@ -775,4 +830,3 @@ export async function listenEvent<T>(event: string, handler: EventHandler<T>): P
     set.delete(wrapped);
   };
 }
-

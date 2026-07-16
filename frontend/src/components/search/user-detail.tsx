@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  AlertCircle,
   Copy,
   Download,
   Loader2,
@@ -13,6 +12,8 @@ import {
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { InlineStatus, PageState } from "@/components/common/page-state";
+import { SectionSurface, surfaceClassName } from "@/components/common/surface";
 import { useAppStore, useDownloadStore, useLogStore } from "@/stores/app-store";
 import { useSearchStore } from "@/stores/search-store";
 import { useToastStore } from "@/components/ui/toast";
@@ -72,11 +73,7 @@ export function UserDetail() {
 
   if (searching && !currentUser && users.length === 0) {
     return (
-      <motion.div
-        initial={false}
-        animate={{ opacity: 1, y: 0 }}
-        className="rounded-[18px] border border-border bg-surface-solid/80 p-8 mb-5"
-      >
+      <SectionSurface density="spacious" tone="solid" className="mb-5 rounded-[18px]">
         <div className="flex items-center gap-3 text-text">
           <div className="w-11 h-11 rounded-[14px] bg-accent/10 flex items-center justify-center">
             <Loader2 className="w-5 h-5 text-accent animate-spin" />
@@ -88,7 +85,7 @@ export function UserDetail() {
             </div>
           </div>
         </div>
-      </motion.div>
+      </SectionSurface>
     );
   }
 
@@ -103,10 +100,9 @@ export function UserDetail() {
         />
 
         {error && (
-          <div className="mt-3 flex items-start gap-2 rounded-[14px] border border-white/[0.06] bg-danger-soft px-4 py-3 text-[0.78rem] text-danger">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{error}</span>
-          </div>
+          <InlineStatus tone="danger" className="mt-3">
+            {error}
+          </InlineStatus>
         )}
       </div>
     );
@@ -136,7 +132,12 @@ export function UserDetail() {
               tabIndex={0}
               initial={false}
               animate={{ opacity: 1, y: 0 }}
-              className="group rounded-[18px] border border-border bg-surface-solid/80 p-4 text-left hover:border-border-strong hover:shadow-md active:scale-[0.99] transition-[transform,box-shadow,border-color,background-color] cursor-pointer"
+              className={surfaceClassName({
+                density: "default",
+                tone: "solid",
+                interactive: true,
+                className: "group cursor-pointer rounded-[18px] text-left",
+              })}
             >
               <div className="flex items-center gap-3 mb-3">
                 <UserAvatar
@@ -187,47 +188,23 @@ export function UserDetail() {
 
   if (error) {
     return (
-      <div className="mb-5 rounded-[18px] border border-white/[0.06] bg-danger-soft p-5">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-[12px] bg-danger/10 flex items-center justify-center shrink-0">
-            <AlertCircle className="w-4.5 h-4.5 text-danger" />
-          </div>
-          <div>
-            <div className="text-[0.88rem] font-semibold text-danger">搜索失败</div>
-            <div className="text-[0.78rem] text-text-secondary mt-1">{error}</div>
-          </div>
-        </div>
-      </div>
+      <PageState
+        tone="danger"
+        title="搜索失败"
+        description={error}
+        className="mb-5"
+      />
     );
   }
 
   return (
-    <motion.div
-      initial={false}
-      animate={{ opacity: 1, y: 0 }}
-      className="mb-5 rounded-[18px] border border-border bg-surface-solid/70 p-7"
-    >
-      <div className="flex items-start gap-4">
-        <div className="w-12 h-12 rounded-[16px] bg-accent/10 flex items-center justify-center shrink-0">
-          {query ? (
-            <Sparkles className="w-5 h-5 text-accent" />
-          ) : (
-            <Search className="w-5 h-5 text-accent" />
-          )}
-        </div>
-        <div>
-          <div className="text-[0.92rem] font-semibold text-text">
-            还没有选择用户
-          </div>
-          <div className="text-[0.78rem] text-text-muted mt-1 leading-relaxed">
-            请先在搜索用户页面选择一个用户，或从视频卡片进入作者主页。
-          </div>
-          <Button variant="default" size="sm" className="mt-4" onClick={() => setView("search")}>
-            去搜索用户
-          </Button>
-        </div>
-      </div>
-    </motion.div>
+    <PageState
+      icon={query ? Sparkles : Search}
+      title="还没有选择用户"
+      description="请先在搜索用户页面选择一个用户，或从视频卡片进入作者主页。"
+      action={{ label: "去搜索用户", onClick: () => setView("search") }}
+      className="mb-5"
+    />
   );
 }
 
@@ -317,7 +294,11 @@ export function UserDetailCard({ user, busy, onDownloadAll, onViewVideos }: User
       initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 350, damping: 28 }}
-      className="relative overflow-hidden rounded-[18px] border border-border bg-surface-solid/85 p-5 text-text shadow-[var(--shadow-md)]"
+      className={surfaceClassName({
+        density: "spacious",
+        tone: "solid",
+        className: "relative overflow-hidden rounded-[18px] text-text shadow-[var(--shadow-md)]",
+      })}
     >
       <div className="flex items-center gap-4 flex-wrap">
         <UserAvatar

@@ -51,6 +51,7 @@ export default function App() {
   const showAlert = useAlertStore((s) => s.showAlert);
   const { showLoader, hideLoader } = useLoaderStore();
   const lastCookieInvalidLogAt = useRef(0);
+  const cookieGraceUntilRef = useRef(0);
   const cookieInvalidRetryRef = useRef<number | null>(null);
   const updateInFlightRef = useRef(false);
   const updateReadyPromptShownRef = useRef(false);
@@ -63,6 +64,13 @@ export default function App() {
     let removeCookieLoginStatus: (() => void) | null = null;
 
     const handleCookieLoginStatus = (detail: { event?: string; cookie_set?: boolean; sec_uid?: string; nickname?: string }) => {
+      if (detail.cookie_set || detail.event === "success") {
+        cookieGraceUntilRef.current = Date.now() + 15_000;
+        if (cookieInvalidRetryRef.current !== null) {
+          window.clearTimeout(cookieInvalidRetryRef.current);
+          cookieInvalidRetryRef.current = null;
+        }
+      }
       if (detail.event === "success" && detail.cookie_set && detail.sec_uid) {
         setCookieLoggedIn(true, detail.nickname || undefined, detail.sec_uid);
       }
@@ -342,16 +350,11 @@ export default function App() {
 
     const scheduleCookieInvalidConfirmation = (message: string) => {
       if (cookieInvalidRetryRef.current !== null) return;
+      const delay = Date.now() < cookieGraceUntilRef.current ? 2_000 : 800;
       cookieInvalidRetryRef.current = window.setTimeout(() => {
         cookieInvalidRetryRef.current = null;
         void (async () => {
           try {
-            const config = await getConfig().catch(() => null);
-            if (disposed || !config?.cookie_set) {
-              setCookieLoggedIn(false);
-              return;
-            }
-
             const status = await verifyCookie();
             if (disposed) return;
             if (status.valid) {
@@ -371,7 +374,7 @@ export default function App() {
             }
           }
         })();
-      }, 800);
+      }, delay);
     };
 
     const handleCookieInvalid = (event: Event) => {
@@ -496,18 +499,19 @@ export default function App() {
               return;
             }
 
-            setCookieLoggedIn(status.valid, status.user_name || undefined, status.sec_uid || status.user_id || undefined);
-
             if (status.valid) {
+              setCookieLoggedIn(true, status.user_name || undefined, status.sec_uid || status.user_id || undefined);
               prefetchTimer = window.setTimeout(() => {
                 void useRecommendedStore.getState().loadFeed();
               }, 1200);
+            } else if (status.need_verify && !status.need_login) {
+              useLogStore.getState().addLog(status.message || "Cookie 需要完成验证", "warning");
             } else {
+              setCookieLoggedIn(false);
               useLogStore.getState().addLog(status.message || "Cookie 可能已失效", "warning");
             }
           } catch (error) {
             if (!disposed) {
-              setCookieLoggedIn(false);
               useLogStore
                 .getState()
                 .addLog(error instanceof Error ? error.message : "Cookie 校验失败", "warning");
@@ -516,9 +520,11 @@ export default function App() {
         } else {
           setCookieLoggedIn(false);
         }
-      } catch {
+      } catch (error) {
         if (!disposed) {
-          setCookieLoggedIn(false);
+          useLogStore
+            .getState()
+            .addLog(error instanceof Error ? error.message : "读取配置失败", "warning");
         }
       } finally {
         hideLoader();

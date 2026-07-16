@@ -3,6 +3,8 @@ import { ArrowUpRight, ChevronLeft, ChevronRight, Clock3, Loader2, Search, Shiel
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { InlineStatus } from "@/components/common/page-state";
+import { surfaceClassName } from "@/components/common/surface";
 import { CompletionInput, type CompletionInputOption } from "@/components/ui/completion-input";
 import { useAlertStore, useAppStore } from "@/stores/app-store";
 import { useSearchStore } from "@/stores/search-store";
@@ -316,9 +318,9 @@ export function SearchView() {
             )}
 
             {error && !pendingVerifySearch && (
-              <div className="mt-3 rounded-[12px] border border-white/[0.06] bg-danger-soft px-3 py-2 text-[0.78rem] text-danger">
+              <InlineStatus tone="danger" className="mt-3">
                 {error}
-              </div>
+              </InlineStatus>
             )}
           </section>
 
@@ -451,7 +453,11 @@ function UserSearchCard({
           onOpen();
         }
       }}
-      className="group min-w-0 cursor-pointer rounded-[18px] border border-border bg-surface-solid/78 p-4 transition-[background-color,border-color,box-shadow,transform] hover:border-border-strong hover:bg-surface-raised hover:shadow-md active:scale-[0.99]"
+      className={surfaceClassName({
+        density: "default",
+        interactive: true,
+        className: "group min-w-0 cursor-pointer rounded-[18px]",
+      })}
     >
       <div className="mb-3 flex items-start gap-3">
         <UserAvatar user={user} className="h-12 w-12 border border-border shadow-[0_8px_22px_rgba(0,0,0,0.18)]" />

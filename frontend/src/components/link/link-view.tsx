@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  AlertCircle,
   ArrowUpRight,
   CheckCircle2,
   ChevronLeft,
@@ -18,6 +17,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { InlineStatus, PageState } from "@/components/common/page-state";
+import { SectionSurface, surfaceClassName } from "@/components/common/surface";
 import { CompletionInput, type CompletionInputOption } from "@/components/ui/completion-input";
 import { VideoCard, VIDEO_CARD_GRID_CLASS } from "@/components/search/video-card";
 import { VideoDetailModal } from "@/components/modals/video-detail";
@@ -223,10 +224,9 @@ export function LinkView() {
           )}
 
           {error && (
-            <div className="mt-3 flex items-start gap-2 rounded-[12px] border border-white/[0.06] bg-danger-soft px-3 py-2 text-[0.78rem] text-danger">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{error}</span>
-            </div>
+            <InlineStatus tone="danger" className="mt-3">
+              {error}
+            </InlineStatus>
           )}
         </section>
 
@@ -235,11 +235,13 @@ export function LinkView() {
         )}
 
         {parsing && !hasResult ? (
-          <section className="flex flex-col items-center justify-center rounded-[18px] border border-border bg-surface-solid/60 py-16 text-center">
-            <Loader2 className="mb-4 h-8 w-8 animate-spin text-info" />
-            <p className="text-[0.9rem] text-text-secondary">正在解析链接...</p>
-            <p className="mt-1 text-[0.76rem] text-text-muted">短链会先跟随跳转，再读取作品详情。</p>
-          </section>
+          <PageState
+            icon={Loader2}
+            title="正在解析链接..."
+            description="短链会先跟随跳转，再读取作品详情。"
+            minHeight="md"
+            className="py-16"
+          />
         ) : videos.length > 0 ? (
           <section>
             <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
@@ -372,7 +374,7 @@ function ParsedUserPanel({ user, onOpen }: { user: UserInfo; onOpen: () => void 
   ];
 
   return (
-    <section className="rounded-[18px] border border-border bg-surface-solid/72 p-4 shadow-[0_14px_38px_rgba(0,0,0,0.12)]">
+    <SectionSurface density="default" className="rounded-[18px] shadow-[0_14px_38px_rgba(0,0,0,0.12)]">
       <div className="flex items-start gap-4">
         {avatar ? (
           <img
@@ -409,7 +411,7 @@ function ParsedUserPanel({ user, onOpen }: { user: UserInfo; onOpen: () => void 
           </div>
         ))}
       </div>
-    </section>
+    </SectionSurface>
   );
 }
 
@@ -442,7 +444,11 @@ function RecentLinkCard({
           onParse();
         }
       }}
-      className="group min-w-0 cursor-pointer rounded-[18px] border border-border bg-surface-solid/78 p-4 transition-[background-color,border-color,box-shadow,transform] hover:border-border-strong hover:bg-surface-raised hover:shadow-md active:scale-[0.99]"
+      className={surfaceClassName({
+        density: "default",
+        interactive: true,
+        className: "group min-w-0 cursor-pointer rounded-[18px]",
+      })}
     >
       <div className="mb-3 flex items-start gap-3">
         <RecentLinkThumb entry={entry} className="h-12 w-12 rounded-[14px]" />

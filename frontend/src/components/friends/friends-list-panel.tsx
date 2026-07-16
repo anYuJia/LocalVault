@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
-import { Loader2, Users, Wifi, WifiOff } from "lucide-react";
+import { Loader2, Users } from "lucide-react";
+import { SectionSurface } from "@/components/common/surface";
 import type { FriendListItem, FriendStatusItem } from "./friends-status-types";
-import { FriendRow, Metric } from "./friends-status-components";
+import { FriendRow } from "./friends-status-components";
 
 interface FriendListPanelProps {
   friends: FriendStatusItem[];
@@ -36,7 +37,7 @@ export function FriendListPanel({ friends, friendItems, selectedFriendId, online
   }, [friendItems.length, hasMore, onLoadMore]);
 
   return (
-    <section className="flex min-h-0 flex-col rounded-[var(--radius-lg)] border border-border bg-surface-solid/70 p-3 shadow-[var(--shadow-sm)]">
+    <SectionSurface density="compact" className="flex min-h-0 flex-col">
       <div className="mb-3 flex items-center justify-between shrink-0 px-0.5">
         <span className="text-[0.76rem] font-bold text-text-secondary tracking-wide">联系人列表</span>
         <div className="flex gap-1.5">
@@ -71,6 +72,6 @@ export function FriendListPanel({ friends, friendItems, selectedFriendId, online
           )}
         </div>
       )}
-    </section>
+    </SectionSurface>
   );
 }

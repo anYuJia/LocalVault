@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useAppStore, useLogStore, useAlertStore, useUpdateStore } from "@/stores/app-store";
 import { useToast } from "@/components/ui/toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { Palette, Key, FolderOpen, Info, Sparkles } from "lucide-react";
+import { Palette, Key, FolderOpen, Info, Sparkles, SquareTerminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   cancelCookieBrowserLogin,
@@ -39,6 +39,7 @@ import { SettingsAppearanceTab } from "./settings-appearance";
 import { SettingsAboutTab } from "./settings-about";
 import { SettingGroup } from "./settings-components";
 import { SettingsAiTab } from "./settings-ai";
+import { SettingsMcpTab } from "./settings-mcp";
 
 export function SettingsView() {
   const theme = useAppStore((s) => s.theme);
@@ -782,15 +783,46 @@ export function SettingsView() {
     }
   };
 
+  const validateAiConnectionConfig = (requireApiKey = false) => {
+    const provider = aiProvider.trim();
+    const apiBase = aiApiBase.trim();
+    const model = aiModel.trim();
+    if (!provider) return "请选择 AI 提供商";
+    if (!apiBase) return "请填写 Base URL";
+    try {
+      const parsed = new URL(apiBase.includes("://") ? apiBase : `https://${apiBase}`);
+      if (!/^https?:$/.test(parsed.protocol)) return "Base URL 只支持 HTTP 或 HTTPS";
+    } catch {
+      return "Base URL 格式不正确，请填写完整接口根地址";
+    }
+    if (!model) return "请填写模型名称";
+    if (requireApiKey && !aiApiKey.trim() && !aiApiKeySet) {
+      return "请填写当前提供商的 API Key 后再测试";
+    }
+    return "";
+  };
+
+  const resetAiTestResult = () => {
+    setAiTestStatus("idle");
+    setAiTestMessage("");
+  };
+
   const handleSaveAiInteraction = async () => {
+    const validationError = validateAiConnectionConfig();
+    if (validationError) {
+      markFieldStatus("ai_interaction", "error");
+      toast.error(validationError, "AI 配置不完整");
+      addLog(`AI 配置校验失败：${validationError}`, "warning");
+      return false;
+    }
     const trimmedApiKey = aiApiKey.trim();
     const nextAi = {
       enabled: aiEnabled,
       provider: aiProvider,
-      api_base: aiApiBase.trim() || "https://api.openai.com/v1",
+      api_base: aiApiBase.trim(),
       api_key: trimmedApiKey || undefined,
       api_key_set: trimmedApiKey ? true : aiApiKeySet,
-      model: aiModel.trim() || "gpt-4o-mini",
+      model: aiModel.trim(),
       system_prompt: aiSystemPrompt.trim(),
       auto_send_comments: aiAutoSendComments,
       auto_send_private_messages: aiAutoSendPrivateMessages,
@@ -870,8 +902,15 @@ export function SettingsView() {
   };
 
   const handleTestAiInteraction = async () => {
+    const validationError = validateAiConnectionConfig(true);
+    if (validationError) {
+      setAiTestStatus("error");
+      setAiTestMessage(validationError);
+      toast.error(validationError, "无法开始测试");
+      return;
+    }
     setAiTestStatus("testing");
-    setAiTestMessage("正在保存配置并测试模型连接...");
+    setAiTestMessage("正在保存配置并向模型发送测试请求，最长等待 20 秒...");
     try {
       const saved = await handleSaveAiInteraction();
       if (!saved) {
@@ -885,6 +924,7 @@ export function SettingsView() {
         tone: "concise",
         language: "zh-CN",
         max_suggestions: 1,
+        test_connection: true,
       });
       const providerError = String(result.provider_error || "").trim();
       if (!result.success) {
@@ -894,11 +934,17 @@ export function SettingsView() {
         throw new Error(providerError || "AI 服务未返回模型结果，已降级为本地兜底");
       }
       setAiTestStatus("success");
-      setAiTestMessage(`连接成功：${result.suggestions?.[0] || result.draft || "模型已返回结果"}`);
+      const preset = aiProviderPresets.find((item) => item.id === (result.provider || aiProvider));
+      const providerLabel = preset?.label || result.provider || aiProvider;
+      const latency = result.provider_latency_ms ? ` · ${result.provider_latency_ms} ms` : "";
+      const reply = result.suggestions?.[0] || result.draft || "模型已返回结果";
+      setAiTestMessage(`连接成功 · ${providerLabel} / ${result.model || aiModel}${latency}\n模型返回：${reply}`);
       toast.success("AI 服务连接测试通过", "测试成功");
       addLog("AI 服务连接测试通过", "success");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "AI 服务测试失败";
+      const detail = error instanceof Error ? error.message : "AI 服务测试失败";
+      const preset = aiProviderPresets.find((item) => item.id === aiProvider);
+      const message = `${preset?.label || aiProvider} / ${aiModel}\n${detail}`;
       setAiTestStatus("error");
       setAiTestMessage(message);
       toast.error(message, "测试失败");
@@ -907,9 +953,29 @@ export function SettingsView() {
   };
 
   const handleAiProviderChange = (value: string, preset?: AiProviderPreset) => {
+    if (value !== aiProvider) {
+      setAiApiKey("");
+      setAiApiKeySet(false);
+    }
     setAiProvider(value);
     if (preset?.api_base) setAiApiBase(preset.api_base);
     if (preset?.default_model) setAiModel(preset.default_model);
+    resetAiTestResult();
+  };
+
+  const handleAiApiBaseChange = (value: string) => {
+    setAiApiBase(value);
+    resetAiTestResult();
+  };
+
+  const handleAiApiKeyChange = (value: string) => {
+    setAiApiKey(value);
+    resetAiTestResult();
+  };
+
+  const handleAiModelChange = (value: string) => {
+    setAiModel(value);
+    resetAiTestResult();
   };
 
   const handleSaveUpdateProxy = async (proxy: string | null) => {
@@ -1068,13 +1134,14 @@ export function SettingsView() {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<"accounts" | "download" | "preferences" | "ai" | "about">("accounts");
+  const [activeTab, setActiveTab] = useState<"accounts" | "download" | "preferences" | "ai" | "mcp" | "about">("accounts");
 
   const TABS = [
     { id: "accounts", label: "账号管理", icon: Key },
     { id: "download", label: "下载配置", icon: FolderOpen },
     { id: "preferences", label: "外观偏好", icon: Palette },
     { id: "ai", label: "AI 互动", icon: Sparkles },
+    { id: "mcp", label: "AI 工具接入", icon: SquareTerminal },
     { id: "about", label: "关于更新", icon: Info },
   ] as const;
 
@@ -1083,7 +1150,7 @@ export function SettingsView() {
       initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: [0.2, 0, 0, 1] }}
-      className="mx-auto w-full max-w-[860px] p-4 lg:p-6"
+      className="mx-auto w-full max-w-[860px] p-4 pb-24 lg:p-6 lg:pb-24"
     >
       <div className="flex items-center justify-between mb-5">
         <div>
@@ -1096,7 +1163,7 @@ export function SettingsView() {
 
       <div className="flex flex-col md:flex-row gap-6">
         {/* Navigation Sidebar */}
-        <div className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible shrink-0 pb-2 md:pb-0 md:w-[180px] border-b md:border-b-0 md:border-r border-white/[0.06]">
+        <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-white/[0.06] pb-2 md:sticky md:top-4 md:max-h-[calc(100vh-2rem)] md:w-[180px] md:flex-col md:self-start md:overflow-visible md:border-b-0 md:border-r md:pb-0">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -1183,9 +1250,9 @@ export function SettingsView() {
                   testMessage={aiTestMessage}
                   onEnabledChange={setAiEnabled}
                   onProviderChange={handleAiProviderChange}
-                  onApiBaseChange={setAiApiBase}
-                  onApiKeyChange={setAiApiKey}
-                  onModelChange={setAiModel}
+                  onApiBaseChange={handleAiApiBaseChange}
+                  onApiKeyChange={handleAiApiKeyChange}
+                  onModelChange={handleAiModelChange}
                   onSystemPromptChange={setAiSystemPrompt}
                   onAutoSendCommentsChange={setAiAutoSendComments}
                   onAutoSendPrivateMessagesChange={setAiAutoSendPrivateMessages}
@@ -1209,6 +1276,8 @@ export function SettingsView() {
                   onTest={() => void handleTestAiInteraction()}
                 />
               )}
+
+              {activeTab === "mcp" && <SettingsMcpTab />}
 
               {activeTab === "about" && (
                 <SettingsAboutTab appVersion={appVersion} updateStatus={updateStatus} updateMessage={updateMessage} updateInfo={updateInfo} updateProgress={updateProgress} updateCanRestart={updateCanRestart} handleCheckUpdate={handleCheckUpdate} handleDownloadUpdate={handleDownloadUpdate} handleRestart={handleRestart} updateProxy={updateProxy} savingProxy={savingProxy} handleSaveUpdateProxy={handleSaveUpdateProxy} />

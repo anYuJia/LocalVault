@@ -30,6 +30,7 @@ interface BatchDownloadStartedPayload {
 
 interface DownloadProgressPayload {
   task_id: string;
+  progress_scope?: string;
   progress?: number;
   completed?: number;
   total?: number;
@@ -41,6 +42,8 @@ interface DownloadProgressPayload {
   file_progress?: number;
   bytes_downloaded?: number;
   bytes_total?: number;
+  capacity_bytes_downloaded?: number;
+  capacity_bytes_total?: number;
   speed_bps?: number;
   speed_mbps?: number;
   eta_seconds?: number | null;
@@ -52,8 +55,13 @@ interface DownloadProgressPayload {
   total_videos?: number;
   skipped?: number;
   failed?: number;
+  succeeded?: number;
   processed?: number;
   elapsed_seconds?: number;
+  current_aweme_id?: string;
+  current_name?: string;
+  current_video_status?: string;
+  worker_slot?: number;
   message?: string;
 }
 
@@ -105,6 +113,12 @@ interface CurrentVideoProgressPayload {
   aweme_id?: string;
   name?: string;
   progress?: number;
+  status?: string;
+  worker_slot?: number;
+  file_index?: number;
+  file_total?: number;
+  bytes_downloaded?: number;
+  bytes_total?: number;
   speed_bps?: number;
   speed_mbps?: number;
 }
@@ -138,6 +152,11 @@ function toPercent(value: unknown) {
 }
 
 function computeBatchProgress(d: DownloadProgressPayload, existing?: DownloadTask) {
+  const currentVideoStatus = String(d.current_video_status || "").toLowerCase();
+  if (d.current_aweme_id && currentVideoStatus !== "completed" && currentVideoStatus !== "failed") {
+    return existing?.progress;
+  }
+
   const hasBatchCounters =
     d.overall_progress !== undefined ||
     d.current_downloaded !== undefined ||
@@ -175,6 +194,11 @@ function normalizeSpeedBps(payload: { speed_bps?: number; speed_mbps?: number })
   const speedMbps = toFiniteNumber(payload.speed_mbps);
   if (speedMbps === undefined) return undefined;
   return speedMbps * 1024 * 1024;
+}
+
+function isCurrentVideoTerminal(status?: string) {
+  const value = String(status || "").toLowerCase();
+  return value === "completed" || value === "failed" || value === "error" || value === "cancelled" || value === "canceled";
 }
 
 export function useSocket() {
@@ -240,7 +264,9 @@ export function useSocket() {
       // download-progress
       await register<DownloadProgressPayload>("download-progress", (d) => {
           const existing = useDownloadStore.getState().tasks[d.task_id];
+          const hasCurrentVideoPayload = Boolean(d.current_aweme_id);
           const hasBatchProgress =
+            d.progress_scope === "current_video" ||
             d.overall_progress !== undefined ||
             d.current_downloaded !== undefined ||
             d.total_videos !== undefined ||
@@ -256,16 +282,20 @@ export function useSocket() {
             id: d.task_id,
             ...(d.display_name || d.desc ? { filename: d.display_name || d.desc || "" } : {}),
             status: nextStatus,
-            downloadedBytes: d.bytes_downloaded,
-            totalBytes: d.bytes_total,
+            capacityDownloadedBytes: d.capacity_bytes_downloaded,
+            capacityTotalBytes: d.capacity_bytes_total,
             etaSeconds: d.eta_seconds ?? undefined,
             savePath: d.save_path,
             filePath: d.file_path,
             mediaType: d.media_type,
           };
           const speed = normalizeSpeedBps(d);
-          if (speed !== undefined) {
+          if (speed !== undefined && !hasCurrentVideoPayload) {
             patch.speed = speed;
+          }
+          if (!hasCurrentVideoPayload) {
+            patch.downloadedBytes = d.bytes_downloaded;
+            patch.totalBytes = d.bytes_total;
           }
 
           if (isBatchTask) {
@@ -291,7 +321,7 @@ export function useSocket() {
               patch.fileIndex = currentDownloaded;
               patch.completedCount = currentDownloaded;
             }
-            if (d.message) {
+            if (d.message && !hasCurrentVideoPayload) {
               patch.currentName = d.message;
             }
             if (d.skipped !== undefined) {
@@ -300,7 +330,10 @@ export function useSocket() {
             if (d.failed !== undefined) {
               patch.failedCount = d.failed;
             }
-            if (d.file_progress !== undefined) {
+            if (d.succeeded !== undefined) {
+              patch.succeededCount = d.succeeded;
+            }
+            if (d.file_progress !== undefined && !hasCurrentVideoPayload) {
               patch.fileProgress = toPercent(d.file_progress);
             }
             if (d.status) {
@@ -309,11 +342,17 @@ export function useSocket() {
             if (existing?.status === "paused" && nextStatus === "downloading") {
               patch.status = "paused";
             }
-            if (d.bytes_downloaded !== undefined) {
+            if (d.bytes_downloaded !== undefined && !hasCurrentVideoPayload) {
               patch.downloadedBytes = d.bytes_downloaded;
             }
-            if (d.bytes_total !== undefined) {
+            if (d.bytes_total !== undefined && !hasCurrentVideoPayload) {
               patch.totalBytes = d.bytes_total;
+            }
+            if (d.capacity_bytes_downloaded !== undefined) {
+              patch.capacityDownloadedBytes = d.capacity_bytes_downloaded;
+            }
+            if (d.capacity_bytes_total !== undefined) {
+              patch.capacityTotalBytes = d.capacity_bytes_total;
             }
             if (d.eta_seconds !== undefined) {
               patch.etaSeconds = d.eta_seconds ?? undefined;
@@ -338,7 +377,7 @@ export function useSocket() {
       // download-failed
       await register<DownloadFailedPayload>("download-failed", (d) => {
           const cancelled = isCancelledMessage(d.error);
-          updateTask({ id: d.task_id, status: cancelled ? "cancelled" : "error", speed: 0, errorMessage: d.error });
+          updateTask({ id: d.task_id, status: cancelled ? "cancelled" : "error", speed: 0, currentDownloads: {}, errorMessage: d.error });
           addLog(d.error, cancelled ? "warning" : "error");
           if (!cancelled) {
             toast(d.error, "error", "下载失败");
@@ -348,7 +387,7 @@ export function useSocket() {
       // download-error
       await register<DownloadErrorPayload>("download-error", (d) => {
           const cancelled = isCancelledMessage(d.message);
-          updateTask({ id: d.task_id, status: cancelled ? "cancelled" : "error", speed: 0, errorMessage: d.message });
+          updateTask({ id: d.task_id, status: cancelled ? "cancelled" : "error", speed: 0, currentDownloads: {}, errorMessage: d.message });
           addLog(d.message, cancelled ? "warning" : "error");
           if (!cancelled) {
             toast(d.message, "error", "下载异常");
@@ -356,7 +395,7 @@ export function useSocket() {
         });
 
       await register<DownloadCancelledPayload>("download-cancelled", (d) => {
-          updateTask({ id: d.task_id, status: "cancelled", speed: 0, etaSeconds: 0 });
+          updateTask({ id: d.task_id, status: "cancelled", speed: 0, etaSeconds: 0, currentDownloads: {} });
           const msg = d.message || "下载已取消";
           addLog(msg, "warning");
           toast(msg, "warning");
@@ -376,6 +415,7 @@ export function useSocket() {
               totalBytes: d.total_size,
               filePath: d.file_path || d.files?.[0],
               savePath: d.save_path,
+              currentDownloads: {},
               finishedTime: Date.now(),
             });
             const msg = d.message || `下载完成: ${d.display_name || d.task_id}`;
@@ -408,12 +448,14 @@ export function useSocket() {
             progress,
             speed: 0,
             etaSeconds: 0,
+            currentDownloads: {},
             finishedTime: Date.now(),
             fileIndex: processed || completed || undefined,
             fileTotal: totalVideos ?? undefined,
             mediaCount: totalVideos ?? undefined,
             skippedCount: skipped,
             failedCount: failed,
+            succeededCount: successful,
             errorMessage: status === "error" ? d.message || "批量下载失败" : undefined,
           });
           const msg = d.message || "批量下载已完成";
@@ -428,6 +470,7 @@ export function useSocket() {
             status: "cancelled",
             speed: 0,
             etaSeconds: 0,
+            currentDownloads: {},
             errorMessage: d.message || "下载已取消",
           });
           addLog(d.message || "下载已取消", "warning");
@@ -437,15 +480,52 @@ export function useSocket() {
       await register<CurrentVideoProgressPayload>("current-video-progress", (d) => {
           const existing = useDownloadStore.getState().tasks[d.task_id];
           if (existing && isTerminalStatus(existing.status)) return;
+          const awemeId = String(d.aweme_id || "").trim();
+          if (!awemeId) return;
+
+          const currentDownloads = { ...(existing?.currentDownloads || {}) };
+          const status = String(d.status || "downloading").toLowerCase();
+          if (isCurrentVideoTerminal(status)) {
+            delete currentDownloads[awemeId];
+          } else {
+            const existingItem = currentDownloads[awemeId];
+            const explicitSlot = toFiniteNumber(d.worker_slot);
+            const usedSlots = new Set(
+              Object.values(currentDownloads)
+                .filter((item) => item.awemeId !== awemeId)
+                .map((item) => item.slot)
+                .filter((slot): slot is number => Number.isFinite(slot))
+            );
+            let slot = explicitSlot || existingItem?.slot;
+            if (!slot || (usedSlots.has(slot) && !explicitSlot)) {
+              slot = 1;
+              while (usedSlots.has(slot)) slot += 1;
+            }
+            currentDownloads[awemeId] = {
+              awemeId,
+              name: d.name || awemeId,
+              progress: toPercent(d.progress),
+              slot,
+              status,
+              speed: normalizeSpeedBps(d),
+              bytesDownloaded: d.bytes_downloaded,
+              bytesTotal: d.bytes_total,
+              fileIndex: d.file_index,
+              fileTotal: d.file_total,
+              updatedAt: Date.now(),
+            };
+          }
+
+          const activeCurrentDownloads = Object.values(currentDownloads);
+          const combinedSpeed = activeCurrentDownloads.reduce((sum, item) => sum + (item.speed || 0), 0);
 
           updateTask({
             id: d.task_id,
             isBatch: true,
             filename: existing?.filename || "批量下载",
-            currentAwemeId: d.aweme_id,
-            currentName: d.name,
-            fileProgress: d.progress,
-            speed: normalizeSpeedBps(d) ?? existing?.speed ?? 0,
+            currentAwemeId: awemeId,
+            currentDownloads,
+            speed: activeCurrentDownloads.length > 0 ? combinedSpeed : 0,
             status: existing?.status === "paused" ? "paused" : "downloading",
           });
         });

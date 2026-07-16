@@ -13,6 +13,7 @@ import { ImagePlus, Loader2, MapPin, MessageCircle, Play, Send, ShoppingBag, Spa
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ThemeLogo } from "@/components/common/theme-logo";
+import { SectionSurface } from "@/components/common/surface";
 import { Textarea } from "@/components/ui/textarea";
 import { mediaProxyUrl, suggestAiInteraction } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
@@ -494,7 +495,7 @@ export function ChatWorkspace({
   };
 
   return (
-    <section className="flex min-h-[420px] min-w-0 flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border bg-surface-solid/70 shadow-[var(--shadow-sm)]">
+    <SectionSurface density="none" className="flex min-h-[420px] min-w-0 flex-col overflow-hidden">
       <div className="flex min-h-14 items-center justify-between gap-3 border-b border-border px-4">
         <div className="flex min-w-0 items-center gap-3">
           <button
@@ -749,7 +750,7 @@ export function ChatWorkspace({
           </div>
         </div>
       </div>
-    </section>
+    </SectionSurface>
   );
 }
 

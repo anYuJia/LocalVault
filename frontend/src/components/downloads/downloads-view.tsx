@@ -5,6 +5,7 @@ import { DownloadTaskCardById } from "./task-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Surface } from "@/components/common/surface";
 import { FullscreenPlayer } from "@/components/player/lazy-fullscreen-player";
 import {
   Select,
@@ -827,23 +828,23 @@ export function DownloadsView() {
             />
           </>
         ) : localListLoading ? (
-          <div className="rounded-[16px] border border-border bg-surface-solid/60 p-6 text-center">
+          <Surface density="spacious" tone="muted" className="rounded-[16px] text-center">
             <p className="text-[0.85rem] text-text-secondary mb-1">
               {displayMode === "work" ? "正在整理下载作品..." : "正在扫描下载目录..."}
             </p>
             <p className="text-[0.76rem] text-text-muted">
               文件越多，首次整理需要的时间越长。
             </p>
-          </div>
+          </Surface>
         ) : (
-          <div className="rounded-[16px] border border-border bg-surface-solid/60 p-6 text-center">
+          <Surface density="spacious" tone="muted" className="rounded-[16px] text-center">
             <p className="text-[0.85rem] text-text-secondary mb-1">
               {displayMode === "work" ? "没有找到下载作品" : "没有找到本地文件"}
             </p>
             <p className="text-[0.76rem] text-text-muted">
               这里直接扫描下载目录，已过滤 .DS_Store、.downloaded 和非媒体文件。
             </p>
-          </div>
+          </Surface>
         )}
       </div>
 

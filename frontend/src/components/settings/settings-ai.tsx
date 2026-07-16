@@ -1,5 +1,7 @@
 import {
+  CircleAlert,
   CheckCircle2,
+  Clock3,
   KeyRound,
   Loader2,
   MessageSquare,
@@ -14,13 +16,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
+import type { AiProviderPreset } from "@/lib/contracts";
 import { SettingGroup } from "./settings-components";
 import type { SettingStatus } from "./settings-utils";
 
 interface SettingsAiTabProps {
   enabled: boolean;
   provider: string;
-  providerPresets?: any[];
+  providerPresets?: AiProviderPreset[];
   apiBase: string;
   apiKey: string;
   apiKeySet: boolean;
@@ -48,7 +51,7 @@ interface SettingsAiTabProps {
   testStatus?: "idle" | "testing" | "success" | "error";
   testMessage?: string;
   onEnabledChange: (value: boolean) => void;
-  onProviderChange: (value: string) => void;
+  onProviderChange: (value: string, preset?: AiProviderPreset) => void;
   onApiBaseChange: (value: string) => void;
   onApiKeyChange: (value: string) => void;
   onModelChange: (value: string) => void;
@@ -87,6 +90,7 @@ function FieldLabel({ icon: Icon, children }: { icon?: React.ElementType; childr
 export function SettingsAiTab({
   enabled,
   provider,
+  providerPresets = [],
   apiBase,
   apiKey,
   apiKeySet,
@@ -107,30 +111,15 @@ export function SettingsAiTab({
   const saving = status === "saving";
   const testing = testStatus === "testing";
   const setView = useAppStore((s) => s.setView);
-
-  const normalized = provider.trim().toLowerCase().replace("-", "_");
-  let currentFormat = "openai_chat";
-  if (normalized.includes("anthropic") || normalized.includes("claude")) {
-    currentFormat = "anthropic_messages";
-  } else if (normalized.includes("gemini") || normalized.includes("google")) {
-    currentFormat = "gemini_generate_content";
-  }
-
-  const handleFormatChange = (format: string) => {
-    if (format === "anthropic_messages") {
-      onProviderChange("anthropic");
-      onApiBaseChange("https://api.anthropic.com/v1");
-      onModelChange("claude-3-5-haiku-latest");
-    } else if (format === "gemini_generate_content") {
-      onProviderChange("gemini");
-      onApiBaseChange("https://generativelanguage.googleapis.com/v1beta");
-      onModelChange("gemini-1.5-flash");
-    } else {
-      onProviderChange("openai_compatible");
-      onApiBaseChange("https://api.openai.com/v1");
-      onModelChange("gpt-4o-mini");
-    }
-  };
+  const currentPreset = providerPresets.find((preset) => preset.id === provider);
+  const providerOptions = providerPresets.length > 0
+    ? providerPresets
+    : [{ id: provider, label: provider || "OpenAI", api_base: apiBase, default_model: model, format: "openai_chat" }];
+  const formatLabel = currentPreset?.format === "anthropic_messages"
+    ? "Anthropic Messages"
+    : currentPreset?.format === "gemini_generate_content"
+      ? "Gemini GenerateContent"
+      : "OpenAI Chat Completions";
 
   return (
     <div className="space-y-4">
@@ -140,53 +129,51 @@ export function SettingsAiTab({
             type="button"
             onClick={() => onEnabledChange(!enabled)}
             className={cn(
-              "flex w-full items-center justify-between rounded-[12px] border p-4 transition-all duration-300 select-none cursor-pointer transform active:scale-[0.99]",
+              "flex w-full items-center justify-between rounded-[8px] border p-3.5 transition-colors select-none cursor-pointer",
               enabled
-                ? "bg-gradient-to-r from-accent to-[#ff4d73] text-white border-transparent shadow-[0_12px_24px_-8px_rgba(254,44,85,0.4)]"
-                : "border-border bg-zinc-50/50 dark:bg-zinc-900/40 hover:bg-zinc-100/80 dark:hover:bg-zinc-900/70"
+                ? "border-accent/40 bg-accent/[0.07]"
+                : "border-border bg-subtle-bg/45 hover:bg-subtle-bg/70"
             )}
           >
             <div className="flex items-center gap-3.5">
               <div className={cn(
                 "flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] transition-colors",
-                enabled ? "bg-white/20 text-white" : "bg-zinc-100 dark:bg-zinc-800 text-text-secondary"
+                enabled ? "bg-accent/15 text-accent" : "bg-zinc-100 dark:bg-zinc-800 text-text-secondary"
               )}>
                 <Sparkles className="h-5 w-5" />
               </div>
               <div className="text-left">
-                <div className={cn("text-[0.84rem] font-bold tracking-wide", enabled ? "text-white" : "text-text")}>
+                <div className="text-[0.84rem] font-bold text-text">
                   启用 AI 智能交互建议
                 </div>
-                <div className={cn("text-[0.66rem] mt-0.5 leading-normal", enabled ? "text-white/85" : "text-text-muted")}>
+                <div className="mt-0.5 text-[0.66rem] leading-normal text-text-muted">
                   启用后由大语言模型提供实时视频分析、私信回复与评论草稿生成。
                 </div>
               </div>
             </div>
             <div className={cn(
-              "rounded-full px-2.5 py-0.5 text-[0.62rem] font-black tracking-wider border transition-all duration-300",
-              enabled ? "border-white/30 bg-white/20 text-white" : "border-border bg-subtle-bg text-text-muted"
+              "rounded-full px-2.5 py-0.5 text-[0.62rem] font-semibold border transition-colors",
+              enabled ? "border-success/30 bg-success/10 text-success" : "border-border bg-surface text-text-muted"
             )}>
-              {enabled ? "ACTIVE" : "OFFLINE"}
+              {enabled ? "已启用" : "未启用"}
             </div>
           </button>
 
           <div className="space-y-3.5 pt-1">
-            <div className="grid gap-3.5 sm:grid-cols-3">
+            <div className="grid gap-3.5 sm:grid-cols-2">
               <label className="flex flex-col">
-                <FieldLabel icon={Server}>提供商名字</FieldLabel>
-                <Input value={provider} onChange={(event) => onProviderChange(event.target.value)} placeholder="例如：OpenAI, DeepSeek" className="h-9 text-[0.78rem] rounded-[8px]" />
-              </label>
-
-              <label className="flex flex-col">
-                <FieldLabel icon={Server}>选择格式</FieldLabel>
-                <Select value={currentFormat} onValueChange={handleFormatChange}>
+                <FieldLabel icon={Server}>AI 提供商</FieldLabel>
+                <Select
+                  value={provider}
+                  onValueChange={(value) => onProviderChange(value, providerOptions.find((preset) => preset.id === value))}
+                >
                   <SelectTrigger className="h-9 text-[0.76rem] rounded-[8px]">
-                    <SelectValue />
+                    <SelectValue placeholder="选择提供商" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="openai_chat">OpenAI Chat 格式</SelectItem>
-                    <SelectItem value="anthropic_messages">Anthropic Messages 格式</SelectItem>
-                    <SelectItem value="gemini_generate_content">Google Gemini 格式</SelectItem>
+                    {providerOptions.map((preset) => (
+                      <SelectItem key={preset.id} value={preset.id}>{preset.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </label>
@@ -200,6 +187,9 @@ export function SettingsAiTab({
             <label className="flex flex-col">
               <FieldLabel icon={Server}>Base URL 地址</FieldLabel>
               <Input value={apiBase} onChange={(event) => onApiBaseChange(event.target.value)} placeholder="https://api.openai.com/v1" className="h-9 text-[0.78rem] rounded-[8px] font-mono" />
+              <span className="mt-1.5 text-[0.66rem] text-text-muted">
+                请求格式：{formatLabel}。填写 API 根地址，无需添加具体接口路径。
+              </span>
             </label>
 
             <label className="flex flex-col">
@@ -215,7 +205,7 @@ export function SettingsAiTab({
               {apiKeySet && !apiKey.trim() && (
                 <span className="inline-flex items-center gap-1 mt-1.5 text-[0.68rem] text-success select-none">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  已配置有效密钥；若留空则继续使用已保存的值
+                  已保存密钥；留空不会修改。切换提供商时需要填写对应的新密钥
                 </span>
               )}
             </label>
@@ -252,27 +242,34 @@ export function SettingsAiTab({
         </div>
       </SettingGroup>
 
-      <div className="flex items-center justify-between gap-3 p-3 rounded-[12px] border border-border bg-white/[0.01]">
-        <div className="min-w-0 text-[0.7rem] text-text-muted select-none">
-          <div>{enabled ? "AI 智能交互建议已开启" : "AI 智能交互建议已关闭 (未启用)"}</div>
+      <div className="flex flex-col gap-3 rounded-[8px] border border-border bg-surface/35 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 flex-1 text-[0.7rem] text-text-muted select-none">
+          <div className="flex items-center gap-1.5 font-medium text-text-secondary">
+            <Clock3 className="h-3.5 w-3.5" />
+            连接测试会保存当前配置并发起一次真实模型请求
+          </div>
           {testMessage && (
             <div className={cn(
-              "mt-1 flex items-center gap-1.5 truncate",
-              testStatus === "success" ? "text-success" : testStatus === "error" ? "text-destructive" : "text-text-muted"
+              "mt-2 flex items-start gap-1.5 rounded-[6px] border px-2.5 py-2 leading-relaxed",
+              testStatus === "success"
+                ? "border-success/25 bg-success/[0.06] text-success"
+                : testStatus === "error"
+                  ? "border-destructive/25 bg-destructive/[0.06] text-destructive"
+                  : "border-border bg-subtle-bg/40 text-text-muted"
             )}>
-              {testStatus === "success" && <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />}
-              {testStatus === "error" && <ShieldAlert className="h-3.5 w-3.5 shrink-0" />}
-              <span className="truncate">{testMessage}</span>
+              {testStatus === "success" && <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+              {testStatus === "error" && <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+              <span className="min-w-0 whitespace-pre-wrap break-words">{testMessage}</span>
             </div>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center">
           <Button
             type="button"
             variant="outline"
             onClick={onTest}
             disabled={saving || testing}
-            className="h-9 rounded-[8px] px-4 text-[0.76rem] font-semibold gap-1.5"
+            className="h-9 rounded-[8px] px-2 text-[0.76rem] font-semibold gap-1.5 sm:px-4"
           >
             {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
             {testing ? "测试中" : "测试连接"}
@@ -281,7 +278,7 @@ export function SettingsAiTab({
             type="button"
             onClick={onSave}
             disabled={saving || testing}
-            className="h-9 rounded-[8px] px-5 text-[0.76rem] font-semibold gap-1.5 shadow-sm transition-all active:scale-[0.98] cursor-pointer bg-accent text-white hover:bg-accent-hover"
+            className="h-9 rounded-[8px] px-2 text-[0.76rem] font-semibold gap-1.5 shadow-sm transition-all active:scale-[0.98] cursor-pointer bg-accent text-white hover:bg-accent-hover sm:px-5"
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
             {saving ? "保存中" : "保存 AI 配置"}

@@ -187,8 +187,8 @@ export function getVideoCover(video: VideoInfo | null | undefined): string {
   const source = video as VideoLikeSource;
   const videoData = source.video || {};
   const directCover = firstUrl([
-    videoData.cover,
     videoData.origin_cover,
+    videoData.cover,
     videoData.dynamic_cover,
     source.cover_url,
   ]);
@@ -314,12 +314,12 @@ function buildQualityCandidates(bitRate: BitRateInfo, index: number): VideoQuali
     qualityType: Number(bitRate.quality_type || 0),
   };
 
-  const playUrl = readUrl(bitRate.play_addr);
-  if (playUrl && !isDashVideoOnlyUrl(playUrl)) {
+  for (const [candidateIndex, playUrl] of readCandidateUrls(bitRate.play_addr, bitRate.play_addr_candidates).entries()) {
+    if (!playUrl || isDashVideoOnlyUrl(playUrl)) continue;
     const codec = bitRate.is_h265 ? "H.265" : "H.264";
     options.push({
       ...base,
-      key: `quality-${index}-${codec}-main`,
+      key: `quality-${index}-${codec}-main-${candidateIndex}`,
       label: formatQualityLabel(bitRate),
       detail: formatQualityDetail(bitRate, codec),
       url: playUrl,
@@ -327,12 +327,13 @@ function buildQualityCandidates(bitRate: BitRateInfo, index: number): VideoQuali
     });
   }
 
-  const h264Url = readUrl(bitRate.play_addr_h264);
-  if (h264Url && h264Url !== playUrl && !isDashVideoOnlyUrl(h264Url)) {
+  const mainUrls = new Set(options.map((option) => option.url));
+  for (const [candidateIndex, h264Url] of readCandidateUrls(bitRate.play_addr_h264, bitRate.play_addr_h264_candidates).entries()) {
+    if (!h264Url || mainUrls.has(h264Url) || isDashVideoOnlyUrl(h264Url)) continue;
     const codec = "H.264";
     options.push({
       ...base,
-      key: `quality-${index}-${codec}-h264`,
+      key: `quality-${index}-${codec}-h264-${candidateIndex}`,
       label: formatQualityLabel(bitRate),
       detail: formatQualityDetail(bitRate, codec),
       url: h264Url,
@@ -447,8 +448,9 @@ function pickReliableDuration(primarySeconds: number, bitRateSeconds: number): n
 function qualityRank(option: VideoQualityOption): number {
   const height = option.height || parseQualityLabelHeight(option.label);
   const width = option.width || (height > 0 ? Math.round(height * 16 / 9) : 0);
+  const codecRank = option.codec === "H.264" ? 1_000 : 0;
   const resolution = height > 0 ? height * 1_000_000_000 + width * 100_000 : 0;
-  return resolution + option.dataSize + option.bitRate + option.qualityType;
+  return resolution + option.dataSize + option.bitRate + option.qualityType + codecRank;
 }
 
 function qualityGroupKey(option: VideoQualityOption): string {
@@ -499,6 +501,10 @@ function readUrl(value: unknown): string {
 function readUrlList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return Array.from(new Set(value.map((item) => readUrl(item)).filter(Boolean)));
+}
+
+function readCandidateUrls(primary: unknown, candidates: unknown): string[] {
+  return Array.from(new Set([readUrl(primary), ...readUrlList(candidates)].filter(Boolean)));
 }
 
 function firstUrl(values: unknown[]): string {

@@ -4,7 +4,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, easeConfig, formatBytes } from "@/lib/utils";
-import { Ban, Clock3, FolderOpen, Pause, Play, RotateCw, X, CheckCircle2, AlertCircle, Loader2, Gauge, HardDrive } from "lucide-react";
+import { Ban, Clock3, FolderOpen, Pause, Play, RotateCw, X, CheckCircle2, AlertCircle, Loader2, HardDrive } from "lucide-react";
 import { useDownloadStore } from "@/stores/app-store";
 import type { DownloadTask, DownloadStatus } from "@/types";
 
@@ -45,15 +45,23 @@ export const TaskCard = memo(function TaskCard({
     ? Math.max(0, Math.floor(((task.finishedTime || Date.now()) - task.startTime) / 1000))
     : 0;
   const progress = clampPercent(task.progress);
-  const currentProgress = task.fileProgress === undefined ? undefined : clampPercent(task.fileProgress);
+  const currentDownloads = Object.values(task.currentDownloads || {}).sort((a, b) => {
+    const slotDiff = (a.slot || 0) - (b.slot || 0);
+    return slotDiff || a.updatedAt - b.updatedAt;
+  });
   const displayTitle = task.filename || (looksLikeUuid(task.id) ? (task.isBatch ? "批量下载" : "下载任务") : task.id);
-  const itemLabel = task.isBatch ? "作品" : "文件";
-  const fileLabel = task.fileTotal && task.fileTotal > 1
-    ? `${task.fileIndex ?? 0}/${task.fileTotal}`
-    : "";
+  const processedCount = task.fileIndex ?? task.completedCount ?? 0;
+  const totalCount = task.fileTotal ?? task.mediaCount ?? 0;
+  const skippedCount = task.skippedCount ?? 0;
+  const failedCount = task.failedCount ?? 0;
+  const downloadedCount = task.succeededCount ?? Math.max(0, processedCount - skippedCount - failedCount);
+  const fileLabel = totalCount > 0 ? `${processedCount}/${totalCount}` : `${processedCount}`;
+  const downloadedLabel = !task.isBatch && totalCount > 1 ? `下载了 ${fileLabel}` : "";
+  const hasCapacityBytes = task.isBatch && task.capacityDownloadedBytes !== undefined;
   const active = task.status === "downloading" || task.status === "pending" || task.status === "paused";
-  const percentLabel = progress >= 10 ? progress.toFixed(1) : progress.toFixed(0);
-  const currentLabel = currentProgress !== undefined ? `${currentProgress.toFixed(0)}%` : "";
+  const totalPercentLabel = progress >= 10 ? progress.toFixed(1) : progress.toFixed(0);
+  const showCurrentProgress = task.isBatch && currentDownloads.length > 0;
+  const progressLabelPrefix = task.isBatch ? "总 " : "";
 
   return (
     <motion.div
@@ -111,17 +119,40 @@ export const TaskCard = memo(function TaskCard({
         </div>
 
         {active && (
-          <div className="mb-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
-            <span className="min-w-[2.8rem] text-right text-[0.72rem] font-semibold tabular-nums text-text-secondary">
-              {percentLabel}%
-            </span>
-            <Progress value={progress} className="h-2 bg-surface-raised/80" />
-            {fileLabel ? (
-              <span className="min-w-[4.6rem] text-right text-[0.68rem] font-medium tabular-nums text-text-muted">
-                {itemLabel} {fileLabel}
+          <div className="mb-2 space-y-1.5">
+            <div className="grid grid-cols-[3.6rem_minmax(0,1fr)_auto] items-center gap-2">
+              <span className="text-right text-[0.68rem] font-semibold tabular-nums text-text-secondary">
+                {progressLabelPrefix}{totalPercentLabel}%
               </span>
-            ) : (
-              <span className="min-w-[2rem]" />
+              <Progress value={progress} className="h-2 bg-surface-raised/80" />
+              {task.isBatch && (
+                <span className="whitespace-nowrap rounded-full bg-surface-raised/60 px-1.5 py-0.5 text-[0.66rem] tabular-nums text-text-muted">
+                  已处理 {fileLabel} · 已下载 {downloadedCount}
+                </span>
+              )}
+            </div>
+            {showCurrentProgress && (
+              <div className="space-y-1.5 rounded-lg bg-surface-raised/35 px-2 py-1.5">
+                {currentDownloads.map((item) => {
+                  const itemProgress = clampPercent(item.progress);
+                  const itemPercentLabel = itemProgress >= 10 ? itemProgress.toFixed(1) : itemProgress.toFixed(0);
+                  const speedLabel = item.speed && item.speed > 0 ? ` · ${formatBytes(item.speed)}/s` : "";
+                  const bytesLabel = item.bytesDownloaded !== undefined
+                    ? ` · ${formatBytes(item.bytesDownloaded)}${item.bytesTotal ? ` / ${formatBytes(item.bytesTotal)}` : ""}`
+                    : "";
+                  return (
+                    <div key={item.awemeId} className="grid grid-cols-[4.4rem_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5">
+                      <span className="text-right text-[0.66rem] font-semibold tabular-nums text-text-muted">
+                        #{item.slot || 1} {itemPercentLabel}%
+                      </span>
+                      <Progress value={itemProgress} className="h-1.5 bg-surface-raised/70" />
+                      <span className="col-start-2 min-w-0 truncate text-[0.66rem] text-text-muted" title={item.name}>
+                        {item.name}{speedLabel}{bytesLabel}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
@@ -129,13 +160,18 @@ export const TaskCard = memo(function TaskCard({
         {active ? (
           <div className="space-y-2 text-[0.69rem] text-text-muted">
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 tabular-nums">
-              {task.skippedCount !== undefined && task.skippedCount > 0 && (
-                <span className="shrink-0 rounded-full bg-surface-raised/60 px-1.5 py-0.5">跳过 {task.skippedCount}</span>
+              {downloadedLabel && (
+                <span className="shrink-0 rounded-full bg-surface-raised/60 px-1.5 py-0.5">
+                  {downloadedLabel}
+                </span>
               )}
-              {task.failedCount !== undefined && task.failedCount > 0 && (
-                <span className="shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-warning">失败 {task.failedCount}</span>
+              {skippedCount > 0 && (
+                <span className="shrink-0 rounded-full bg-surface-raised/60 px-1.5 py-0.5">跳过 {skippedCount}</span>
               )}
-              {task.currentName && (
+              {failedCount > 0 && (
+                <span className="shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-warning">失败 {failedCount}</span>
+              )}
+              {task.currentName && currentDownloads.length === 0 && (
                 <span className="min-w-[12rem] flex-1 truncate">
                   当前 {task.currentName}
                 </span>
@@ -143,12 +179,6 @@ export const TaskCard = memo(function TaskCard({
             </div>
 
             <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 tabular-nums sm:grid-cols-[auto_auto_auto_auto]">
-              {currentProgress !== undefined && (
-                <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                  <Gauge className="h-3 w-3" />
-                  当前 {currentLabel}
-                </span>
-              )}
               {task.speed > 0 && (
                 <span className="whitespace-nowrap">{formatBytes(task.speed)}/s</span>
               )}
@@ -156,6 +186,13 @@ export const TaskCard = memo(function TaskCard({
                 <span className="inline-flex items-center gap-1 whitespace-nowrap">
                   <HardDrive className="h-3 w-3" />
                   {formatBytes(task.downloadedBytes)}{task.totalBytes ? ` / ${formatBytes(task.totalBytes)}` : ""}
+                </span>
+              )}
+              {hasCapacityBytes && (
+                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <HardDrive className="h-3 w-3" />
+                  总容量 {formatBytes(task.capacityDownloadedBytes || 0)}
+                  {task.capacityTotalBytes ? ` / ${formatBytes(task.capacityTotalBytes)}` : ""}
                 </span>
               )}
               {task.etaSeconds !== undefined && task.etaSeconds > 0 && (
@@ -175,12 +212,12 @@ export const TaskCard = memo(function TaskCard({
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.68rem] text-text-muted tabular-nums">
-            {fileLabel && <span>{itemLabel} {fileLabel}</span>}
-            {task.skippedCount !== undefined && task.skippedCount > 0 && (
-              <span>跳过 {task.skippedCount}</span>
+            {downloadedLabel && <span>{downloadedLabel}</span>}
+            {skippedCount > 0 && (
+              <span>跳过 {skippedCount}</span>
             )}
-            {task.failedCount !== undefined && task.failedCount > 0 && (
-              <span className="text-warning">失败 {task.failedCount}</span>
+            {failedCount > 0 && (
+              <span className="text-warning">失败 {failedCount}</span>
             )}
             {task.status === "completed" && task.totalBytes && (
               <span>{formatBytes(task.totalBytes)}</span>

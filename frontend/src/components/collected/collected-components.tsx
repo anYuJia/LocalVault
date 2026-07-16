@@ -1,12 +1,12 @@
 import { motion } from "framer-motion";
-import { Key, ListVideo, Loader2, RefreshCw, Star } from "lucide-react";
+import { ListVideo, Loader2, RefreshCw, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ErrorState as SharedErrorState, InlineStatus, LoginRequiredState } from "@/components/common/page-state";
 import {
   VIDEO_CARD_BODY_CLASS,
   VIDEO_CARD_COVER_CLASS,
   VIDEO_CARD_HEIGHT_CLASS,
 } from "@/components/search/video-card";
-import { useAppStore } from "@/stores/app-store";
 import { mediaProxyUrl, type CollectedMixItem } from "@/lib/tauri";
 import { cn, formatNumber, formatTime } from "@/lib/utils";
 import { ORIGINAL_VIDEO_GRID_CLASS } from "./collected-utils";
@@ -128,66 +128,17 @@ export function MixSkeletonGrid() {
 }
 
 export function EmptyState({ title, description, loggedIn = false }: { title: string; description: string; loggedIn?: boolean }) {
-  const setView = useAppStore((s) => s.setView);
-  return (
-    <motion.div
-      initial={false}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex min-h-[360px] flex-col items-center justify-center rounded-[var(--radius-xl)] border border-border/50 bg-surface-solid/40 p-12 text-center"
-    >
-      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-[20px] border border-accent/10 bg-accent-soft shadow-[0_8px_20px_rgba(254,44,85,0.1)]">
-        <Star className="h-8 w-8 text-accent" />
-      </div>
-      <h3 className="mb-2 text-[1.05rem] font-bold text-text">{title}</h3>
-      <p className="mb-8 max-w-[280px] text-[0.82rem] leading-relaxed text-text-muted">{description}</p>
-      {!loggedIn && (
-        <Button
-          variant="outline"
-          size="lg"
-          onClick={() => setView("settings")}
-          className="gap-2 rounded-[14px] border-accent/20 px-8 hover:bg-accent-soft hover:text-accent"
-        >
-          <Key className="h-4 w-4" />
-          前往登录 Cookie
-        </Button>
-      )}
-    </motion.div>
-  );
+  return <LoginRequiredState title={title} description={description} icon={Star} loggedIn={loggedIn} />;
 }
 
 export function InlineWarning({ message }: { message: string }) {
   return (
-    <div className="mb-3 rounded-[12px] border border-warning/20 bg-warning-soft px-3 py-2 text-[0.75rem] text-text-secondary">
+    <InlineStatus tone="warning">
       当前显示的是本地缓存，刷新失败：{message}
-    </div>
+    </InlineStatus>
   );
 }
 
 export function ErrorState({ message }: { message: string }) {
-  const setView = useAppStore((s) => s.setView);
-  const needsLogin = /请登录后获取|请先设置\s*Cookie|未登录|登录态|decoding response body/i.test(message);
-  return (
-    <motion.div
-      initial={false}
-      animate={{ opacity: 1, scale: 1 }}
-      className="flex min-h-[300px] flex-col items-center justify-center rounded-[var(--radius-xl)] border border-danger/20 bg-danger-soft p-12 text-center"
-    >
-      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-[18px] bg-danger/10">
-        <Star className="h-7 w-7 text-danger" />
-      </div>
-      <h3 className="mb-2 text-[1rem] font-bold text-danger">读取失败</h3>
-      <p className="max-w-[360px] text-[0.78rem] text-text-secondary">{message}</p>
-      {needsLogin && (
-        <Button
-          variant="default"
-          size="sm"
-          onClick={() => setView("settings")}
-          className="mt-6 rounded-[10px]"
-        >
-          <Key className="mr-2 h-3.5 w-3.5" />
-          去登录
-        </Button>
-      )}
-    </motion.div>
-  );
+  return <SharedErrorState message={message} icon={Star} />;
 }
