@@ -37,7 +37,7 @@ export function QuickStats() {
     const loadStats = async () => {
       const [filesResult, historyResult] = await Promise.allSettled([
         listDownloadFilesPage({ offset: 0, limit: 1 }),
-        getHistory(),
+        getHistory({ limit: 1000 }),
       ]);
       if (disposed) return;
 

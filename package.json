@@ -1,15 +1,12 @@
 {
   "name": "better-douyin-public-shell",
   "private": true,
-  "version": "1.0.40",
+  "version": "1.0.46",
   "type": "module",
   "scripts": {
     "dev": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
     "preview": "npm --prefix frontend run preview",
-    "server": "node backend/server.mjs",
-    "server:check": "node backend/server.mjs --check",
-    "demo": "npm run build && npm run server",
     "check:public": "npm --prefix frontend run build"
   }
 }

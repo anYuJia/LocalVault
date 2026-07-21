@@ -24,7 +24,8 @@ export function useHistory() {
   const loadHistory = useCallback(async () => {
     setState((s) => ({ ...s, loading: true }));
     try {
-      const items = await getHistory();
+      // 默认 limit=1000，避免挂载时全量拉取历史索引
+      const items = await getHistory({ limit: 1000 });
       setState((s) => ({ ...s, loading: false, items: items || [] }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "加载历史失败";

@@ -1,9 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import type { SyntheticEvent } from "react";
 import { CheckCircle2, ExternalLink, Globe, Key, Loader2, UserRound, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { mediaProxyUrl, type AccountInfo } from "@/lib/tauri";
+import { mediaProxyUrl, refreshAccountProfile, type AccountInfo } from "@/lib/tauri";
 import type { AlertConfig } from "@/stores/app-store";
 import type { LoginStatus } from "./settings-utils";
 import { SettingGroup } from "./settings-components";
@@ -14,22 +15,37 @@ interface AccountListSectionProps {
   startLogin: (cookie?: string) => void;
   switchAccount: (secUid: string) => Promise<void>;
   deleteAccount: (secUid: string) => Promise<void>;
+  onAccountsChanged?: () => Promise<void> | void;
   showAlert: (config: AlertConfig) => void;
 }
 
-function AccountAvatar({ account, className }: { account: AccountInfo; className: string }) {
+const avatarRefreshAttempts = new Set<string>();
+
+function AccountAvatar({ account, className, onRefreshed }: { account: AccountInfo; className: string; onRefreshed?: () => Promise<void> | void }) {
   const avatarSrc = account.avatar_thumb ? mediaProxyUrl(account.avatar_thumb, "image") : "";
   const initial = (account.nickname || account.sec_uid || "?").slice(0, 1).toUpperCase();
+  const handleAvatarError = (event: SyntheticEvent<HTMLImageElement>) => {
+    const image = event.currentTarget;
+    image.style.display = "none";
+    const refreshKey = `${account.sec_uid}:${account.avatar_thumb || ""}`;
+    if (!account.sec_uid || avatarRefreshAttempts.has(refreshKey)) return;
+    avatarRefreshAttempts.add(refreshKey);
+    void refreshAccountProfile(account.sec_uid)
+      .then((result) => {
+        if (result.success) return onRefreshed?.();
+        return undefined;
+      })
+      .catch(() => undefined);
+  };
   return (
     <div className={cn("relative overflow-hidden rounded-full border border-white/10 bg-white/[0.04] text-text-muted", className)}>
       {avatarSrc ? (
         <img
+          key={avatarSrc}
           src={avatarSrc}
           alt={account.nickname}
           className="absolute inset-0 h-full w-full object-cover"
-          onError={(event) => {
-            event.currentTarget.style.display = "none";
-          }}
+          onError={handleAvatarError}
         />
       ) : null}
       <div className="flex h-full w-full items-center justify-center text-[0.62rem] font-bold">
@@ -39,7 +55,7 @@ function AccountAvatar({ account, className }: { account: AccountInfo; className
   );
 }
 
-export function AccountListSection({ accounts, currentSecUid, startLogin, switchAccount, deleteAccount, showAlert }: AccountListSectionProps) {
+export function AccountListSection({ accounts, currentSecUid, startLogin, switchAccount, deleteAccount, onAccountsChanged, showAlert }: AccountListSectionProps) {
   return (
     <SettingGroup icon={Key} label="当前账号">
       {accounts.length > 0 ? (
@@ -49,7 +65,7 @@ export function AccountListSection({ accounts, currentSecUid, startLogin, switch
             const isExpired = acc.is_valid === false;
             return (
               <div key={acc.sec_uid} className={cn("flex items-center gap-3 p-3 rounded-[10px] transition-all duration-200 border", isActive ? "bg-accent/[0.04] border-accent/20 shadow-[0_0_12px_rgba(254,44,85,0.02)]" : "bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04]")}>
-                <AccountAvatar account={acc} className="h-8 w-8 shrink-0" />
+                <AccountAvatar account={acc} className="h-8 w-8 shrink-0" onRefreshed={onAccountsChanged} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-[0.78rem] font-semibold text-text truncate">{acc.nickname}</span>

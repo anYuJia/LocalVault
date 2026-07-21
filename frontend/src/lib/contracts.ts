@@ -72,6 +72,7 @@ export interface McpLogEntry {
 
 export interface McpConnectionInfo {
   endpoint?: string | null;
+  im_ws_endpoint?: string | null;
   token: string;
   running: boolean;
   port?: number | null;
@@ -238,6 +239,7 @@ export interface MusicInfo {
 export interface VideoMediaUrl {
   type?: string;
   url: string;
+  fallback_urls?: string[] | null;
 }
 
 export interface VideoInfo {

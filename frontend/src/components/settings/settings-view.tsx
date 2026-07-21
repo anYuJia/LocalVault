@@ -101,7 +101,7 @@ export function SettingsView() {
   const [sslVerify, setSslVerify] = useState(true);
   const [updateProxy, setUpdateProxy] = useState("");
   const [aiEnabled, setAiEnabled] = useState(false);
-  const [aiProvider, setAiProvider] = useState("openai");
+  const [aiProvider, setAiProvider] = useState("openai_compatible");
   const [aiProviderPresets, setAiProviderPresets] = useState<AiProviderPreset[]>([]);
   const [aiApiBase, setAiApiBase] = useState("https://api.openai.com/v1");
   const [aiApiKey, setAiApiKey] = useState("");
@@ -146,7 +146,7 @@ export function SettingsView() {
     sslVerify: true,
     updateProxy: "",
     aiEnabled: false,
-    aiProvider: "openai",
+    aiProvider: "openai_compatible",
     aiApiBase: "https://api.openai.com/v1",
     aiApiKeySet: false,
     aiModel: "gpt-4o-mini",
@@ -226,7 +226,7 @@ export function SettingsView() {
         const nextUpdateProxy = config.proxy || "";
         const nextAi = config.ai_interaction || {
           enabled: false,
-          provider: "openai",
+          provider: "openai_compatible",
           api_base: "https://api.openai.com/v1",
           api_key_set: false,
           model: "gpt-4o-mini",
@@ -270,7 +270,7 @@ export function SettingsView() {
         setSslVerify(nextSslVerify);
         setUpdateProxy(nextUpdateProxy);
         setAiEnabled(Boolean(nextAi.enabled));
-        setAiProvider(nextAi.provider || "openai");
+        setAiProvider(nextAi.provider || "openai_compatible");
         setAiProviderPresets(nextAi.provider_presets || []);
         setAiApiBase(nextAi.api_base || "https://api.openai.com/v1");
         setAiApiKey("");
@@ -308,7 +308,7 @@ export function SettingsView() {
           sslVerify: nextSslVerify,
           updateProxy: nextUpdateProxy,
           aiEnabled: Boolean(nextAi.enabled),
-          aiProvider: nextAi.provider || "openai",
+          aiProvider: nextAi.provider || "openai_compatible",
           aiApiBase: nextAi.api_base || "https://api.openai.com/v1",
           aiApiKeySet: Boolean(nextAi.api_key_set),
           aiModel: nextAi.model || "gpt-4o-mini",
@@ -787,7 +787,7 @@ export function SettingsView() {
     const provider = aiProvider.trim();
     const apiBase = aiApiBase.trim();
     const model = aiModel.trim();
-    if (!provider) return "请选择 AI 提供商";
+    if (!provider) return "请选择请求格式";
     if (!apiBase) return "请填写 Base URL";
     try {
       const parsed = new URL(apiBase.includes("://") ? apiBase : `https://${apiBase}`);
@@ -1203,7 +1203,7 @@ export function SettingsView() {
             >
               {activeTab === "accounts" && (
                 <div className="space-y-4">
-                  <AccountListSection accounts={accounts} currentSecUid={currentSecUid} startLogin={startLogin} switchAccount={async (secUid) => { try { const res = await switchAccount(secUid); if (res.success) { toast.success(`已切换为: ${res.nickname}`, "切换成功"); await loadAccounts(); await initClient().catch(() => {}); } else { toast.error(res.message, "切换失败"); } } catch (e) { toast.error(e instanceof Error ? e.message : "切换失败", "错误"); } }} deleteAccount={async (secUid) => { try { const res = await deleteAccount(secUid); if (res.success) { toast.success("Cookie 已清空", "注销成功"); await loadAccounts(); await initClient().catch(() => {}); } else { toast.error(res.message, "注销失败"); } } catch (e) { toast.error(e instanceof Error ? e.message : "删除失败", "错误"); } }} showAlert={showAlert} />
+                  <AccountListSection accounts={accounts} currentSecUid={currentSecUid} startLogin={startLogin} switchAccount={async (secUid) => { try { const res = await switchAccount(secUid); if (res.success) { toast.success(`已切换为: ${res.nickname}`, "切换成功"); await loadAccounts(); await initClient().catch(() => {}); } else { toast.error(res.message, "切换失败"); } } catch (e) { toast.error(e instanceof Error ? e.message : "切换失败", "错误"); } }} deleteAccount={async (secUid) => { try { const res = await deleteAccount(secUid); if (res.success) { toast.success("Cookie 已清空", "注销成功"); await loadAccounts(); await initClient().catch(() => {}); } else { toast.error(res.message, "注销失败"); } } catch (e) { toast.error(e instanceof Error ? e.message : "删除失败", "错误"); } }} onAccountsChanged={loadAccounts} showAlert={showAlert} />
                   <LoginSection loginStatus={loginStatus} loginMessage={loginMessage} countdown={countdown} browserType={browserType} setBrowserType={setBrowserType} startLogin={() => startLogin()} handleCancel={handleCancel} resetLogin={resetLogin} />
                   {loginStatus === "idle" && (<CookieInputSection cookieValue={cookieValue} setCookieValue={setCookieValue} cookieInputStatus={cookieInputStatus} savingCookie={savingCookie} loginMessage={loginMessage} handleValidateCookie={handleValidateCookie} handleSaveCookie={handleSaveCookie} />)}
                 </div>

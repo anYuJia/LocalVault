@@ -1,4 +1,5 @@
 import { normalizeLikedVideo, type UserInfo, type VideoInfo } from "@/lib/tauri";
+import { LIKED_VIDEOS_SOFT_LIMIT, trimVideoListWindow } from "@/lib/list-limits";
 
 const LIKED_VIDEOS_KEY = "liked_videos_cache";
 const LIKED_AUTHORS_KEY = "liked_authors_cache";
@@ -61,7 +62,7 @@ export function loadLikedVideosCache(scope: string): VideoInfo[] {
 export function saveLikedVideosCache(videos: VideoInfo[], scope: string) {
   const key = scopedKey(LIKED_VIDEOS_KEY, scope);
   if (!key) return;
-  writeCache(key, videos);
+  writeCache(key, trimVideoListWindow(videos, LIKED_VIDEOS_SOFT_LIMIT));
 }
 
 export function loadLikedAuthorsCache(): UserInfo[] {

@@ -269,6 +269,15 @@ const state: {
     im_friend_include_all_users: false,
     im_friend_refresh_interval_seconds: 30,
     ai_interaction: defaultAi,
+    mcp: {
+      enabled: false,
+      preferred_port: 39144,
+      allow_write_actions: false,
+      require_confirmation: true,
+      token: "public-shell-demo-token",
+      token_set: true,
+      log_retention: 300,
+    },
     theme: "dark",
     language: "zh-CN",
     cookie_set: true,
@@ -361,6 +370,63 @@ export async function getConfig(): Promise<AppConfig> {
 export async function saveConfig(config: Partial<AppConfig>): Promise<{ success: boolean; message: string }> {
   state.config = { ...state.config, ...config, ai_interaction: { ...defaultAi, ...state.config.ai_interaction, ...config.ai_interaction } };
   return { success: true, message: "Demo configuration saved locally for this session." };
+}
+
+export async function getMcpStatus(): Promise<McpStatus> {
+  return {
+    enabled: Boolean(state.config.mcp?.enabled),
+    running: false,
+    port: state.config.mcp?.preferred_port || 39144,
+    endpoint: null,
+    started_at: null,
+    last_error: "Public shell only includes a frontend mock bridge.",
+    tool_count: 41,
+  };
+}
+
+export async function getMcpLogs(_limit = 50): Promise<McpLogEntry[]> {
+  return [
+    {
+      timestamp: new Date().toISOString(),
+      transport: "mock",
+      client_name: "public-shell",
+      tool_name: "demo",
+      category: "read",
+      argument_summary: "public frontend mock",
+      success: true,
+      elapsed_ms: 0,
+      error_code: null,
+      message: "Public shell does not start a real MCP backend.",
+    },
+  ];
+}
+
+export async function clearMcpLogs(): Promise<void> {}
+
+export async function getMcpConnectionInfo(): Promise<McpConnectionInfo> {
+  return {
+    endpoint: null,
+    im_ws_endpoint: null,
+    token: state.config.mcp?.token || "public-shell-demo-token",
+    running: false,
+    port: state.config.mcp?.preferred_port || 39144,
+  };
+}
+
+export async function regenerateMcpToken(): Promise<{ success: boolean; token: string }> {
+  const token = `public-shell-${Date.now().toString(36)}`;
+  state.config.mcp = { ...(state.config.mcp || {
+    enabled: false,
+    preferred_port: 39144,
+    allow_write_actions: false,
+    require_confirmation: true,
+    log_retention: 300,
+  }), token, token_set: true };
+  return { success: true, token };
+}
+
+export async function restartMcpServer(): Promise<McpStatus> {
+  return getMcpStatus();
 }
 
 export async function suggestAiInteraction(payload: AiInteractionSuggestPayload): Promise<AiInteractionSuggestResponse> {
@@ -676,6 +742,11 @@ export async function getAccounts(..._args: any[]): Promise<{ success: boolean; 
   return { success: true, accounts: [clone(demoAccount)], current_sec_uid: demoAccount.sec_uid };
 }
 
+export async function refreshAccountProfile(secUid: string): Promise<{ success: boolean; message?: string; account?: AccountInfo; current_sec_uid?: string }> {
+  const account = { ...demoAccount, sec_uid: secUid || demoAccount.sec_uid };
+  return { success: true, message: "Demo account refreshed locally.", account, current_sec_uid: account.sec_uid };
+}
+
 export async function switchAccount(secUid: string, _cookie?: string): Promise<{ success: boolean; message: string; nickname?: string; sec_uid?: string }> {
   state.config.current_sec_uid = secUid;
   return { success: true, message: "Switched demo account.", nickname: demoAccount.nickname, sec_uid: secUid };
@@ -756,58 +827,6 @@ export async function loadRecentSearchUsersFromBackend<T>(): Promise<T[]> {
 
 export async function saveRecentSearchUsersToBackend<T>(users: T[]): Promise<T[]> {
   return users;
-}
-
-export async function getMcpStatus(): Promise<McpStatus> {
-  const port = state.config.mcp?.preferred_port || 39144;
-  return {
-    enabled: Boolean(state.config.mcp?.enabled),
-    running: false,
-    port,
-    endpoint: `http://127.0.0.1:${port}/mcp`,
-    started_at: null,
-    last_error: "Public shell uses a mock MCP bridge.",
-    tool_count: 0,
-  };
-}
-
-export async function getMcpLogs(_limit = 50): Promise<McpLogEntry[]> {
-  return [
-    {
-      timestamp: new Date().toISOString(),
-      transport: "demo",
-      client_name: "public-shell",
-      tool_name: "mcp_demo",
-      category: "read",
-      argument_summary: "{}",
-      success: true,
-      elapsed_ms: 0,
-      error_code: null,
-      message: "Public shell MCP demo is disabled. Private builds provide the local MCP runtime.",
-    },
-  ];
-}
-
-export async function getMcpConnectionInfo(): Promise<McpConnectionInfo> {
-  const port = state.config.mcp?.preferred_port || 39144;
-  return {
-    endpoint: `http://127.0.0.1:${port}/mcp`,
-    token: "",
-    running: false,
-    port,
-  };
-}
-
-export async function regenerateMcpToken(): Promise<{ success: boolean; token: string; token_preview?: string; message?: string }> {
-  return { success: true, token: "", token_preview: undefined, message: "Public shell does not manage MCP tokens." };
-}
-
-export async function restartMcpServer(): Promise<{ success: boolean; message?: string }> {
-  return { success: true, message: "Public shell MCP runtime is mock-only." };
-}
-
-export async function clearMcpLogs(): Promise<{ success: boolean; message?: string }> {
-  return { success: true, message: "Public shell MCP logs cleared." };
 }
 
 export function normalizeBrowserTask(value: unknown) {

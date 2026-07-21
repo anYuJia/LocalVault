@@ -500,6 +500,8 @@ export function ChatWorkspace({
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
+            aria-label={friend ? `打开 ${displayName} 主页` : "好友主页"}
+            title={friend ? `打开 ${displayName} 主页` : "好友主页"}
             disabled={!friend}
             onClick={() => friend && void onOpenProfile(friend)}
             className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-raised outline-none ring-accent/35 transition hover:ring-2 focus-visible:ring-2 disabled:pointer-events-none disabled:hover:ring-0"

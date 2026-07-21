@@ -75,20 +75,35 @@ export const VirtualVideoGrid = memo(function VirtualVideoGrid({
   const [viewport, setViewport] = useState({ top: 0, height: 900, width: 0 });
 
   useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    const scrollParent = findScrollParent(node);
+    let frame: number | null = null;
     const updateViewport = () => {
-      const node = containerRef.current;
-      if (!node) return;
-      setViewport(readScrollParentViewport(node, findScrollParent(node)));
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        const currentNode = containerRef.current;
+        if (!currentNode) return;
+        const next = readScrollParentViewport(currentNode, scrollParent);
+        setViewport((current) =>
+          current.top === next.top && current.height === next.height && current.width === next.width
+            ? current
+            : next
+        );
+      });
     };
 
     updateViewport();
     const resizeObserver = new ResizeObserver(updateViewport);
-    if (containerRef.current) resizeObserver.observe(containerRef.current);
-    const scrollParent = findScrollParent(containerRef.current);
+    resizeObserver.observe(node);
     scrollParent.addEventListener("scroll", updateViewport, { passive: true });
     window.addEventListener("resize", updateViewport);
 
     return () => {
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
       resizeObserver.disconnect();
       scrollParent.removeEventListener("scroll", updateViewport);
       window.removeEventListener("resize", updateViewport);

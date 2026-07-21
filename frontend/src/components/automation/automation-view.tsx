@@ -37,7 +37,7 @@ const SOURCE_LABELS: Record<MonitorSource, string> = {
 
 const DEFAULT_AI_CONFIG: AiInteractionConfig = {
   enabled: false,
-  provider: "openai",
+  provider: "openai_compatible",
   api_base: "https://api.openai.com/v1",
   model: "gpt-4o-mini",
   system_prompt: "",

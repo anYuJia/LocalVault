@@ -4,6 +4,7 @@ import type { RecommendedFeedType } from "@/lib/contracts";
 import { requestVerifyRecovery } from "@/lib/verify-recovery";
 import { useLogStore } from "@/stores/app-store";
 import { readAiAutomationConfig, rememberAutomationKey, runVideoAutomation } from "@/lib/ai-automation";
+import { RECOMMENDED_FEED_SOFT_LIMIT, trimVideoListWindow } from "@/lib/list-limits";
 
 const PAGE_SIZE = 20;
 const FEED_TYPE_STORAGE_KEY = "dy_recommended_feed_type";
@@ -252,7 +253,7 @@ export const useRecommendedStore = create<RecommendedStoreState>((set, get) => (
         return;
       }
 
-      const videos = uniqueVideos([], result.videos || []);
+      const videos = trimVideoListWindow(uniqueVideos([], result.videos || []), RECOMMENDED_FEED_SOFT_LIMIT);
       const nextFeed: RecommendedFeedCache = {
         videos,
         cursor: result.cursor || 0,
@@ -332,8 +333,9 @@ export const useRecommendedStore = create<RecommendedStoreState>((set, get) => (
       set((current) => {
         const feed = current.feeds[feedType] || emptyFeed();
         const baseVideos = current.feedType === feedType ? current.videos : feed.videos;
-        const nextVideos = uniqueVideos(baseVideos, result.videos || []);
-        const addedCount = nextVideos.length - baseVideos.length;
+        const mergedVideos = uniqueVideos(baseVideos, result.videos || []);
+        const addedCount = mergedVideos.length - baseVideos.length;
+        const nextVideos = trimVideoListWindow(mergedVideos, RECOMMENDED_FEED_SOFT_LIMIT);
         const nextFeed: RecommendedFeedCache = {
           videos: nextVideos,
           cursor: result.cursor || feed.cursor,

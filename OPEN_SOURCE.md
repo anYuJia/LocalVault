@@ -7,7 +7,7 @@ better-douyin 的公开源码是一个可运行的 Open Shell，适合查看界�
 ## Included
 
 - React UI, theme, layout, stores, reusable components, and frontend contracts.
-- Local mock bridge and mock backend with demo users, videos, comments, notices, downloads, accounts, and AI suggestions.
+- Local mock bridge with demo users, videos, comments, notices, downloads, accounts, and AI suggestions.
 - Public documentation for adapter boundaries, contribution scope, screenshots, icons, and local development.
 
 ## Not Included

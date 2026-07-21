@@ -142,6 +142,7 @@ export function DownloadsView() {
     try {
       const page = await listDownloadFilesPage({
         offset: 0,
+        limit: 1000,
         forceRefresh,
         query: deferredSearchQuery.trim() || undefined,
         mediaType: typeFilter,
@@ -373,6 +374,7 @@ export function DownloadsView() {
       try {
         const page = await listDownloadFilesPage({
           offset: 0,
+          limit: 1000,
           query: deferredSearchQuery.trim() || undefined,
           mediaType: typeFilter,
           sortBy,

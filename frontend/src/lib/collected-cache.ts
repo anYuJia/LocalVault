@@ -1,4 +1,5 @@
 import { normalizeVideo, type CollectedMixItem, type VideoInfo } from "@/lib/tauri";
+import { COLLECTED_VIDEOS_SOFT_LIMIT, trimVideoListWindow } from "@/lib/list-limits";
 
 const COLLECTED_VIDEOS_KEY = "collected_videos_cache";
 const COLLECTED_MIXES_KEY = "collected_mixes_cache";
@@ -61,7 +62,7 @@ export function loadCollectedVideosCache(scope: string): VideoInfo[] {
 export function saveCollectedVideosCache(videos: VideoInfo[], scope: string) {
   const key = scopedKey(COLLECTED_VIDEOS_KEY, scope);
   if (!key) return;
-  writeCache(key, videos);
+  writeCache(key, trimVideoListWindow(videos, COLLECTED_VIDEOS_SOFT_LIMIT));
 }
 
 export function loadCollectedMixesCache(scope: string): CollectedMixItem[] {

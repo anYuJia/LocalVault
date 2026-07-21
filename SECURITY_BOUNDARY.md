@@ -1,13 +1,13 @@
 # Security Boundary
 
-The public repository is intentionally limited to a runnable UI shell, mock bridge, mock backend, public assets, and documentation. Anything related to real platform access or release infrastructure is outside the public boundary.
+The public repository is intentionally limited to a runnable frontend UI shell, mock bridge, public assets, and documentation. Anything related to real platform access or release infrastructure is outside the public boundary.
 
 ## Public Surface
 
 The public shell may include:
 
 - Frontend UI, state, styles, public assets, and local development configuration.
-- Mock bridge and mock backend that return demo data only.
+- Mock bridge that returns demo data only.
 - Public README, open source notes, adapter boundary notes, license, screenshots, and community documentation.
 
 ## Private Boundary

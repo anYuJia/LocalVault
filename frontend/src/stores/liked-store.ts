@@ -14,6 +14,7 @@ import {
   saveLikedVideosCache,
 } from "@/lib/liked-cache";
 import { useAppStore, useLogStore } from "@/stores/app-store";
+import { LIKED_VIDEOS_SOFT_LIMIT, trimVideoListWindow } from "@/lib/list-limits";
 
 const DEFAULT_COUNT = 20;
 let latestVideosRequestId = 0;
@@ -147,7 +148,7 @@ export const useLikedStore = create<LikedStoreState>((set, get) => ({
         return;
       }
 
-      const videos = result.data || [];
+      const videos = trimVideoListWindow(result.data || [], LIKED_VIDEOS_SOFT_LIMIT);
       saveLikedVideosCache(videos, cacheScope);
       set({
         videos,
@@ -221,8 +222,9 @@ export const useLikedStore = create<LikedStoreState>((set, get) => ({
 
       const incoming = result.data || [];
       const currentVideos = get().videos;
-      const nextVideos = uniqueVideos(currentVideos, incoming);
-      const addedCount = nextVideos.length - currentVideos.length;
+      const mergedVideos = uniqueVideos(currentVideos, incoming);
+      const addedCount = mergedVideos.length - currentVideos.length;
+      const nextVideos = trimVideoListWindow(mergedVideos, LIKED_VIDEOS_SOFT_LIMIT);
       const cacheScope = useAppStore.getState().currentSecUid;
       saveLikedVideosCache(nextVideos, cacheScope);
 

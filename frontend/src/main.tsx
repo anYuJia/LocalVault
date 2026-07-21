@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
+import { MotionConfig } from "framer-motion";
 import App from "./App";
 import { initTheme } from "./stores/app-store";
 import "./index.css";
@@ -100,7 +101,9 @@ initTheme();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
-    <App />
+    <MotionConfig reducedMotion="user">
+      <App />
+    </MotionConfig>
     <BootReady />
   </ErrorBoundary>
 );

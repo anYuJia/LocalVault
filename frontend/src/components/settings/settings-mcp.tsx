@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   CheckCircle2,
   Clipboard,
   Eye,
   EyeOff,
-  KeyRound,
   Loader2,
   RefreshCw,
   RotateCcw,
@@ -64,7 +63,10 @@ function ToggleRow({
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-4 rounded-[8px] border border-border bg-surface/30 px-3 py-3 text-left transition-colors hover:bg-surface/60 disabled:cursor-not-allowed disabled:opacity-60"
+      className={cn(
+        "flex w-full items-center justify-between gap-4 rounded-[8px] border border-border bg-surface/30 px-3 py-3 text-left transition-colors hover:bg-surface/60 disabled:cursor-not-allowed disabled:opacity-60",
+        checked && danger && "border-danger/25 bg-danger/5"
+      )}
     >
       <span className="min-w-0">
         <span className="block text-[0.78rem] font-semibold text-text">{title}</span>
@@ -72,7 +74,7 @@ function ToggleRow({
       </span>
       <span
         className={cn(
-          "relative h-5 w-9 shrink-0 rounded-full border transition-colors",
+          "flex h-5 w-9 shrink-0 items-center rounded-full border p-0.5 transition-colors",
           checked
             ? danger
               ? "border-danger bg-danger"
@@ -82,8 +84,8 @@ function ToggleRow({
       >
         <span
           className={cn(
-            "absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform",
-            checked ? "translate-x-[17px]" : "translate-x-0.5"
+            "h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-[margin]",
+            checked ? "ml-auto" : "ml-0"
           )}
         />
       </span>
@@ -91,48 +93,25 @@ function ToggleRow({
   );
 }
 
-function GuideCommand({
-  label,
-  description,
-  command,
-  copied,
-  onCopy,
-  copyLabel = `${label}配置`,
-  disabled = false,
+function MiniBadge({
+  children,
+  tone = "muted",
 }: {
-  label: string;
-  description: string;
-  command: string;
-  copied: boolean;
-  onCopy: () => void;
-  copyLabel?: string;
-  disabled?: boolean;
+  children: ReactNode;
+  tone?: "success" | "danger" | "info" | "muted";
 }) {
   return (
-    <div className="rounded-[8px] border border-border bg-surface/30 px-3 py-2.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[0.72rem] font-semibold text-text">{label}</div>
-          <div className="mt-0.5 text-[0.62rem] leading-relaxed text-text-muted">{description}</div>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0"
-          onClick={onCopy}
-          disabled={disabled}
-          title={copied ? `${copyLabel}已复制` : `复制${copyLabel}`}
-          aria-label={copied ? `${copyLabel}已复制` : `复制${copyLabel}`}
-        >
-          {copied
-            ? <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-            : <Clipboard className="h-3.5 w-3.5" />}
-        </Button>
-      </div>
-      <code className="mt-2 block overflow-x-auto whitespace-pre-wrap break-all rounded bg-subtle-bg px-2 py-1.5 font-mono text-[0.62rem] leading-relaxed text-text-secondary">
-        {command}
-      </code>
-    </div>
+    <span
+      className={cn(
+        "inline-flex h-6 shrink-0 items-center rounded-full border px-2 text-[0.64rem] font-semibold tabular-nums",
+        tone === "success" && "border-success/20 bg-success-soft text-success",
+        tone === "danger" && "border-danger/20 bg-danger-soft text-danger",
+        tone === "info" && "border-info/20 bg-info-soft text-info",
+        tone === "muted" && "border-border bg-surface-raised/70 text-text-muted"
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -283,11 +262,25 @@ export function SettingsMcpTab() {
     }
   };
 
-  const mcpEndpoint = connection?.endpoint || status?.endpoint || "http://127.0.0.1:<实际端口>/mcp";
+  const running = Boolean(status?.running);
+  const mcpEndpoint = connection?.endpoint || status?.endpoint || "";
+  const imWsEndpoint = connection?.im_ws_endpoint || "";
   const mcpToken = connection?.token || "";
-  const httpMcpConfig = `URL: ${mcpEndpoint}\nHeader: Authorization: Bearer ${mcpToken || "<服务启动后显示令牌>"}`;
+  const httpMcpConfig = mcpEndpoint && mcpToken
+    ? `URL: ${mcpEndpoint}\nHeader: Authorization: Bearer ${mcpToken}`
+    : "";
+  const imWsConfig = imWsEndpoint && mcpToken
+    ? `WS: ${imWsEndpoint}\nHeader: Authorization: Bearer ${mcpToken}`
+    : "";
+  const endpointDisplay = mcpEndpoint || "启用服务后显示地址";
+  const imWsDisplay = imWsEndpoint || "启用服务后显示实时私信 WS 地址";
+  const statusLabel = running ? `运行中 · ${status?.port}` : config.enabled ? "等待启动" : "未启用";
+  const statusDescription = running
+    ? "本机 HTTP MCP 已可连接。"
+    : config.enabled
+      ? "服务正在启动，若失败会在这里显示原因。"
+      : "开启后 AI 客户端可通过本机地址调用工具。";
   const visibleLogs = logs.slice(0, visibleLogLimit);
-  const hiddenLogCount = Math.max(0, logs.length - visibleLogs.length);
 
   if (loading) {
     return (
@@ -301,16 +294,104 @@ export function SettingsMcpTab() {
     <div className="space-y-4">
       <SettingGroup icon={SquareTerminal} label="AI 工具接入">
         <div className="space-y-3">
-          <ToggleRow
-            title="启用本地 MCP 服务"
-            description="仅监听 127.0.0.1；首选端口占用时自动尝试后续 32 个端口。"
-            checked={config.enabled}
-            onChange={(enabled) => void patchConfig({ enabled })}
-            disabled={saving}
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="space-y-1.5">
-              <span className="text-[0.72rem] font-semibold text-text-secondary">首选端口</span>
+          <div className="rounded-[10px] border border-border bg-surface/35 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-[0.84rem] font-semibold">
+                  {running
+                    ? <CheckCircle2 className="h-4 w-4 text-success" />
+                    : <XCircle className="h-4 w-4 text-text-muted" />}
+                  <span className={running ? "text-success" : "text-text-secondary"}>{statusLabel}</span>
+                </div>
+                <div className="mt-1 text-[0.66rem] leading-relaxed text-text-muted">{statusDescription}</div>
+              </div>
+              <div className="flex flex-wrap justify-end gap-1.5">
+                <MiniBadge tone={running ? "success" : "muted"}>{status?.tool_count || 0} 个工具</MiniBadge>
+                <MiniBadge tone="info">127.0.0.1</MiniBadge>
+                <MiniBadge tone={config.allow_write_actions ? "danger" : "success"}>
+                  {config.allow_write_actions ? "写操作开启" : "默认只读"}
+                </MiniBadge>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
+              <div className={cn("grid min-w-0 gap-2", imWsEndpoint && "sm:grid-cols-2")}>
+                <div className="min-w-0 rounded-[8px] border border-border bg-subtle-bg/70 px-3 py-2">
+                  <div className="text-[0.58rem] font-semibold uppercase tracking-[0.08em] text-text-muted">MCP Endpoint</div>
+                  <div className="mt-1 truncate font-mono text-[0.68rem] text-text-secondary" title={endpointDisplay}>
+                    {endpointDisplay}
+                  </div>
+                </div>
+                {imWsEndpoint && (
+                  <div className="min-w-0 rounded-[8px] border border-border bg-subtle-bg/70 px-3 py-2">
+                    <div className="text-[0.58rem] font-semibold uppercase tracking-[0.08em] text-text-muted">实时私信 WS</div>
+                    <div className="mt-1 truncate font-mono text-[0.68rem] text-text-secondary" title={imWsDisplay}>
+                      {imWsDisplay}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  disabled={!httpMcpConfig}
+                  onClick={() => void copyText(httpMcpConfig, "客户端配置")}
+                  title="复制 URL 和 Authorization Header"
+                >
+                  {copiedText === httpMcpConfig
+                    ? <CheckCircle2 className="h-3.5 w-3.5" />
+                    : <Clipboard className="h-3.5 w-3.5" />}
+                  {copiedText === httpMcpConfig ? "已复制" : "复制配置"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!mcpEndpoint}
+                  onClick={() => void copyText(mcpEndpoint, "地址")}
+                  title="复制 MCP 地址"
+                >
+                  <Clipboard className="h-3.5 w-3.5" />
+                  地址
+                </Button>
+                {imWsEndpoint && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!imWsConfig}
+                    onClick={() => void copyText(imWsConfig, "实时私信 WS 配置")}
+                    title="复制实时私信 WebSocket 地址和 Authorization Header"
+                  >
+                    {copiedText === imWsConfig
+                      ? <CheckCircle2 className="h-3.5 w-3.5" />
+                      : <Clipboard className="h-3.5 w-3.5" />}
+                    WS
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={saving || !config.enabled}
+                  onClick={() => void restartServer()}
+                  title="重启 MCP 服务"
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", saving && "animate-spin")} />
+                  重启
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
+            <ToggleRow
+              title="启用本地 MCP 服务"
+              description="仅监听本机；端口占用时自动向后探测。"
+              checked={config.enabled}
+              onChange={(enabled) => void patchConfig({ enabled })}
+              disabled={saving}
+            />
+            <label className="rounded-[8px] border border-border bg-surface/30 px-3 py-2">
+              <span className="text-[0.68rem] font-semibold text-text-secondary">首选端口</span>
               <Input
                 type="number"
                 min={1}
@@ -322,22 +403,62 @@ export function SettingsMcpTab() {
                 }))}
                 onBlur={() => void patchConfig({ preferred_port: config.preferred_port })}
                 disabled={saving}
-                className="h-9 font-mono text-[0.78rem]"
+                className="mt-1 h-8 font-mono text-[0.76rem]"
               />
             </label>
-            <div className="rounded-[8px] border border-border bg-surface/30 px-3 py-2">
-              <div className="text-[0.68rem] text-text-muted">运行状态</div>
-              <div className="mt-1 flex items-center gap-2 text-[0.78rem] font-semibold">
-                {status?.running
+          </div>
+
+          <div className="rounded-[8px] border border-border bg-surface/30 px-3 py-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-[0.72rem] font-semibold text-text-secondary">Bearer Token</div>
+              <div className="text-[0.62rem] text-text-muted">轮换后旧令牌立即失效</div>
+            </div>
+            <div className="mt-2 flex gap-2">
+              <Input
+                readOnly
+                type={showToken ? "text" : "password"}
+                value={mcpToken}
+                placeholder="服务启动后显示令牌"
+                className="h-9 font-mono text-[0.7rem]"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 rounded-[8px]"
+                disabled={!mcpToken}
+                onClick={() => setShowToken((current) => !current)}
+                title={showToken ? "隐藏 Bearer 令牌" : "显示 Bearer 令牌"}
+                aria-label={showToken ? "隐藏 Bearer 令牌" : "显示 Bearer 令牌"}
+              >
+                {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 rounded-[8px]"
+                disabled={!mcpToken}
+                onClick={() => void copyText(mcpToken, "令牌")}
+                title="复制 Bearer 令牌"
+                aria-label="复制 Bearer 令牌"
+              >
+                {Boolean(mcpToken) && copiedText === mcpToken
                   ? <CheckCircle2 className="h-4 w-4 text-success" />
-                  : <XCircle className="h-4 w-4 text-text-muted" />}
-                <span className={status?.running ? "text-success" : "text-text-secondary"}>
-                  {status?.running ? `运行中 · ${status.port}` : config.enabled ? "启动失败或等待中" : "未启用"}
-                </span>
-              </div>
-              <div className="mt-1 text-[0.64rem] text-text-muted">{status?.tool_count || 0} 个工具可用</div>
+                  : <Clipboard className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 rounded-[8px]"
+                disabled={saving}
+                onClick={() => void rotateToken()}
+                title="重新生成令牌"
+                aria-label="重新生成令牌"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
             </div>
           </div>
+
           {status?.last_error && (
             <div className="rounded-[8px] border border-danger/30 bg-danger/10 px-3 py-2 text-[0.7rem] text-danger">
               {status.last_error}
@@ -346,19 +467,19 @@ export function SettingsMcpTab() {
         </div>
       </SettingGroup>
 
-      <SettingGroup icon={ShieldCheck} label="写操作安全">
-        <div className="space-y-2.5">
+      <SettingGroup icon={ShieldCheck} label="权限与安全">
+        <div className="grid gap-2.5 sm:grid-cols-2">
           <ToggleRow
-            title="允许下载、点赞、收藏、关注和私信"
-            description="关闭时所有修改账号或本地状态的工具都会返回 WRITE_DISABLED。"
+            title="允许写操作"
+            description="下载、点赞、收藏、关注、私信等工具才会真正执行。"
             checked={config.allow_write_actions}
             onChange={(allow_write_actions) => void patchConfig({ allow_write_actions })}
             danger
             disabled={saving}
           />
           <ToggleRow
-            title="每次写操作要求显式确认"
-            description="开启后调用参数必须包含 confirm=true，可防止 AI 误触发。"
+            title="要求 confirm=true"
+            description="AI 每次调用写操作都必须显式确认。"
             checked={config.require_confirmation}
             onChange={(require_confirmation) => void patchConfig({ require_confirmation })}
             disabled={saving}
@@ -366,78 +487,13 @@ export function SettingsMcpTab() {
         </div>
       </SettingGroup>
 
-      <SettingGroup icon={KeyRound} label="连接信息">
-        <div className="space-y-2.5">
-          <div className="flex gap-2">
-            <Input readOnly value={connection?.endpoint || status?.endpoint || "服务启动后显示地址"} className="h-9 font-mono text-[0.7rem]" />
-            <Button variant="outline" size="icon" disabled={!connection?.endpoint} onClick={() => void copyText(connection?.endpoint || "", "地址")} title="复制 MCP 地址">
-              <Clipboard className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            <Input readOnly type={showToken ? "text" : "password"} value={connection?.token || ""} placeholder="服务启动后显示令牌" className="h-9 font-mono text-[0.7rem]" />
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={!connection?.token}
-              onClick={() => setShowToken((current) => !current)}
-              title={showToken ? "隐藏 Bearer 令牌" : "显示 Bearer 令牌"}
-              aria-label={showToken ? "隐藏 Bearer 令牌" : "显示 Bearer 令牌"}
-            >
-              {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </Button>
-            <Button variant="outline" size="icon" disabled={!connection?.token} onClick={() => void copyText(connection?.token || "", "令牌")} title="复制 Bearer 令牌">
-              <Clipboard className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon" disabled={saving} onClick={() => void rotateToken()} title="重新生成令牌">
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[0.66rem] text-text-muted">支持兼容 Streamable HTTP MCP 的 AI 客户端。</span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={saving || !config.enabled}
-              onClick={() => void restartServer()}
-            >
-              <RefreshCw className={cn("h-3.5 w-3.5", saving && "animate-spin")} />
-              重启服务
-            </Button>
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-[0.68rem] font-semibold text-text-secondary">HTTP MCP 接入</div>
-            <GuideCommand
-              label="HTTP MCP"
-              description="复制后可直接粘贴到 AI 客户端，已包含当前实际 Endpoint 和 Bearer Token。"
-              command={httpMcpConfig}
-              copied={copiedText === httpMcpConfig}
-              onCopy={() => void copyText(httpMcpConfig, "HTTP MCP 配置")}
-              copyLabel="HTTP MCP 配置"
-            />
-            <GuideCommand
-              label="Bearer Token"
-              description="只复制密钥本身，适合客户端单独填写 Authorization Token 的场景。"
-              command={mcpToken || "服务启动后显示令牌"}
-              copied={Boolean(mcpToken) && copiedText === mcpToken}
-              onCopy={() => {
-                if (!mcpToken) return;
-                void copyText(mcpToken, "Bearer Token");
-              }}
-              copyLabel="Bearer Token"
-              disabled={!mcpToken}
-            />
-          </div>
-        </div>
-      </SettingGroup>
-
       <SettingGroup icon={Activity} label="调用日志">
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-[0.68rem] text-text-muted">
-              仅拉取最近 {visibleLogLimit} 条，当前显示 {visibleLogs.length} 条；最多保留 {config.log_retention} 条，只记录字段名，不记录 Cookie、Token 或正文。
-            </span>
+            <div>
+              <div className="text-[0.72rem] font-semibold text-text-secondary">{visibleLogs.length} 条最近调用</div>
+              <div className="mt-0.5 text-[0.62rem] text-text-muted">脱敏记录工具名、字段摘要、耗时和错误码。</div>
+            </div>
             <Button variant="ghost" size="sm" disabled={logs.length === 0} onClick={() => void clearLogs()}>
               <Trash2 className="h-3.5 w-3.5" />
               清空
@@ -445,7 +501,7 @@ export function SettingsMcpTab() {
           </div>
           <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
             <label className="flex items-center gap-2 rounded-[8px] border border-border bg-surface/20 px-3 py-2">
-              <span className="shrink-0 text-[0.64rem] font-semibold text-text-secondary">最多保留</span>
+              <span className="shrink-0 text-[0.64rem] font-semibold text-text-secondary">保留条数</span>
               <Input
                 type="number"
                 min={50}
@@ -461,7 +517,7 @@ export function SettingsMcpTab() {
               />
               <span className="text-[0.62rem] text-text-muted">50-2000</span>
             </label>
-            <div className="flex items-center gap-1 rounded-[8px] border border-border bg-surface/20 p-1">
+            <div className="flex items-center gap-1 rounded-[8px] border border-border bg-surface/20 p-1" aria-label="日志显示数量">
               {LOG_LIMIT_OPTIONS.map((limit) => (
                 <button
                   key={limit}
@@ -512,11 +568,6 @@ export function SettingsMcpTab() {
                 </div>
               </div>
             ))}
-            {hiddenLogCount > 0 && (
-              <div className="px-3 py-2 text-center text-[0.62rem] text-text-muted">
-                已隐藏 {hiddenLogCount} 条较早记录，可切换显示数量或清空日志。
-              </div>
-            )}
           </div>
         </div>
       </SettingGroup>

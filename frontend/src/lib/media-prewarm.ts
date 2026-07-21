@@ -5,7 +5,7 @@ const PREWARM_INTENT_RANGE = "bytes=0-1048575";
 const PREWARM_PLAYBACK_RANGE = "bytes=0-4194303";
 const PREWARM_HEADER = "X-Douyin-Prewarm";
 const MAX_PREWARMED = 48;
-const MAX_CONCURRENT_PREWARMS = 2;
+const MAX_CONCURRENT_PREWARMS = 1;
 const DEFAULT_INTENT_DELAY_MS = 140;
 
 type PrewarmMode = "intent" | "playback";
@@ -103,10 +103,9 @@ function drainPrewarmQueue() {
     })
       .then((response) => {
         if (!response.ok && response.status !== 206) throw new Error(`Prewarm failed: ${response.status}`);
-        return response.arrayBuffer();
-      })
-      .then((buffer) => {
-        if (buffer.byteLength <= 0) throw new Error("Empty prewarm response");
+        // 取消 response body，避免完整媒体片段进入 JS 堆增加内存峰值。
+        // 后端代理已在预热路径缓存数据，前端只需触发请求即可。
+        return response.body?.cancel() ?? Promise.resolve();
       })
       .catch(() => {
         prewarmedKeys.delete(pending.key);

@@ -33,6 +33,7 @@ import {
   saveCollectedVideosCache,
 } from "@/lib/collected-cache";
 import { videoAuthorToUserInfo } from "@/lib/video-author";
+import { COLLECTED_VIDEOS_SOFT_LIMIT, MIX_VIDEOS_SOFT_LIMIT, trimVideoListWindow } from "@/lib/list-limits";
 import { cn } from "@/lib/utils";
 import {
   ORIGINAL_VIDEO_GRID_CLASS,
@@ -155,7 +156,10 @@ function CollectedVideosPanel() {
 
       const incoming = result.data || [];
       setVideos((current) => {
-        const next = reset ? incoming : uniqueVideos(current, incoming);
+        const next = trimVideoListWindow(
+          reset ? incoming : uniqueVideos(current, incoming),
+          COLLECTED_VIDEOS_SOFT_LIMIT,
+        );
         saveCollectedVideosCache(next, currentSecUid);
         return next;
       });
@@ -478,7 +482,7 @@ function MixVideosPanel({ mix, onBack }: { mix: CollectedMixItem; onBack: () => 
         return;
       }
       const incoming = result.data || [];
-      setVideos((current) => (reset ? incoming : uniqueVideos(current, incoming)));
+      setVideos((current) => trimVideoListWindow(reset ? incoming : uniqueVideos(current, incoming), MIX_VIDEOS_SOFT_LIMIT));
       setCursor(result.cursor || 0);
       setHasMore(result.has_more ?? incoming.length > 0);
       setInitialized(true);

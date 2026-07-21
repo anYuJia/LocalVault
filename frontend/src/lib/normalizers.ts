@@ -227,6 +227,26 @@ function normalizeMediaType(type: unknown, fallback = "video"): string {
 function normalizeMediaUrls(value: unknown): VideoMediaUrl[] {
   if (!Array.isArray(value)) return [];
 
+  const readFallbackUrls = (record: Record<string, unknown>, primaryUrl: string): string[] => {
+    const rawCandidates = [
+      record.fallback_urls,
+      record.fallbackUrls,
+      record.fallback_url,
+      record.backup_url,
+    ];
+    const seen = new Set<string>([primaryUrl]);
+    const urls: string[] = [];
+    for (const candidate of rawCandidates) {
+      for (const url of extractUrls(candidate)) {
+        const cleanUrl = url.trim();
+        if (!cleanUrl || seen.has(cleanUrl)) continue;
+        seen.add(cleanUrl);
+        urls.push(cleanUrl);
+      }
+    }
+    return urls;
+  };
+
   return value
     .map((item) => {
       if (!item) return null;
@@ -238,9 +258,11 @@ function normalizeMediaUrls(value: unknown): VideoMediaUrl[] {
       const record = item as Record<string, unknown>;
       const url = extractUrl(record.url || record.play_url || record.play_addr || record.url_list);
       if (!url) return null;
+      const fallbackUrls = readFallbackUrls(record, url);
       return {
         type: normalizeMediaType(record.type),
         url,
+        ...(fallbackUrls.length > 0 ? { fallback_urls: fallbackUrls } : {}),
       };
     })
     .filter(Boolean) as VideoMediaUrl[];
@@ -254,9 +276,15 @@ function uniqueMediaUrls(urls: VideoMediaUrl[]): VideoMediaUrl[] {
     const url = (item.url || "").trim();
     if (!url || seen.has(`${item.type || "video"}::${url}`)) continue;
     seen.add(`${item.type || "video"}::${url}`);
+    const fallbackUrls = Array.from(new Set(
+      (item.fallback_urls || [])
+        .map((fallbackUrl) => fallbackUrl.trim())
+        .filter((fallbackUrl) => fallbackUrl && fallbackUrl !== url)
+    ));
     items.push({
       type: normalizeMediaType(item.type),
       url,
+      ...(fallbackUrls.length > 0 ? { fallback_urls: fallbackUrls } : {}),
     });
   }
 

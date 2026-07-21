@@ -102,6 +102,7 @@ import {
 
 const AUTO_PLAY_NEXT_VIDEO_STORAGE_KEY = "player_auto_play_next_video";
 const AI_COMMENT_CONTEXT_CHAR_LIMIT = 900;
+const PLAYER_PROGRESS_INTERVAL_MS = 50;
 
 function trimAiText(value: string, limit = AI_COMMENT_CONTEXT_CHAR_LIMIT) {
   const text = value.replace(/\s+/g, " ").trim();
@@ -281,7 +282,7 @@ export function FullscreenPlayer({
   const relationRefreshSeqRef = useRef(0);
   const relationRefreshedIdsRef = useRef(new Set<string>());
   const refreshedDetailIdsRef = useRef(new Set<string>());
-  const videoProgressRafRef = useRef<number | null>(null);
+  const videoProgressTimerRef = useRef<number | null>(null);
   const progressSampleRef = useRef(0);
   const surfaceTapStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
   const lastSurfaceToggleAtRef = useRef(0);
@@ -376,9 +377,9 @@ export function FullscreenPlayer({
   }, [currentVideo?.aweme_id, currentVideo?.is_liked, currentVideo?.is_collected]);
 
   const stopVideoProgressLoop = useCallback(() => {
-    if (videoProgressRafRef.current === null) return;
-    window.cancelAnimationFrame(videoProgressRafRef.current);
-    videoProgressRafRef.current = null;
+    if (videoProgressTimerRef.current === null) return;
+    window.clearTimeout(videoProgressTimerRef.current);
+    videoProgressTimerRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -416,29 +417,26 @@ export function FullscreenPlayer({
   }, []);
 
   const startVideoProgressLoop = useCallback(() => {
-    if (videoProgressRafRef.current !== null) return;
+    if (videoProgressTimerRef.current !== null) return;
 
     const tick = () => {
       const node = videoRef.current;
       if (!node) {
-        videoProgressRafRef.current = null;
+        videoProgressTimerRef.current = null;
         return;
       }
 
-      const now = performance.now();
-      if (now - progressSampleRef.current >= 50 || node.paused || node.ended) {
-        progressSampleRef.current = now;
-        syncVideoProgress(node);
-      }
+      progressSampleRef.current = performance.now();
+      syncVideoProgress(node);
 
       if (!node.paused && !node.ended) {
-        videoProgressRafRef.current = window.requestAnimationFrame(tick);
+        videoProgressTimerRef.current = window.setTimeout(tick, PLAYER_PROGRESS_INTERVAL_MS);
       } else {
-        videoProgressRafRef.current = null;
+        videoProgressTimerRef.current = null;
       }
     };
 
-    videoProgressRafRef.current = window.requestAnimationFrame(tick);
+    videoProgressTimerRef.current = window.setTimeout(tick, 0);
   }, [syncVideoProgress]);
 
   const setVideoElementRef = useCallback((node: HTMLVideoElement | null) => {
@@ -2562,11 +2560,12 @@ export function FullscreenPlayer({
       currentMedia?.type === "image" && mediaItems.length <= 1 && !(autoPlayNextVideo && videos.length > 1);
     if (!open || currentMedia?.type !== "image" || !playing || isSingleStaticImage) return;
 
-    let frame = 0;
+    let timer = 0;
     let last = performance.now();
-    const tick = (timestamp: number) => {
-      const delta = Math.max(0, timestamp - last) / 1000;
-      last = timestamp;
+    const tick = () => {
+      const now = performance.now();
+      const delta = Math.max(0, now - last) / 1000;
+      last = now;
 
       setCurrentTime((value) => {
         const next = Math.min(IMAGE_DURATION_SECONDS, value + delta * playbackRateRef.current);
@@ -2578,12 +2577,12 @@ export function FullscreenPlayer({
       });
 
       if (!imageAdvanceQueued.current) {
-        frame = window.requestAnimationFrame(tick);
+        timer = window.setTimeout(tick, PLAYER_PROGRESS_INTERVAL_MS);
       }
     };
 
-    frame = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(frame);
+    timer = window.setTimeout(tick, PLAYER_PROGRESS_INTERVAL_MS);
+    return () => window.clearTimeout(timer);
   }, [currentMedia?.type, mediaKey, open, playing, requestAdvanceMediaSequence, mediaItems.length, autoPlayNextVideo, videos.length]);
 
   useEffect(() => {

@@ -31,6 +31,7 @@ export function BottomBar() {
   const visibleLogs = useMemo(() => logs.slice(-300), [logs]);
   const hiddenLogCount = Math.max(0, logs.length - visibleLogs.length);
   const hasActiveTasks = activeCount > 0;
+  const toggleLabel = expanded ? "收起下载面板" : "展开下载面板";
   const scrollLogsToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     const viewport = logsViewportRef.current;
     if (!viewport) return;
@@ -110,6 +111,10 @@ export function BottomBar() {
           </button>
 
           <motion.button
+            type="button"
+            aria-label={toggleLabel}
+            aria-expanded={expanded}
+            title={toggleLabel}
             onClick={(event) => {
               event.stopPropagation();
               toggleExpanded();
@@ -164,6 +169,9 @@ export function BottomBar() {
               <>
                 <div className="flex items-center gap-1 mb-1">
                   <button
+                    type="button"
+                    aria-label="清空日志"
+                    title="清空日志"
                     onClick={clearLogs}
                     className="w-6 h-6 rounded flex items-center justify-center text-text-muted hover:text-text hover:bg-surface-raised transition-[background-color,color,transform,opacity] cursor-pointer"
                   >
