@@ -17,8 +17,44 @@ function imageDataUrl(blob: Blob) {
   });
 }
 
+function sharedCardItemId(value: string) {
+  try {
+    const root = JSON.parse(value) as unknown;
+    const visit = (item: unknown, depth = 0): string => {
+      if (!item || typeof item !== "object" || depth > 4) return "";
+      if (Array.isArray(item)) {
+        for (const child of item) {
+          const found = visit(child, depth + 1);
+          if (found) return found;
+        }
+        return "";
+      }
+      const record = item as Record<string, unknown>;
+      for (const key of ["itemId", "item_id", "aweme_id", "awemeId", "share_id"]) {
+        const candidate = String(record[key] || "").trim();
+        if (/^\d{10,}$/.test(candidate)) return candidate;
+      }
+      for (const child of Object.values(record)) {
+        const found = visit(child, depth + 1);
+        if (found) return found;
+      }
+      return "";
+    };
+    return visit(root);
+  } catch {
+    return "";
+  }
+}
+
 function sharedUrl(value: string) {
-  return value.match(SHARE_URL)?.[0].replace(/[，。！？；、,.!;]+$/, "") || "";
+  const direct = value.match(SHARE_URL)?.[0].replace(/[，。！？；、,.!;]+$/, "");
+  if (direct && /(?:^https?:\/\/)?(?:[^/]+\.)?douyin\.com\//i.test(direct)) return direct;
+  const itemId = sharedCardItemId(value);
+  return itemId ? `https://www.douyin.com/video/${itemId}` : "";
+}
+
+export function isSharedWorkPayload(value: string) {
+  return Boolean(sharedUrl(value));
 }
 
 function videoSizeBytes(video: NonNullable<Awaited<ReturnType<typeof parseLink>>["video"]>) {
@@ -80,4 +116,3 @@ export async function autoReturnSharedMedia(
   if (!result.success) throw new Error(result.message || "回传视频作品失败");
   return { handled: true, sent: 1, skipped: "video_card" };
 }
-
