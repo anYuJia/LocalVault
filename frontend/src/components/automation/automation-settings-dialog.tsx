@@ -346,7 +346,7 @@ export function AutomationSettingsDialog({
               </Section>
 
               <Section title="分享内容回传">
-                <ToggleLine label="收到分享链接后自动回传" description="图集会下载后逐张发送并立即释放临时数据；视频回传原作品卡片。" checked={form.auto_return_shared_media} onChange={(checked) => update("auto_return_shared_media", checked)} icon={Download} />
+                <ToggleLine label="收到分享链接后自动回传" description="图集和视频都会先下载，再作为媒体文件发送；发送完成立即释放临时数据。" checked={form.auto_return_shared_media} onChange={(checked) => update("auto_return_shared_media", checked)} icon={Download} />
                 <ToggleLine label="允许图集" checked={form.auto_return_shared_allow_images} onChange={(checked) => update("auto_return_shared_allow_images", checked)} icon={Download} />
                 <ToggleLine label="允许视频" checked={form.auto_return_shared_allow_videos} onChange={(checked) => update("auto_return_shared_allow_videos", checked)} icon={Download} />
                 <div className="grid grid-cols-2 gap-2 py-2">
