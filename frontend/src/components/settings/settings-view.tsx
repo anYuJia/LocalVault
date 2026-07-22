@@ -127,11 +127,6 @@ export function SettingsView() {
   const [aiAutoMinPlayCount, setAiAutoMinPlayCount] = useState("0");
   const [aiAutoScanIntervalSeconds, setAiAutoScanIntervalSeconds] = useState("30");
   const [aiAutoMaxActionsPerRun, setAiAutoMaxActionsPerRun] = useState("5");
-  const [aiAutoReturnSharedMedia, setAiAutoReturnSharedMedia] = useState(false);
-  const [aiAutoReturnSharedAllowImages, setAiAutoReturnSharedAllowImages] = useState(true);
-  const [aiAutoReturnSharedAllowVideos, setAiAutoReturnSharedAllowVideos] = useState(true);
-  const [aiAutoReturnSharedMaxSizeMb, setAiAutoReturnSharedMaxSizeMb] = useState("20");
-  const [aiAutoReturnSharedMaxMediaCount, setAiAutoReturnSharedMaxMediaCount] = useState("9");
   const [savingProxy, setSavingProxy] = useState(false);
   const [choosingDirectory, setChoosingDirectory] = useState(false);
   const [savingFields, setSavingFields] = useState<SavingFields>({});
@@ -266,11 +261,6 @@ export function SettingsView() {
           auto_min_play_count: 0,
           auto_scan_interval_seconds: 30,
           auto_max_actions_per_run: 5,
-          auto_return_shared_media: false,
-          auto_return_shared_allow_images: true,
-          auto_return_shared_allow_videos: true,
-          auto_return_shared_max_size_mb: 20,
-          auto_return_shared_max_media_count: 9,
         };
         setDownloadPath(nextDownloadPath);
         setDownloadQuality(nextDownloadQuality);
@@ -309,11 +299,6 @@ export function SettingsView() {
         setAiAutoMinPlayCount(String(nextAi.auto_min_play_count ?? 0));
         setAiAutoScanIntervalSeconds(String(nextAi.auto_scan_interval_seconds ?? 30));
         setAiAutoMaxActionsPerRun(String(nextAi.auto_max_actions_per_run ?? 5));
-        setAiAutoReturnSharedMedia(Boolean(nextAi.auto_return_shared_media ?? false));
-        setAiAutoReturnSharedAllowImages(Boolean(nextAi.auto_return_shared_allow_images ?? true));
-        setAiAutoReturnSharedAllowVideos(Boolean(nextAi.auto_return_shared_allow_videos ?? true));
-        setAiAutoReturnSharedMaxSizeMb(String(nextAi.auto_return_shared_max_size_mb ?? 20));
-        setAiAutoReturnSharedMaxMediaCount(String(nextAi.auto_return_shared_max_media_count ?? 9));
         savedSettingsRef.current = {
           ...savedSettingsRef.current,
           downloadPath: nextDownloadPath,
@@ -871,11 +856,6 @@ export function SettingsView() {
       auto_min_play_count: Math.max(0, Number(aiAutoMinPlayCount || 0)),
       auto_scan_interval_seconds: Math.max(10, Math.min(300, Number(aiAutoScanIntervalSeconds || 30))),
       auto_max_actions_per_run: Math.max(1, Math.min(50, Number(aiAutoMaxActionsPerRun || 5))),
-      auto_return_shared_media: aiAutoReturnSharedMedia,
-      auto_return_shared_allow_images: aiAutoReturnSharedAllowImages,
-      auto_return_shared_allow_videos: aiAutoReturnSharedAllowVideos,
-      auto_return_shared_max_size_mb: Math.max(1, Math.min(200, Number(aiAutoReturnSharedMaxSizeMb || 20))),
-      auto_return_shared_max_media_count: Math.max(1, Math.min(20, Number(aiAutoReturnSharedMaxMediaCount || 9))),
     };
     const saved = await saveSetting(
       "ai_interaction",
