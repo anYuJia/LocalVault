@@ -86,6 +86,7 @@ export interface AiInteractionConfig {
   api_key_set?: boolean;
   model: string;
   system_prompt: string;
+  user_prompt: string;
   provider_presets?: AiProviderPreset[];
   auto_send_comments: boolean;
   auto_send_private_messages: boolean;

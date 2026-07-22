@@ -208,6 +208,7 @@ const defaultAi: AiInteractionConfig = {
   api_key_set: false,
   model: "mock-assistant",
   system_prompt: "用自然、克制、友好的中文生成可编辑草稿。",
+  user_prompt: "",
   provider_presets: [
     { id: "openai_compatible", label: "OpenAI Compatible", api_base: "https://api.openai.com/v1", default_model: "gpt-4o-mini", format: "openai_chat" },
     { id: "anthropic", label: "Anthropic", api_base: "https://api.anthropic.com/v1", default_model: "claude-haiku-4-5-20251001", format: "anthropic_messages" },

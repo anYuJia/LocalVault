@@ -108,6 +108,7 @@ export function SettingsView() {
   const [aiApiKeySet, setAiApiKeySet] = useState(false);
   const [aiModel, setAiModel] = useState("gpt-4o-mini");
   const [aiSystemPrompt, setAiSystemPrompt] = useState("");
+  const [aiUserPrompt, setAiUserPrompt] = useState("");
   const [aiAutoSendComments, setAiAutoSendComments] = useState(false);
   const [aiAutoSendPrivateMessages, setAiAutoSendPrivateMessages] = useState(false);
   const [aiAutoLike, setAiAutoLike] = useState(false);
@@ -151,6 +152,7 @@ export function SettingsView() {
     aiApiKeySet: false,
     aiModel: "gpt-4o-mini",
     aiSystemPrompt: "",
+    aiUserPrompt: "",
     aiAutoSendComments: false,
     aiAutoSendPrivateMessages: false,
     aiAutoLike: false,
@@ -231,6 +233,7 @@ export function SettingsView() {
           api_key_set: false,
           model: "gpt-4o-mini",
           system_prompt: "",
+          user_prompt: "",
           provider_presets: [],
           auto_send_comments: false,
           auto_send_private_messages: false,
@@ -277,6 +280,7 @@ export function SettingsView() {
         setAiApiKeySet(Boolean(nextAi.api_key_set));
         setAiModel(nextAi.model || "gpt-4o-mini");
         setAiSystemPrompt(nextAi.system_prompt || "");
+        setAiUserPrompt(nextAi.user_prompt || "");
         setAiAutoSendComments(Boolean(nextAi.auto_send_comments));
         setAiAutoSendPrivateMessages(Boolean(nextAi.auto_send_private_messages));
         setAiAutoLike(Boolean(nextAi.auto_like));
@@ -313,6 +317,7 @@ export function SettingsView() {
           aiApiKeySet: Boolean(nextAi.api_key_set),
           aiModel: nextAi.model || "gpt-4o-mini",
           aiSystemPrompt: nextAi.system_prompt || "",
+          aiUserPrompt: nextAi.user_prompt || "",
           aiAutoSendComments: Boolean(nextAi.auto_send_comments),
           aiAutoSendPrivateMessages: Boolean(nextAi.auto_send_private_messages),
           aiAutoLike: Boolean(nextAi.auto_like),
@@ -824,6 +829,7 @@ export function SettingsView() {
       api_key_set: trimmedApiKey ? true : aiApiKeySet,
       model: aiModel.trim(),
       system_prompt: aiSystemPrompt.trim(),
+      user_prompt: aiUserPrompt.trim(),
       auto_send_comments: aiAutoSendComments,
       auto_send_private_messages: aiAutoSendPrivateMessages,
       auto_like: aiAutoLike,
@@ -863,6 +869,7 @@ export function SettingsView() {
       setAiApiBase(nextAi.api_base);
       setAiModel(nextAi.model);
       setAiSystemPrompt(nextAi.system_prompt);
+      setAiUserPrompt(nextAi.user_prompt);
       setAiApiKey("");
       setAiApiKeySet(nextAi.api_key_set);
       savedSettingsRef.current.aiEnabled = nextAi.enabled;
@@ -871,6 +878,7 @@ export function SettingsView() {
       savedSettingsRef.current.aiApiKeySet = nextAi.api_key_set;
       savedSettingsRef.current.aiModel = nextAi.model;
       savedSettingsRef.current.aiSystemPrompt = nextAi.system_prompt;
+      savedSettingsRef.current.aiUserPrompt = nextAi.user_prompt;
       savedSettingsRef.current.aiAutoSendComments = nextAi.auto_send_comments;
       savedSettingsRef.current.aiAutoSendPrivateMessages = nextAi.auto_send_private_messages;
       savedSettingsRef.current.aiAutoLike = nextAi.auto_like;
@@ -1227,6 +1235,7 @@ export function SettingsView() {
                   apiKeySet={aiApiKeySet}
                   model={aiModel}
                   systemPrompt={aiSystemPrompt}
+                  userPrompt={aiUserPrompt}
                   autoSendComments={aiAutoSendComments}
                   autoSendPrivateMessages={aiAutoSendPrivateMessages}
                   autoLike={aiAutoLike}
@@ -1254,6 +1263,7 @@ export function SettingsView() {
                   onApiKeyChange={handleAiApiKeyChange}
                   onModelChange={handleAiModelChange}
                   onSystemPromptChange={setAiSystemPrompt}
+                  onUserPromptChange={setAiUserPrompt}
                   onAutoSendCommentsChange={setAiAutoSendComments}
                   onAutoSendPrivateMessagesChange={setAiAutoSendPrivateMessages}
                   onAutoLikeChange={setAiAutoLike}

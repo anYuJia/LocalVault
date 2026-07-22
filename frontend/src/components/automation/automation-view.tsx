@@ -41,6 +41,7 @@ const DEFAULT_AI_CONFIG: AiInteractionConfig = {
   api_base: "https://api.openai.com/v1",
   model: "gpt-4o-mini",
   system_prompt: "",
+  user_prompt: "",
   auto_send_comments: false,
   auto_send_private_messages: false,
   auto_like: false,

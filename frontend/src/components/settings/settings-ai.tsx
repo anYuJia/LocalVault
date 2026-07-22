@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useRef, useState, type ChangeEvent } from "react";
 import {
   CircleAlert,
   CheckCircle2,
   Clipboard,
   Clock3,
+  FileText,
   KeyRound,
   Loader2,
   MessageSquare,
   Server,
   Sparkles,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +32,7 @@ interface SettingsAiTabProps {
   apiKeySet: boolean;
   model: string;
   systemPrompt: string;
+  userPrompt: string;
   autoSendComments: boolean;
   autoSendPrivateMessages: boolean;
   autoLike: boolean;
@@ -57,6 +60,7 @@ interface SettingsAiTabProps {
   onApiKeyChange: (value: string) => void;
   onModelChange: (value: string) => void;
   onSystemPromptChange: (value: string) => void;
+  onUserPromptChange: (value: string) => void;
   onAutoSendCommentsChange: (value: boolean) => void;
   onAutoSendPrivateMessagesChange: (value: boolean) => void;
   onAutoLikeChange: (value: boolean) => void;
@@ -144,6 +148,15 @@ function formatMeta(format: string) {
   };
 }
 
+const PROMPT_FILE_MAX_BYTES = 300 * 1024;
+
+type PromptTarget = "system" | "user";
+
+function isSupportedPromptFile(file: File) {
+  const name = file.name.toLowerCase();
+  return name.endsWith(".md") || name.endsWith(".txt") || file.type === "text/plain" || file.type === "text/markdown";
+}
+
 function withScheme(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return "";
@@ -184,6 +197,7 @@ export function SettingsAiTab({
   apiKeySet,
   model,
   systemPrompt,
+  userPrompt,
   status,
   testStatus = "idle",
   testMessage = "",
@@ -193,12 +207,15 @@ export function SettingsAiTab({
   onApiKeyChange,
   onModelChange,
   onSystemPromptChange,
+  onUserPromptChange,
   onSave,
   onTest,
 }: SettingsAiTabProps) {
   const saving = status === "saving";
   const testing = testStatus === "testing";
   const [copiedTestMessage, setCopiedTestMessage] = useState(false);
+  const systemPromptFileRef = useRef<HTMLInputElement | null>(null);
+  const userPromptFileRef = useRef<HTMLInputElement | null>(null);
   const toast = useToast();
   const currentPreset = providerPresets.find((preset) => preset.id === provider);
   const providerOptions = providerPresets.length > 0
@@ -228,6 +245,49 @@ export function SettingsAiTab({
     }
     if (copied) {
       window.setTimeout(() => setCopiedTestMessage(false), 1500);
+    }
+  };
+
+  const openPromptFilePicker = (target: PromptTarget) => {
+    if (target === "system") {
+      systemPromptFileRef.current?.click();
+      return;
+    }
+    userPromptFileRef.current?.click();
+  };
+
+  const importPromptFile = async (event: ChangeEvent<HTMLInputElement>, target: PromptTarget) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const promptLabel = target === "system" ? "系统提示词" : "用户提示词";
+    try {
+      if (!isSupportedPromptFile(file)) {
+        toast.error("仅支持 .md / .txt 文档", "导入失败");
+        return;
+      }
+      if (file.size > PROMPT_FILE_MAX_BYTES) {
+        toast.error("文件不能超过 300 KB", "导入失败");
+        return;
+      }
+
+      const content = (await file.text()).replace(/\r\n/g, "\n").trim();
+      if (!content) {
+        toast.error("文档内容为空", "导入失败");
+        return;
+      }
+
+      if (target === "system") {
+        onSystemPromptChange(content);
+      } else {
+        onUserPromptChange(content);
+      }
+      toast.success(`${promptLabel}已导入`, file.name);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "读取文档失败", "导入失败");
+    } finally {
+      input.value = "";
     }
   };
 
@@ -345,17 +405,86 @@ export function SettingsAiTab({
         </div>
       </SettingGroup>
 
-      <SettingGroup icon={MessageSquare} label="回复风格">
-        <div className="space-y-2">
+      <SettingGroup icon={MessageSquare} label="提示词">
+        <div className="space-y-3">
           <p className="text-[0.66rem] text-text-secondary leading-relaxed select-none">
-            控制 AI 回复的口吻、边界和表达习惯，建议保持自然、友好、克制。
+            系统提示词控制角色和边界；用户提示词补充具体任务、示例或风格文档。
           </p>
-          <Textarea
-            value={systemPrompt}
-            onChange={(event) => onSystemPromptChange(event.target.value)}
-            placeholder="用自然、克制、友好的中文生成可编辑草稿。"
-            className="min-h-28 resize-y rounded-[8px] text-[0.78rem] focus-visible:ring-accent"
-          />
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="rounded-[10px] border border-border bg-surface/35 p-3">
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 text-[0.74rem] font-bold text-text-secondary">
+                    <FileText className="h-3.5 w-3.5 text-text-muted" />
+                    系统提示词
+                  </div>
+                  <p className="mt-1 text-[0.62rem] leading-relaxed text-text-muted">
+                    定义 AI 的身份、语气、禁止事项和安全边界。
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openPromptFilePicker("system")}
+                  className="h-8 shrink-0 rounded-[8px] px-2.5 text-[0.68rem] font-semibold"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  导入
+                </Button>
+              </div>
+              <Textarea
+                value={systemPrompt}
+                onChange={(event) => onSystemPromptChange(event.target.value)}
+                placeholder="例如：你是短视频运营助理，用自然、克制、友好的中文生成可编辑草稿。"
+                className="min-h-32 resize-y rounded-[8px] text-[0.78rem] focus-visible:ring-accent"
+              />
+              <input
+                ref={systemPromptFileRef}
+                type="file"
+                accept=".md,.txt,text/markdown,text/plain"
+                className="hidden"
+                onChange={(event) => void importPromptFile(event, "system")}
+              />
+            </div>
+
+            <div className="rounded-[10px] border border-border bg-surface/35 p-3">
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 text-[0.74rem] font-bold text-text-secondary">
+                    <MessageSquare className="h-3.5 w-3.5 text-text-muted" />
+                    用户提示词
+                  </div>
+                  <p className="mt-1 text-[0.62rem] leading-relaxed text-text-muted">
+                    追加每次生成的具体要求，可导入话术库或风格指南。
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openPromptFilePicker("user")}
+                  className="h-8 shrink-0 rounded-[8px] px-2.5 text-[0.68rem] font-semibold"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  导入
+                </Button>
+              </div>
+              <Textarea
+                value={userPrompt}
+                onChange={(event) => onUserPromptChange(event.target.value)}
+                placeholder="例如：回复要像真人私信，不要模板化；遇到售后问题先表达理解，再给下一步。"
+                className="min-h-32 resize-y rounded-[8px] text-[0.78rem] focus-visible:ring-accent"
+              />
+              <input
+                ref={userPromptFileRef}
+                type="file"
+                accept=".md,.txt,text/markdown,text/plain"
+                className="hidden"
+                onChange={(event) => void importPromptFile(event, "user")}
+              />
+            </div>
+          </div>
         </div>
       </SettingGroup>
 
