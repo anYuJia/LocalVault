@@ -664,6 +664,10 @@ export async function sendFriendVideoShare(_payload?: Record<string, unknown>): 
   return sendFriendMessage();
 }
 
+export async function sendFriendVideoMessage(_payload?: Record<string, unknown>): Promise<SendFriendMessageResponse> {
+  return sendFriendMessage();
+}
+
 export async function sendFriendImageMessage(_payload?: Record<string, unknown>): Promise<SendFriendMessageResponse> {
   return sendFriendMessage();
 }

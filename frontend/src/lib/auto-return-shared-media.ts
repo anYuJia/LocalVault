@@ -2,7 +2,7 @@ import {
   mediaProxyUrl,
   parseLink,
   sendFriendImageMessage,
-  sendFriendVideoShare,
+  sendFriendVideoMessage,
   type AiInteractionConfig,
 } from "@/lib/tauri";
 
@@ -63,9 +63,9 @@ function videoSizeBytes(video: NonNullable<Awaited<ReturnType<typeof parseLink>>
 
 /**
  * Return a shared work to its sender. Image albums are downloaded through the
- * local media proxy, uploaded to IM one by one, then released from memory. The
- * currently supported Douyin IM API has no binary-video upload endpoint, so a
- * permitted video is returned as its official work card instead.
+ * local media proxy, uploaded to IM one by one, then released from memory.
+ * Videos follow the same download → binary upload → release flow; no work card
+ * is sent back to the friend.
  */
 export async function autoReturnSharedMedia(
   senderUid: string,
@@ -112,7 +112,25 @@ export async function autoReturnSharedMedia(
   if (!config.auto_return_shared_allow_videos) return { handled: true, sent: 0, skipped: "videos_disabled" };
   const size = videoSizeBytes(video);
   if (size > maxBytes) return { handled: true, sent: 0, skipped: "size_limit" };
-  const result = await sendFriendVideoShare({ toUserId: senderUid, video });
-  if (!result.success) throw new Error(result.message || "回传视频作品失败");
-  return { handled: true, sent: 1, skipped: "video_card" };
+  const videoUrl = video.video?.play_addr || video.video?.download_addr;
+  if (!videoUrl) throw new Error("未找到可下载的视频地址");
+  const response = await fetch(mediaProxyUrl(videoUrl, "video"));
+  if (!response.ok) throw new Error("下载视频失败");
+  const declaredSize = Number(response.headers.get("content-length") || 0);
+  if (declaredSize > maxBytes) return { handled: true, sent: 0, skipped: "size_limit" };
+  const blob = await response.blob();
+  if (!blob.size || blob.size > maxBytes) return { handled: true, sent: 0, skipped: "size_limit" };
+  const dataUrl = await imageDataUrl(blob);
+  try {
+    const result = await sendFriendVideoMessage({
+      toUserId: senderUid,
+      videoDataUrl: dataUrl,
+      fileName: `${video.aweme_id || "shared"}.mp4`,
+      mimeType: blob.type || "video/mp4",
+    });
+    if (!result.success) throw new Error(result.message || "回传视频文件失败");
+    return { handled: true, sent: 1, skipped: "" };
+  } finally {
+    // The temporary Blob/Data URL is scoped to this upload and released afterward.
+  }
 }
