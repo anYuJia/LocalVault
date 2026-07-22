@@ -55,11 +55,16 @@ function unreadTotal(unreadCounts: UnreadCounts) {
   return Object.values(unreadCounts).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
 }
 
-function hasExistingMessage(messages: ChatMessages, message: LocalChatMessage) {
+function hasExistingMessage(
+  messages: ChatMessages,
+  message: LocalChatMessage,
+  hasStableServerMessageId: boolean,
+) {
   return Object.values(messages).some((items) =>
     items.some((item) =>
       item.id === message.id ||
       (
+        !hasStableServerMessageId &&
         Boolean(message.text) &&
         item.senderUid === message.senderUid &&
         item.text === message.text &&
@@ -130,7 +135,9 @@ function persistIncomingMessage(currentSecUid: string, payload: JsonRecord) {
   };
 
   const chatMessages = readChatMessages(currentSecUid);
-  if (hasExistingMessage(chatMessages, message)) {
+  // Compact share labels are intentionally repeated. A stable message ID
+  // must win over text/time fallback so consecutive shares remain distinct.
+  if (hasExistingMessage(chatMessages, message, Boolean(serverMessageId))) {
     return null;
   }
 
