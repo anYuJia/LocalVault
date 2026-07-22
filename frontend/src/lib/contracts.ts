@@ -114,6 +114,11 @@ export interface AiInteractionConfig {
   auto_min_play_count: number;
   auto_scan_interval_seconds: number;
   auto_max_actions_per_run: number;
+  auto_return_shared_media: boolean;
+  auto_return_shared_allow_images: boolean;
+  auto_return_shared_allow_videos: boolean;
+  auto_return_shared_max_size_mb: number;
+  auto_return_shared_max_media_count: number;
 }
 
 export interface AiProviderPreset {

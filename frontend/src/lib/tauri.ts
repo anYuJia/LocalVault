@@ -240,6 +240,11 @@ const defaultAi: AiInteractionConfig = {
   auto_min_play_count: 0,
   auto_scan_interval_seconds: 30,
   auto_max_actions_per_run: 5,
+  auto_return_shared_media: false,
+  auto_return_shared_allow_images: true,
+  auto_return_shared_allow_videos: true,
+  auto_return_shared_max_size_mb: 20,
+  auto_return_shared_max_media_count: 9,
 };
 
 const state: {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Bell,
+  Download,
   Loader2,
   MessageSquare,
   RefreshCw,
@@ -47,6 +48,9 @@ type AutomationForm = Pick<
   | "auto_like_exclude_keywords"
   | "auto_collect_match_keywords"
   | "auto_collect_exclude_keywords"
+  | "auto_return_shared_media"
+  | "auto_return_shared_allow_images"
+  | "auto_return_shared_allow_videos"
 > & {
   auto_send_delay_ms: string;
   auto_send_max_chars: string;
@@ -55,6 +59,8 @@ type AutomationForm = Pick<
   auto_min_play_count: string;
   auto_scan_interval_seconds: string;
   auto_max_actions_per_run: string;
+  auto_return_shared_max_size_mb: string;
+  auto_return_shared_max_media_count: string;
 };
 
 interface AutomationSettingsDialogProps {
@@ -87,6 +93,9 @@ function toForm(config: AiInteractionConfig | null): AutomationForm {
     auto_like_exclude_keywords: String(config?.auto_like_exclude_keywords || config?.auto_exclude_keywords || ""),
     auto_collect_match_keywords: String(config?.auto_collect_match_keywords || config?.auto_match_keywords || ""),
     auto_collect_exclude_keywords: String(config?.auto_collect_exclude_keywords || config?.auto_exclude_keywords || ""),
+    auto_return_shared_media: Boolean(config?.auto_return_shared_media ?? false),
+    auto_return_shared_allow_images: Boolean(config?.auto_return_shared_allow_images ?? true),
+    auto_return_shared_allow_videos: Boolean(config?.auto_return_shared_allow_videos ?? true),
     auto_send_delay_ms: String(config?.auto_send_delay_ms ?? 0),
     auto_send_max_chars: String(config?.auto_send_max_chars ?? 180),
     auto_min_digg_count: String(config?.auto_min_digg_count ?? 0),
@@ -94,6 +103,8 @@ function toForm(config: AiInteractionConfig | null): AutomationForm {
     auto_min_play_count: String(config?.auto_min_play_count ?? 0),
     auto_scan_interval_seconds: String(config?.auto_scan_interval_seconds ?? 30),
     auto_max_actions_per_run: String(config?.auto_max_actions_per_run ?? 5),
+    auto_return_shared_max_size_mb: String(config?.auto_return_shared_max_size_mb ?? 20),
+    auto_return_shared_max_media_count: String(config?.auto_return_shared_max_media_count ?? 9),
   };
 }
 
@@ -285,6 +296,11 @@ export function AutomationSettingsDialog({
       auto_min_play_count: clampNumber(form.auto_min_play_count, 0, 0, Number.MAX_SAFE_INTEGER),
       auto_scan_interval_seconds: clampNumber(form.auto_scan_interval_seconds, 30, 10, 300),
       auto_max_actions_per_run: clampNumber(form.auto_max_actions_per_run, 5, 1, 50),
+      auto_return_shared_media: form.auto_return_shared_media,
+      auto_return_shared_allow_images: form.auto_return_shared_allow_images,
+      auto_return_shared_allow_videos: form.auto_return_shared_allow_videos,
+      auto_return_shared_max_size_mb: clampNumber(form.auto_return_shared_max_size_mb, 20, 1, 200),
+      auto_return_shared_max_media_count: clampNumber(form.auto_return_shared_max_media_count, 9, 1, 20),
     });
   };
 
@@ -327,6 +343,16 @@ export function AutomationSettingsDialog({
                 <ToggleLine label="点赞视频" checked={form.auto_like} onChange={(checked) => update("auto_like", checked)} icon={ThumbsUp} />
                 <ToggleLine label="收藏视频" checked={form.auto_collect} onChange={(checked) => update("auto_collect", checked)} icon={Star} />
                 <ToggleLine label="仅有上下文时发送" checked={form.auto_require_context} onChange={(checked) => update("auto_require_context", checked)} icon={ShieldCheck} />
+              </Section>
+
+              <Section title="分享内容回传">
+                <ToggleLine label="收到分享链接后自动回传" description="图集会下载后逐张发送并立即释放临时数据；视频回传原作品卡片。" checked={form.auto_return_shared_media} onChange={(checked) => update("auto_return_shared_media", checked)} icon={Download} />
+                <ToggleLine label="允许图集" checked={form.auto_return_shared_allow_images} onChange={(checked) => update("auto_return_shared_allow_images", checked)} icon={Download} />
+                <ToggleLine label="允许视频" checked={form.auto_return_shared_allow_videos} onChange={(checked) => update("auto_return_shared_allow_videos", checked)} icon={Download} />
+                <div className="grid grid-cols-2 gap-2 py-2">
+                  <NumberField label="单媒体最大" min={1} max={200} suffix="MB" value={form.auto_return_shared_max_size_mb} onChange={(value) => update("auto_return_shared_max_size_mb", value)} />
+                  <NumberField label="单作品最多" min={1} max={20} suffix="个" value={form.auto_return_shared_max_media_count} onChange={(value) => update("auto_return_shared_max_media_count", value)} />
+                </div>
               </Section>
             </div>
 
