@@ -32,6 +32,7 @@ import type {
 
 export const GLOBAL_FRIEND_CHAT_UPDATED_EVENT = "dy-friend-chat-updated";
 export const UNKNOWN_FRIEND_KEY_PREFIX = "uid:";
+const RECENT_AUTO_REPLY_TTL_MS = 5 * 60_000;
 
 type FriendChatUpdatedDetail = {
   currentSecUid: string;
@@ -64,6 +65,43 @@ function hasExistingMessage(messages: ChatMessages, message: LocalChatMessage) {
 
 function dispatchFriendChatUpdated(detail: FriendChatUpdatedDetail) {
   window.dispatchEvent(new CustomEvent<FriendChatUpdatedDetail>(GLOBAL_FRIEND_CHAT_UPDATED_EVENT, { detail }));
+}
+
+function booleanField(record: JsonRecord, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (["1", "true", "yes", "out", "outgoing"].includes(normalized)) return true;
+      if (["0", "false", "no", "in", "incoming"].includes(normalized)) return false;
+    }
+  }
+  return false;
+}
+
+function normalizedOutgoingText(text: string) {
+  return String(text || "").trim().replace(/\s+/g, " ").slice(0, 500);
+}
+
+function pruneRecentOutgoingText(recentOutgoingTexts: Map<string, number>, now = Date.now()) {
+  for (const [key, expiresAt] of recentOutgoingTexts) {
+    if (expiresAt <= now) recentOutgoingTexts.delete(key);
+  }
+}
+
+function rememberRecentOutgoingText(recentOutgoingTexts: Map<string, number>, text: string) {
+  const key = normalizedOutgoingText(text);
+  if (!key) return;
+  pruneRecentOutgoingText(recentOutgoingTexts);
+  recentOutgoingTexts.set(key, Date.now() + RECENT_AUTO_REPLY_TTL_MS);
+}
+
+function wasRecentlyAutoSent(recentOutgoingTexts: Map<string, number>, text: string) {
+  const key = normalizedOutgoingText(text);
+  if (!key) return false;
+  pruneRecentOutgoingText(recentOutgoingTexts);
+  return recentOutgoingTexts.has(key);
 }
 
 function persistIncomingMessage(currentSecUid: string, payload: JsonRecord) {
@@ -120,7 +158,13 @@ function persistIncomingMessage(currentSecUid: string, payload: JsonRecord) {
   return { conversationKey, senderUid, message, nextMessages };
 }
 
-async function maybeAutoReply(senderUid: string, incoming: LocalChatMessage, recentMessages: LocalChatMessage[], repliedKeys: Set<string>) {
+async function maybeAutoReply(
+  senderUid: string,
+  incoming: LocalChatMessage,
+  recentMessages: LocalChatMessage[],
+  repliedKeys: Set<string>,
+  recentOutgoingTexts: Map<string, number>,
+) {
   const key = incoming.id || `${senderUid}-${incoming.createdAt}-${incoming.text}`;
   if (!key || repliedKeys.has(key)) return;
   const logger = useLogStore.getState();
@@ -170,6 +214,7 @@ async function maybeAutoReply(senderUid: string, incoming: LocalChatMessage, rec
       return;
     }
     await waitForAiAutoSend(getAiAutoSendDelayMs(result.auto_send_delay_ms));
+    rememberRecentOutgoingText(recentOutgoingTexts, suggestions[0]);
     const sendResult = await sendFriendMessage({ toUserId: senderUid, content: suggestions[0] });
     if (!sendResult.success) {
       throw new Error(sendResult.message || "自动回复发送失败");
@@ -184,6 +229,7 @@ export function useGlobalFriendsIm() {
   const currentSecUidRef = useRef("");
   const currentUidRef = useRef("");
   const autoRepliedMessageIdsRef = useRef<Set<string>>(new Set());
+  const recentOutgoingTextsRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     let disposed = false;
@@ -194,6 +240,7 @@ export function useGlobalFriendsIm() {
           currentSecUidRef.current = result.current_sec_uid || "";
           const currentAccount = result.accounts?.find((account) => account.sec_uid === result.current_sec_uid);
           currentUidRef.current = String(currentAccount?.uid || currentAccount?.user_id || "").trim();
+          recentOutgoingTextsRef.current.clear();
         }
       } catch {
         // Keep the existing namespace if account lookup temporarily fails.
@@ -220,7 +267,19 @@ export function useGlobalFriendsIm() {
         return;
       }
       const senderUid = stringField(payload, ["sender_uid", "senderUid"]);
-      if (senderUid && currentUidRef.current && senderUid === currentUidRef.current) {
+      const currentUid = stringField(payload, ["current_uid", "currentUid"]);
+      if (!currentUidRef.current && currentUid) {
+        currentUidRef.current = currentUid;
+      }
+      const rawContent = stringField(payload, ["raw_content", "rawContent"]) || undefined;
+      const text = stringField(payload, ["content", "text"]) || fallbackMessageText(rawContent);
+      const isOutgoing =
+        booleanField(payload, ["is_outgoing", "isOutgoing", "from_self", "fromSelf"]) ||
+        stringField(payload, ["direction"]) === "out" ||
+        Boolean(senderUid && currentUidRef.current && senderUid === currentUidRef.current) ||
+        wasRecentlyAutoSent(recentOutgoingTextsRef.current, text);
+      if (isOutgoing) {
+        useLogStore.getState().addLog("好友私信回流已忽略：检测到自己发送的消息，已阻止自动回复循环", "info");
         return;
       }
       const result = persistIncomingMessage(currentSecUid, payload);
@@ -232,6 +291,7 @@ export function useGlobalFriendsIm() {
         result.message,
         result.nextMessages[result.conversationKey] || [result.message],
         autoRepliedMessageIdsRef.current,
+        recentOutgoingTextsRef.current,
       );
     }).then((cleanup) => {
       unlisten = cleanup;
