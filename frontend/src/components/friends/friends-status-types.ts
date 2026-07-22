@@ -19,6 +19,7 @@ export const CHAT_DRAFTS_KEY = "douyin.friendStatus.chatDrafts";
 export const CHAT_MESSAGES_KEY = "douyin.friendStatus.chatMessages";
 export const CHAT_UNREAD_KEY = "douyin.friendStatus.unreadCounts";
 export const CHAT_SUMMARIES_KEY = "douyin.friendStatus.chatSummaries";
+export const CHAT_SESSIONS_KEY = "douyin.friendStatus.chatSessions";
 export const CURRENT_USER_AVATAR_KEY = "douyin.friendStatus.currentUserAvatar";
 export const ONLINE_WINDOW_SECONDS = 60;
 export const DEFAULT_REFRESH_INTERVAL_SECONDS = 30;
@@ -55,6 +56,16 @@ export type ChatSummaries = Record<string, {
   latestMessageAt: number;
   unreadCount: number;
 }>;
+export type ChatSession = {
+  /** The beginning of the currently active conversation; resetting starts a clean AI context. */
+  startedAt: number;
+  lastActivityAt: number;
+  /** A compact, local-only digest of messages that no longer fit in the live context window. */
+  summary: string;
+  compressedThroughAt: number;
+  compressedMessageCount: number;
+};
+export type ChatSessions = Record<string, ChatSession>;
 export type ImConnectionStatus = {
   connected: boolean;
   message: string;

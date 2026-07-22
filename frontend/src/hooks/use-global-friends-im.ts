@@ -12,18 +12,23 @@ import {
 import { useAppStore, useLogStore } from "@/stores/app-store";
 import {
   fallbackMessageText,
+  buildPrivateMessageAiContext,
   messagePreviewText,
   numberField,
   persistChatMessages,
+  persistChatSessions,
   persistChatSummaries,
   persistUnreadCounts,
   readChatMessages,
+  readChatSessions,
   readChatSummaries,
   readUnreadCounts,
   stringField,
+  refreshChatSession,
 } from "@/components/friends/friends-status-utils";
 import type {
   ChatMessages,
+  ChatSession,
   ChatSummaries,
   JsonRecord,
   LocalChatMessage,
@@ -149,19 +154,27 @@ function persistIncomingMessage(currentSecUid: string, payload: JsonRecord) {
   };
 
   persistChatMessages(nextMessages, currentSecUid);
+  const chatSessions = readChatSessions(currentSecUid);
+  const session = refreshChatSession(
+    chatSessions[conversationKey],
+    nextMessages[conversationKey] || [],
+    `好友 ${senderUid.slice(-4)}`,
+  );
+  persistChatSessions({ ...chatSessions, [conversationKey]: session }, currentSecUid);
   persistChatSummaries(nextSummaries, currentSecUid);
   persistUnreadCounts(nextUnreadCounts, currentSecUid);
   void saveFriendChatState({ summaries: nextSummaries, unreadCounts: nextUnreadCounts }, currentSecUid).catch(() => undefined);
   useAppStore.getState().setFriendUnreadCount(unreadTotal(nextUnreadCounts));
   dispatchFriendChatUpdated({ currentSecUid, conversationKey, senderUid, message });
 
-  return { conversationKey, senderUid, message, nextMessages };
+  return { conversationKey, senderUid, message, nextMessages, session };
 }
 
 async function maybeAutoReply(
   senderUid: string,
   incoming: LocalChatMessage,
   recentMessages: LocalChatMessage[],
+  session: ChatSession | undefined,
   repliedKeys: Set<string>,
   recentOutgoingTexts: Map<string, number>,
 ) {
@@ -192,13 +205,7 @@ async function maybeAutoReply(
 
     const displayName = `好友 ${senderUid.slice(-4)}`;
     logger.addLog(`好友私信触发自动回复：${displayName}`, "info");
-    const context = recentMessages
-      .slice(-8)
-      .map((item) => `${item.direction === "in" ? displayName : "我"}：${item.text || item.rawContent || ""}`)
-      .filter(Boolean)
-      .join("\n")
-      .replace(/\s+/g, " ")
-      .slice(-900);
+    const context = buildPrivateMessageAiContext(session, recentMessages, displayName);
     const result = await suggestAiInteraction({
       target: "private_message",
       context,
@@ -290,6 +297,7 @@ export function useGlobalFriendsIm() {
         result.senderUid,
         result.message,
         result.nextMessages[result.conversationKey] || [result.message],
+        result.session,
         autoRepliedMessageIdsRef.current,
         recentOutgoingTextsRef.current,
       );

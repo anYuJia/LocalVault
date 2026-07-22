@@ -39,6 +39,7 @@ import {
   STORAGE_KEY,
   type ChatDrafts,
   type ChatMessages,
+  type ChatSessions,
   type ChatSummaries,
   type FriendListItem,
   type FriendStatusItem,
@@ -52,6 +53,7 @@ import {
 import {
   extractIds,
   fallbackMessageText,
+  refreshChatSession,
   formatUpdateTime,
   imageMessageRawContent,
   isRecord,
@@ -63,10 +65,12 @@ import {
   numberField,
   persistChatDrafts,
   persistChatMessages,
+  persistChatSessions,
   persistChatSummaries,
   persistUnreadCounts,
   readChatDrafts,
   readChatMessages,
+  readChatSessions,
   readChatSummaries,
   readUnreadCounts,
   readFileAsDataUrl,
@@ -117,6 +121,7 @@ export function FriendsStatusView() {
   const [chatMessages, setChatMessages] = useState<ChatMessages>(() => readChatMessages());
   const [unreadCounts, setUnreadCounts] = useState<UnreadCounts>(() => readUnreadCounts());
   const [chatSummaries, setChatSummaries] = useState<ChatSummaries>(() => readChatSummaries());
+  const [chatSessions, setChatSessions] = useState<ChatSessions>(() => readChatSessions());
   const [selectedFriendId, setSelectedFriendId] = useState("");
   const [historyState, setHistoryState] = useState<HistoryPageState>({});
   const [savedIds, setSavedIds] = useState<string[]>([]);
@@ -166,9 +171,11 @@ export function FriendsStatusView() {
     const nextMessages = readChatMessages(currentSecUidRef.current);
     const nextUnread = readUnreadCounts(currentSecUidRef.current);
     const nextSummaries = readChatSummaries(currentSecUidRef.current);
+    const nextSessions = readChatSessions(currentSecUidRef.current);
     setChatMessages(nextMessages);
     setUnreadCounts(nextUnread);
     setChatSummaries(nextSummaries);
+    setChatSessions(nextSessions);
     setUnreadTotal(nextUnread);
   }, [setUnreadTotal]);
 
@@ -214,6 +221,7 @@ export function FriendsStatusView() {
     const nextMessages = readChatMessages(currentSecUidRef.current);
     const nextUnread = readUnreadCounts(currentSecUidRef.current);
     const nextSummaries = readChatSummaries(currentSecUidRef.current);
+    const nextSessions = readChatSessions(currentSecUidRef.current);
     let changed = false;
 
     for (const key of Object.keys(nextMessages)) {
@@ -255,6 +263,14 @@ export function FriendsStatusView() {
         };
       }
       delete nextSummaries[key];
+      const sourceSession = nextSessions[key];
+      if (sourceSession) {
+        const currentSession = nextSessions[secUid];
+        nextSessions[secUid] = !currentSession || sourceSession.lastActivityAt > currentSession.lastActivityAt
+          ? sourceSession
+          : currentSession;
+      }
+      delete nextSessions[key];
       changed = true;
     }
 
@@ -262,9 +278,11 @@ export function FriendsStatusView() {
     persistChatMessages(nextMessages, currentSecUidRef.current);
     persistUnreadCounts(nextUnread, currentSecUidRef.current);
     persistChatSummaries(nextSummaries, currentSecUidRef.current);
+    persistChatSessions(nextSessions, currentSecUidRef.current);
     setChatMessages(nextMessages);
     setUnreadCounts(nextUnread);
     setChatSummaries(nextSummaries);
+    setChatSessions(nextSessions);
     setUnreadTotal(nextUnread);
     void saveFriendChatState({ summaries: nextSummaries, unreadCounts: nextUnread }, currentSecUidRef.current).catch(() => undefined);
     return true;
@@ -473,6 +491,28 @@ export function FriendsStatusView() {
     });
   }, [chatMessages, unreadCounts]);
 
+  // Keep a durable, account-scoped AI session for every private chat. Old turns are
+  // compacted locally; only the resulting context is sent when the user asks AI to reply.
+  useEffect(() => {
+    setChatSessions((current) => {
+      const next: ChatSessions = { ...current };
+      let changed = false;
+      for (const [conversationKey, messages] of Object.entries(chatMessages)) {
+        const friend = friends.find((item) => item.secUid === conversationKey);
+        const displayName = friend?.remarkName || friend?.nickname || `好友 ${friend?.uid?.slice(-4) || conversationKey.slice(-4)}`;
+        const session = refreshChatSession(next[conversationKey], messages, displayName);
+        const previous = next[conversationKey];
+        if (!previous || previous.summary !== session.summary || previous.startedAt !== session.startedAt || previous.lastActivityAt !== session.lastActivityAt || previous.compressedThroughAt !== session.compressedThroughAt || previous.compressedMessageCount !== session.compressedMessageCount) {
+          next[conversationKey] = session;
+          changed = true;
+        }
+      }
+      if (!changed) return current;
+      persistChatSessions(next, currentSecUidRef.current);
+      return next;
+    });
+  }, [chatMessages, friends]);
+
   useEffect(() => {
     setUnreadTotal(unreadCounts);
   }, [setUnreadTotal, unreadCounts]);
@@ -500,6 +540,38 @@ export function FriendsStatusView() {
       return next;
     });
   }, []);
+
+  const startNewChatSession = useCallback((friend: FriendStatusItem) => {
+    const now = Date.now();
+    setChatSessions((current) => {
+      const next = {
+        ...current,
+        [friend.secUid]: {
+          startedAt: now,
+          lastActivityAt: now,
+          summary: "",
+          compressedThroughAt: now,
+          compressedMessageCount: 0,
+        },
+      };
+      persistChatSessions(next, currentSecUidRef.current);
+      return next;
+    });
+  }, []);
+
+  const compressChatSession = useCallback((friend: FriendStatusItem) => {
+    setChatSessions((current) => {
+      const next = { ...current };
+      next[friend.secUid] = refreshChatSession(
+        current[friend.secUid],
+        chatMessages[friend.secUid] || [],
+        friend.remarkName || friend.nickname || `好友 ${friend.uid.slice(-4)}`,
+        { force: true },
+      );
+      persistChatSessions(next, currentSecUidRef.current);
+      return next;
+    });
+  }, [chatMessages]);
 
   const patchMessage = useCallback((secUid: string, messageId: string, patch: Partial<LocalChatMessage>) => {
     setChatMessages((current) => {
@@ -1218,6 +1290,7 @@ export function FriendsStatusView() {
         friend={selectedFriend}
         draft={selectedFriend ? chatDrafts[selectedFriend.secUid] || "" : ""}
         messages={selectedMessages}
+        session={selectedFriend ? chatSessions[selectedFriend.secUid] : undefined}
         historyError={selectedHistory?.error || ""}
         historyLoading={Boolean(selectedHistory?.loading)}
         canLoadOlder={Boolean(selectedFriend && selectedHistory?.nextCursor && selectedHistory.hasMore !== false)}
@@ -1225,6 +1298,8 @@ export function FriendsStatusView() {
         onDraftChange={updateDraft}
         onSendMessage={sendLocalMessage}
         onSendImage={sendLocalImageMessage}
+        onStartNewSession={startNewChatSession}
+        onCompressSession={compressChatSession}
         onLoadOlder={() => selectedFriend && selectedHistory?.nextCursor ? loadHistoryMessages(selectedFriend, selectedHistory.nextCursor) : Promise.resolve()}
         onOpenProfile={openFriendProfile}
         onOpenSharedVideo={openSharedVideo}

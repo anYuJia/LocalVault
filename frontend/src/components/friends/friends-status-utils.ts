@@ -2,6 +2,7 @@ import type { FriendOnlineStatusResponse } from "@/lib/tauri";
 import {
   CHAT_DRAFTS_KEY,
   CHAT_MESSAGES_KEY,
+  CHAT_SESSIONS_KEY,
   CHAT_SUMMARIES_KEY,
   CHAT_UNREAD_KEY,
   DEFAULT_REFRESH_INTERVAL_SECONDS,
@@ -11,6 +12,8 @@ import {
   ONLINE_WINDOW_SECONDS,
   type ChatDrafts,
   type ChatMessages,
+  type ChatSession,
+  type ChatSessions,
   type ChatSummaries,
   type FriendStatusItem,
   type JsonRecord,
@@ -18,6 +21,11 @@ import {
   type SharedMessageCard,
   type UnreadCounts,
 } from "./friends-status-types";
+
+const AI_RECENT_MESSAGE_COUNT = 8;
+const AI_SESSION_SUMMARY_LIMIT = 900;
+const AI_CONTEXT_LIMIT = 2_200;
+const AI_AUTO_COMPRESS_MIN_MESSAGES = 6;
 
 // ==================== localStorage 持久化 ====================
 
@@ -152,6 +160,120 @@ export function readChatSummaries(currentSecUid?: string): ChatSummaries {
   } catch {
     return {};
   }
+}
+
+function normalizeChatSession(value: JsonRecord): ChatSession | null {
+  const startedAt = numberField(value, ["startedAt"]);
+  const lastActivityAt = numberField(value, ["lastActivityAt"]);
+  if (!startedAt && !lastActivityAt) return null;
+  return {
+    startedAt: startedAt || lastActivityAt,
+    lastActivityAt: Math.max(startedAt, lastActivityAt),
+    summary: stringField(value, ["summary"]).slice(0, AI_SESSION_SUMMARY_LIMIT),
+    compressedThroughAt: numberField(value, ["compressedThroughAt"]),
+    compressedMessageCount: Math.max(0, numberField(value, ["compressedMessageCount"])),
+  };
+}
+
+export function readChatSessions(currentSecUid?: string): ChatSessions {
+  try {
+    const key = getNamespacedKey(CHAT_SESSIONS_KEY, currentSecUid);
+    const parsed = JSON.parse(localStorage.getItem(key) || "{}");
+    if (!isRecord(parsed)) return {};
+    const sessions: ChatSessions = {};
+    for (const [conversationKey, value] of Object.entries(parsed)) {
+      if (!isRecord(value)) continue;
+      const session = normalizeChatSession(value);
+      if (session) sessions[conversationKey] = session;
+    }
+    return sessions;
+  } catch {
+    return {};
+  }
+}
+
+export function persistChatSessions(sessions: ChatSessions, currentSecUid?: string) {
+  const key = getNamespacedKey(CHAT_SESSIONS_KEY, currentSecUid);
+  const safe = Object.fromEntries(Object.entries(sessions).map(([conversationKey, session]) => [conversationKey, {
+    ...session,
+    summary: String(session.summary || "").slice(0, AI_SESSION_SUMMARY_LIMIT),
+  }]));
+  if (safeSetLocalStorage(key, JSON.stringify(safe))) return;
+  safeSetLocalStorage(key, "{}");
+}
+
+function compactSessionText(value: string, limit = AI_SESSION_SUMMARY_LIMIT) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= limit) return text;
+  const head = Math.min(160, Math.floor(limit * 0.22));
+  return `${text.slice(0, head)} … ${text.slice(-(limit - head - 3))}`;
+}
+
+function sessionMessageLine(message: LocalChatMessage, displayName: string) {
+  const text = compactSessionText(message.text || message.rawContent || "", 120);
+  if (!text) return "";
+  return `${message.direction === "in" ? displayName : "我"}：${text}`;
+}
+
+/**
+ * Incrementally compresses old turns without sending chat contents anywhere.
+ * The summary and the latest turns are later passed together to the configured AI provider.
+ */
+export function refreshChatSession(
+  session: ChatSession | undefined,
+  messages: LocalChatMessage[],
+  displayName: string,
+  options: { force?: boolean; now?: number } = {},
+): ChatSession {
+  const sorted = [...messages]
+    .filter((message) => !session || message.createdAt >= session.startedAt)
+    .sort((a, b) => a.createdAt - b.createdAt);
+  const latestAt = sorted[sorted.length - 1]?.createdAt || options.now || Date.now();
+  const current: ChatSession = session || {
+    startedAt: sorted[0]?.createdAt || latestAt,
+    lastActivityAt: latestAt,
+    summary: "",
+    compressedThroughAt: 0,
+    compressedMessageCount: 0,
+  };
+  const keepCount = options.force ? 4 : AI_RECENT_MESSAGE_COUNT;
+  const cutoff = Math.max(0, sorted.length - keepCount);
+  const candidates = sorted.slice(0, cutoff).filter((message) => message.createdAt > current.compressedThroughAt);
+  const candidateChars = candidates.reduce((total, message) => total + (message.text || message.rawContent || "").length, 0);
+  const shouldCompress = Boolean(options.force || candidates.length >= AI_AUTO_COMPRESS_MIN_MESSAGES || candidateChars >= 700);
+  if (!shouldCompress) {
+    return { ...current, lastActivityAt: Math.max(current.lastActivityAt, latestAt) };
+  }
+  const addition = candidates.map((message) => sessionMessageLine(message, displayName)).filter(Boolean).join("\n");
+  if (!addition) return { ...current, lastActivityAt: Math.max(current.lastActivityAt, latestAt) };
+  return {
+    ...current,
+    lastActivityAt: Math.max(current.lastActivityAt, latestAt),
+    summary: compactSessionText([current.summary, addition].filter(Boolean).join("\n")),
+    compressedThroughAt: candidates[candidates.length - 1]?.createdAt || current.compressedThroughAt,
+    compressedMessageCount: current.compressedMessageCount + candidates.length,
+  };
+}
+
+export function buildPrivateMessageAiContext(
+  session: ChatSession | undefined,
+  messages: LocalChatMessage[],
+  displayName: string,
+) {
+  const recent = [...messages]
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .filter((message) => !session || message.createdAt >= session.startedAt)
+    .filter((message) => !session?.compressedThroughAt || message.createdAt > session.compressedThroughAt)
+    .slice(-AI_RECENT_MESSAGE_COUNT)
+    .map((message) => sessionMessageLine(message, displayName))
+    .filter(Boolean)
+    .join("\n");
+  const parts = [
+    session?.summary ? `【已压缩的早期会话】\n${session.summary}` : "",
+    recent ? `【最近往来】\n${recent}` : "",
+  ].filter(Boolean);
+  const context = parts.join("\n\n");
+  return context.length > AI_CONTEXT_LIMIT ? context.slice(-AI_CONTEXT_LIMIT) : context;
 }
 
 export function friendDisplayName(friend: FriendStatusItem | null | undefined) {
