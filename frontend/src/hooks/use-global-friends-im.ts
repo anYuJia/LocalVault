@@ -10,6 +10,7 @@ import {
   waitForAiAutoSend,
 } from "@/lib/ai-automation";
 import { useAppStore, useLogStore } from "@/stores/app-store";
+import { autoReturnSharedMedia } from "@/lib/auto-return-shared-media";
 import {
   fallbackMessageText,
   buildPrivateMessageAiContext,
@@ -232,10 +233,26 @@ async function maybeAutoReply(
   }
 }
 
+async function maybeAutoReturnShare(senderUid: string, incoming: LocalChatMessage, handledKeys: Set<string>) {
+  const key = `share:${incoming.id || `${senderUid}-${incoming.createdAt}`}`;
+  if (!rememberAutomationKey(handledKeys, key)) return;
+  const logger = useLogStore.getState();
+  try {
+    const config = await readAiAutomationConfig();
+    if (!config?.enabled || !config.auto_monitor_friends || !config.auto_return_shared_media) return;
+    const result = await autoReturnSharedMedia(senderUid, incoming.rawContent || incoming.text, config);
+    if (!result.handled) return;
+    logger.addLog(result.sent > 0 ? `好友分享内容已自动回传：${result.sent} 个媒体` : `好友分享内容未回传：${result.skipped}`, result.sent > 0 ? "success" : "info");
+  } catch (error) {
+    logger.addLog(error instanceof Error ? `好友分享内容回传失败：${error.message}` : "好友分享内容回传失败", "warning");
+  }
+}
+
 export function useGlobalFriendsIm() {
   const currentSecUidRef = useRef("");
   const currentUidRef = useRef("");
   const autoRepliedMessageIdsRef = useRef<Set<string>>(new Set());
+  const autoReturnedSharedMessageIdsRef = useRef<Set<string>>(new Set());
   const recentOutgoingTextsRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
@@ -248,6 +265,8 @@ export function useGlobalFriendsIm() {
           const currentAccount = result.accounts?.find((account) => account.sec_uid === result.current_sec_uid);
           currentUidRef.current = String(currentAccount?.uid || currentAccount?.user_id || "").trim();
           recentOutgoingTextsRef.current.clear();
+          autoRepliedMessageIdsRef.current.clear();
+          autoReturnedSharedMessageIdsRef.current.clear();
         }
       } catch {
         // Keep the existing namespace if account lookup temporarily fails.
@@ -301,6 +320,7 @@ export function useGlobalFriendsIm() {
         autoRepliedMessageIdsRef.current,
         recentOutgoingTextsRef.current,
       );
+      void maybeAutoReturnShare(result.senderUid, result.message, autoReturnedSharedMessageIdsRef.current);
     }).then((cleanup) => {
       unlisten = cleanup;
     });

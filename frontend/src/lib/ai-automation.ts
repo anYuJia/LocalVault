@@ -28,6 +28,11 @@ export const DEFAULT_AI_AUTOMATION: Pick<
   | "auto_min_play_count"
   | "auto_scan_interval_seconds"
   | "auto_max_actions_per_run"
+  | "auto_return_shared_media"
+  | "auto_return_shared_allow_images"
+  | "auto_return_shared_allow_videos"
+  | "auto_return_shared_max_size_mb"
+  | "auto_return_shared_max_media_count"
 > = {
   auto_monitor_notices: false,
   auto_monitor_friends: false,
@@ -48,6 +53,11 @@ export const DEFAULT_AI_AUTOMATION: Pick<
   auto_min_play_count: 0,
   auto_scan_interval_seconds: 30,
   auto_max_actions_per_run: 5,
+  auto_return_shared_media: false,
+  auto_return_shared_allow_images: true,
+  auto_return_shared_allow_videos: true,
+  auto_return_shared_max_size_mb: 20,
+  auto_return_shared_max_media_count: 9,
 };
 
 export const AI_AUTOMATION_DEDUPE_LIMIT = 1000;
@@ -103,6 +113,8 @@ export function normalizeAiAutomationConfig(config?: Partial<AiInteractionConfig
     auto_min_digg_count: Math.max(0, Number(config.auto_min_digg_count || 0)),
     auto_min_comment_count: Math.max(0, Number(config.auto_min_comment_count || 0)),
     auto_min_play_count: Math.max(0, Number(config.auto_min_play_count || 0)),
+    auto_return_shared_max_size_mb: Math.max(1, Math.min(200, Math.trunc(Number(config.auto_return_shared_max_size_mb || 20)))),
+    auto_return_shared_max_media_count: Math.max(1, Math.min(20, Math.trunc(Number(config.auto_return_shared_max_media_count || 9)))),
   } as AiInteractionConfig;
 }
 
