@@ -672,6 +672,19 @@ export async function sendFriendImageMessage(_payload?: Record<string, unknown>)
   return sendFriendMessage();
 }
 
+export async function getImConnectionStatus(): Promise<ApiResponse & {
+  connected: boolean;
+  updated_at: number;
+  listener_epoch: number;
+}> {
+  return {
+    ...ok("Public shell IM listener is mocked."),
+    connected: false,
+    updated_at: Date.now(),
+    listener_epoch: 0,
+  };
+}
+
 export async function getFriendMessageHistory(..._args: any[]): Promise<FriendMessageHistoryResponse> {
   return {
     ...ok(),

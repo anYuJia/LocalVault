@@ -256,6 +256,12 @@ export interface VideoInfo {
   video: VideoData;
   statistics: Statistics;
   media_urls?: VideoMediaUrl[] | null;
+  /**
+   * Source media slots in their original order, used by IM share auto-return.
+   * This intentionally differs from `media_urls` for Live Photos, whose
+   * download representation includes both the still image and video parts.
+   */
+  return_media_urls?: VideoMediaUrl[] | null;
   image_urls: string[] | null;
   images?: string[] | null;
   live_photo_urls?: string[] | null;

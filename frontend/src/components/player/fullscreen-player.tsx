@@ -317,6 +317,10 @@ export function FullscreenPlayer({
   const mediaTransitionDirection = mediaTransition.direction;
   const activeMediaIndex = isOpeningRender ? safeInitialMediaIndexForOpen : mediaIndex;
   const currentMedia = mediaItems[activeMediaIndex] || mediaItems[0] || null;
+  // Video files selected from this device have no Douyin work identity. Keep
+  // playback controls, but do not expose actions that target a remote work.
+  const isLocalMedia = !currentVideo?.aweme_id || /^(?:blob|data):/i.test(currentMedia?.url || "");
+  const showWorkActions = !isLocalMedia;
   const qualityOptions = useMemo(
     () => currentMedia?.type === "video" ? collectVideoQualityOptions(currentVideo, currentMedia.url) : [],
     [currentMedia?.type, currentMedia?.url, currentVideo]
@@ -2973,41 +2977,45 @@ export function FullscreenPlayer({
                   <ListVideo className={cn("h-4 w-4", autoPlayNextVideo && "text-accent")} />
                 </InlinePlayerButton>
 
-                <InlinePlayerButton
-                  label="点赞"
-                  count={likeCount}
-                  active={liked}
-                  activeClassName="fill-accent text-accent"
-                  disabled={relationSubmitting !== null}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void toggleLike();
-                  }}
-                >
-                  {relationSubmitting === "like" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Heart className={cn("h-4 w-4", liked && "fill-accent text-accent")} />
-                  )}
-                </InlinePlayerButton>
+                {showWorkActions && (
+                  <>
+                    <InlinePlayerButton
+                      label="点赞"
+                      count={likeCount}
+                      active={liked}
+                      activeClassName="fill-accent text-accent"
+                      disabled={relationSubmitting !== null}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void toggleLike();
+                      }}
+                    >
+                      {relationSubmitting === "like" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Heart className={cn("h-4 w-4", liked && "fill-accent text-accent")} />
+                      )}
+                    </InlinePlayerButton>
 
-                <InlinePlayerButton
-                  label="收藏"
-                  count={favoriteCount}
-                  active={favorited}
-                  activeClassName="fill-warning text-warning"
-                  disabled={relationSubmitting !== null}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void toggleCollect();
-                  }}
-                >
-                  {relationSubmitting === "collect" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Star className={cn("h-4 w-4", favorited && "fill-warning text-warning")} />
-                  )}
-                </InlinePlayerButton>
+                    <InlinePlayerButton
+                      label="收藏"
+                      count={favoriteCount}
+                      active={favorited}
+                      activeClassName="fill-warning text-warning"
+                      disabled={relationSubmitting !== null}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void toggleCollect();
+                      }}
+                    >
+                      {relationSubmitting === "collect" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Star className={cn("h-4 w-4", favorited && "fill-warning text-warning")} />
+                      )}
+                    </InlinePlayerButton>
+                  </>
+                )}
 
                 <div
                   className="relative shrink-0"
@@ -3174,7 +3182,7 @@ export function FullscreenPlayer({
                   </div>
                 )}
 
-                <div
+                {showWorkActions && <div
                   className="relative shrink-0"
                   onPointerEnter={(event) => {
                     if (event.pointerType !== "touch") openCommentsPanel(event);
@@ -3594,9 +3602,9 @@ export function FullscreenPlayer({
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </div>
+                </div>}
 
-                <div
+                {showWorkActions && <div
                   className="relative shrink-0"
                   onPointerEnter={(event) => openPanelOnPointerEnter("share", event)}
                   onPointerLeave={(event) => closePanelOnPointerLeave("share", event)}
@@ -3699,9 +3707,9 @@ export function FullscreenPlayer({
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </div>
+                </div>}
 
-                <div
+                {showWorkActions && <div
                   className="relative shrink-0"
                   onPointerEnter={(event) => openPanelOnPointerEnter("download", event)}
                   onPointerLeave={(event) => closePanelOnPointerLeave("download", event)}
@@ -3752,9 +3760,9 @@ export function FullscreenPlayer({
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </div>
+                </div>}
 
-                <div
+                {showWorkActions && <div
                   className="relative shrink-0"
                   onPointerEnter={(event) => openPanelOnPointerEnter("music", event)}
                   onPointerLeave={(event) => closePanelOnPointerLeave("music", event)}
@@ -3812,9 +3820,9 @@ export function FullscreenPlayer({
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </div>
+                </div>}
 
-                {onShowDetail && (
+                {showWorkActions && onShowDetail && (
                   <PlayerIconButton
                     label="查看详情"
 	                    onClick={(event) => {

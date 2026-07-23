@@ -43,6 +43,14 @@ export interface LocalChatMessage {
   text: string;
   rawContent?: string;
   imagePreviewUrl?: string;
+  /** Session-only preview for a video selected and sent from this device. */
+  videoPreviewUrl?: string;
+  /** Session-only poster paired with videoPreviewUrl. */
+  videoPosterUrl?: string;
+  /** Session-only confirmed upload percentage for an outgoing local video. */
+  videoUploadProgress?: number;
+  /** Human-readable stage paired with videoUploadProgress. */
+  videoUploadStage?: string;
   createdAt: number;
   status: "pending" | "sent" | "error";
   direction?: "in" | "out";
@@ -85,11 +93,13 @@ export interface FriendListItem extends FriendStatusItem {
 }
 
 export interface SharedMessageCard {
-  kind: "video" | "comment" | "image" | "share" | "location" | "product";
+  kind: "video" | "gallery" | "comment" | "image" | "share" | "location" | "product";
   title: string;
   subtitle: string;
   coverUrl: string;
   skey?: string;
+  /** Number of media items announced by a shared gallery payload. */
+  mediaCount?: number;
   avatarUrl: string;
   authorName: string;
   itemId: string;

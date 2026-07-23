@@ -101,9 +101,23 @@ export function isLocalUnsentImagePlaceholder(message: LocalChatMessage) {
   if (message.imagePreviewUrl) return false;
   const parsed = parseJsonContent(message.rawContent || "");
   if (!parsed || Number(parsed.aweType || 0) !== 2702) return false;
+  const resource = isRecord(parsed.resource_url)
+    ? parsed.resource_url
+    : isRecord(parsed.resourceUrl)
+      ? parsed.resourceUrl
+      : undefined;
+  const resourceId = stringField(resource, ["oid", "uri", "key"]);
+  const resourceSkey =
+    stringField(resource, ["skey", "secret_key", "secretKey"]) ||
+    stringField(parsed, ["skey"]);
   const inlinePic = stringField(parsed, ["inline_pic", "inlinePic"]);
   const hasInlineImage = Boolean(inlineImageDataUrl(inlinePic));
-  const hasUploadedResource = Boolean(firstUrl(parsed.resource_url) || firstUrl(parsed.url));
+  const hasUploadedResource = Boolean(
+    firstUrl(resource) ||
+    imImageResourceUrl(resource) ||
+    firstUrl(parsed.url) ||
+    (resourceId && resourceSkey),
+  );
   return !hasInlineImage && !hasUploadedResource;
 }
 
@@ -308,7 +322,17 @@ export function sanitizePersistedChatMessage(message: LocalChatMessage, rawLimit
     ...message,
     rawContent: compactRawContent(message.rawContent, rawLimit),
     imagePreviewUrl: message.imagePreviewUrl?.startsWith("blob:") ? undefined : message.imagePreviewUrl,
-    error: message.error ? message.error.slice(0, 300) : undefined,
+    // Blob URLs only live in the current renderer. Persisting a native-video
+    // preview would turn a reload into a broken player, so keep only the IM
+    // payload/history record after this browser session ends.
+    videoPreviewUrl: undefined,
+    videoPosterUrl: undefined,
+    videoUploadProgress: undefined,
+    videoUploadStage: undefined,
+    status: message.status === "pending" ? "error" : message.status,
+    error: message.status === "pending"
+      ? "发送未完成，请重试"
+      : message.error ? message.error.slice(0, 300) : undefined,
   };
 }
 
@@ -542,6 +566,14 @@ export function uniqueTextParts(parts: string[]) {
     });
 }
 
+function imImageResourceUrl(resource: JsonRecord | undefined) {
+  const oid = stringField(resource, ["oid", "uri", "key"]).trim();
+  if (!oid) return "";
+  if (/^https?:\/\//i.test(oid)) return oid;
+  const normalized = oid.replace(/^\/+/, "");
+  return normalized ? `https://p3.douyinpic.com/${normalized}~tplv-x-get:.image` : "";
+}
+
 export function imDynamicText(value: unknown): string {
   const parts: string[] = [];
   const visit = (item: unknown) => {
@@ -634,24 +666,92 @@ export function parseDynamicPatchCard(root: JsonRecord): SharedMessageCard | nul
 export function parseSharedMessage(message: LocalChatMessage): SharedMessageCard | null {
   const root = parseJsonContent(message.rawContent || message.text);
   if (!root) return null;
+
+  // Native type-30 video messages are not work-share cards: they contain a
+  // `video` resource and a signed `poster`, but usually no aweType/item id.
+  // Recognise them before falling through to the older share-card parser so
+  // the chat keeps a useful poster instead of rendering raw JSON/text.
+  const nativeVideo = isRecord(root.video) ? root.video : undefined;
+  const nativePoster = isRecord(root.poster) ? root.poster : undefined;
+  const isNativeVideo = Boolean(
+    nativeVideo &&
+    nativePoster &&
+    (
+      stringField(nativeVideo, ["tkey", "skey"]) ||
+      stringField(nativePoster, ["oid", "skey"]) ||
+      firstUrl(nativePoster)
+    ),
+  );
+  const rootAwemeType = numberField(root, ["awemeType", "aweme_type"]);
+  const rootImageCount = Math.max(0, numberField(root, ["image_count", "imageCount"]));
+  const rootItemId = normalizeSharedItemId(
+    deepStringField(root, ["itemId", "item_id", "awemeId", "aweme_id", "group_id", "groupId", "share_id"]),
+  );
+  const rootCoverUrl =
+    firstUrl(nativePoster) ||
+    deepFirstUrl(root, ["cover_url", "coverUrl", "cover_url_v2", "coverUrlV2", "content_cover", "aweme_cover", "item_cover", "video_cover", "origin_cover"]);
+  // `awemeType: 68` identifies a photo/gallery work. Its URL list only
+  // contains the card cover; opening the work fetches the actual media.
+  const isGallery = Boolean(rootItemId || rootCoverUrl) && (rootAwemeType === 68 || rootImageCount > 1);
+  if (isNativeVideo || isGallery) {
+    const title = deepStringField(root, ["content_title", "content_name", "aweme_title", "item_title", "title", "desc", "text", "name"]);
+    const authorName = deepStringField(root, [
+      "author_name",
+      "authorName",
+      "nickname",
+      "nick_name",
+      "user_name",
+      "share_user_name",
+      "content_author_name",
+    ]);
+    const avatarUrl = deepFirstUrl(root, ["content_thumb", "author_avatar", "avatar_thumb", "user_avatar"]);
+    const skey = stringField(nativePoster, ["skey"]) || deepStringField(root, ["skey"]) || undefined;
+    return {
+      kind: isNativeVideo ? "video" : "gallery",
+      title: title || (isNativeVideo ? "视频" : "图集"),
+      subtitle: isNativeVideo ? "视频消息" : rootImageCount > 1 ? `${rootImageCount} 张图集` : "图集作品",
+      coverUrl: rootCoverUrl,
+      skey,
+      avatarUrl,
+      authorName,
+      itemId: rootItemId,
+      mediaCount: isGallery ? Math.max(rootImageCount, 1) : undefined,
+    };
+  }
+
   const nested = parseNestedJsonField(root, ["share_content", "shareContent", "content", "text"]);
   const parsed = nested || root;
   const dynamicCard = parseDynamicPatchCard(parsed) || (nested ? parseDynamicPatchCard(root) : null);
   if (dynamicCard) return dynamicCard;
-  const aweType = Number(parsed.aweType || parsed.awe_type || 0);
+  const aweType = Number(parsed.aweType || parsed.awe_type || parsed.type || 0);
+  const awemeType = Number(parsed.awemeType || parsed.aweme_type || 0);
+  const imageCount = Math.max(0, Number(parsed.image_count || parsed.imageCount || 0) || 0);
   const inlineImageUrl = inlineImageDataUrl(deepStringField(parsed, ["inline_pic", "inlinePic"]));
-  const resourceImageUrl = deepFirstUrl(parsed, ["resource_url", "url"]);
+  const resourceImageUrl =
+    deepFirstUrl(parsed, ["resource_url", "url"]) ||
+    imImageResourceUrl(isRecord(parsed.resource_url) ? parsed.resource_url : undefined);
   const resource = isRecord(parsed.resource_url) ? parsed.resource_url : undefined;
   const imageSkey = stringField(resource, ["skey"]) || deepStringField(parsed, ["skey"]);
+  // `aweType: 2702` is also used by the native type-27 image transport. Its
+  // uploaded resource is encrypted and represented by `resource_url` oid/skey
+  // (usually with `from_gallery: 1`), so it must not be rendered as a shared
+  // comment after an automatic media return.
+  const hasNativeUploadedImage = Boolean(
+    inlineImageUrl ||
+    resourceImageUrl ||
+    (stringField(resource, ["oid", "uri", "key"]) && imageSkey) ||
+    Number(parsed.from_gallery || parsed.fromGallery || 0) > 0,
+  );
   const emojiType = deepStringField(parsed, ["emoji_type", "emojiType"]);
   const imageType = deepStringField(parsed, ["image_type", "imageType"]);
-  const isImageContent =
-    aweType === 2702 ||
-    aweType === 501 ||
-    Boolean(resourceImageUrl || inlineImageUrl) ||
-    Boolean(emojiType || imageType || parsed.sticker_type || parsed.stickerType);
+  // Video share cards can legally omit itemId while the Frontier message is
+  // still fresh.  The numeric aweType is authoritative in that case: without
+  // this classification the card falls back to a generic share and loses its
+  // video preview/player semantics until a later history record fills in the
+  // work ID.
+  const isVideoShare = aweType === 800 || aweType === 2701 || aweType === 5 || aweType === 8;
   const itemId = normalizeSharedItemId(
-    deepStringField(parsed, ["itemId", "item_id", "awemeId", "aweme_id"]) ||
+    deepStringField(parsed, ["itemId", "item_id", "awemeId", "aweme_id", "group_id", "groupId"]) ||
     deepStringField(parsed, ["share_id"]),
   );
   const commentText = deepStringField(parsed, [
@@ -671,23 +771,34 @@ export function parseSharedMessage(message: LocalChatMessage): SharedMessageCard
     "desc",
     "text",
   ]);
-  const hasCommentSignal = hasDeepField(parsed, [
-    "comment_id",
-    "comment",
-    "cid",
-    "comment_content",
-    "comment_text",
-    "comment_info",
-    "reply_id",
-    "reply_content",
-    "reply_text",
-    "origin_comment_content",
-    "origin_comment_text",
-  ]);
+  // Do not treat an empty `ref_msg_info.comment` transport field as a real
+  // comment. It is present on some native image/video payloads.
+  const hasCommentSignal = Boolean(
+    commentText ||
+    deepStringField(parsed, [
+      "comment_id",
+      "commentId",
+      "cid",
+      "reply_id",
+      "replyId",
+      "comment",
+      "comment_content",
+      "comment_text",
+      "reply_content",
+      "reply_text",
+      "origin_comment_content",
+      "origin_comment_text",
+    ]),
+  );
+  const isImageContent =
+    hasNativeUploadedImage ||
+    aweType === 501 ||
+    Boolean(emojiType || imageType || parsed.sticker_type || parsed.stickerType);
   const commentUserName = deepStringField(parsed, ["comment_user_name", "commentUserName"]);
   const awemeTitle = deepStringField(parsed, ["aweme_title", "awemeTitle", "item_title", "itemTitle"]);
   const hasShareSignal = Boolean(
-    itemId ||
+    isVideoShare ||
+      itemId ||
       hasCommentSignal ||
       isImageContent ||
       deepStringField(parsed, ["content_title", "content_name", "aweme_title", "item_title"]) ||
@@ -700,7 +811,18 @@ export function parseSharedMessage(message: LocalChatMessage): SharedMessageCard
     deepFirstUrl(parsed, ["url"]) ||
     deepFirstUrl(parsed, ["content_thumb", "thumb_url"]) ||
     inlineImageUrl;
-  const kind: SharedMessageCard["kind"] = isImageContent ? "image" : hasCommentSignal ? "comment" : itemId ? "video" : coverUrl ? "image" : "share";
+  const isGalleryWork = Boolean(itemId || coverUrl) && (awemeType === 68 || imageCount > 1);
+  const kind: SharedMessageCard["kind"] = isVideoShare
+    ? "video"
+    : isGalleryWork
+      ? "gallery"
+      : isImageContent
+        ? "image"
+        : hasCommentSignal || aweType === 2702
+          ? "comment"
+          : itemId
+            ? "video"
+            : coverUrl ? "image" : "share";
   const avatarUrl = deepFirstUrl(parsed, ["content_thumb", "author_avatar", "avatar_thumb", "user_avatar"]);
   const authorName = deepStringField(parsed, [
     "author_name",
@@ -711,7 +833,7 @@ export function parseSharedMessage(message: LocalChatMessage): SharedMessageCard
     "share_user_name",
     "content_author_name",
   ]);
-  if (!title && !coverUrl) return null;
+  if (!title && !coverUrl && !isVideoShare && !hasNativeUploadedImage && !hasCommentSignal && aweType !== 2702) return null;
   const commentSubtitle = uniqueTextParts([
     "分享评论",
     commentUserName ? `评论者：${commentUserName}` : "",
@@ -719,13 +841,26 @@ export function parseSharedMessage(message: LocalChatMessage): SharedMessageCard
   ]).join(" · ");
   return {
     kind,
-    title: title || (kind === "comment" ? "分享了一条评论" : kind === "image" ? "图片" : "分享了一条内容"),
-    subtitle: kind === "comment" ? commentSubtitle : kind === "video" ? "分享视频" : kind === "image" ? "图片" : "分享内容",
+    title: title || (
+      kind === "video"
+        ? "视频"
+        : kind === "comment"
+          ? "分享了一条评论"
+          : kind === "gallery" ? "图集" : kind === "image" ? "图片" : "分享了一条内容"
+    ),
+    subtitle: kind === "comment"
+      ? commentSubtitle
+      : kind === "video"
+        ? "分享视频"
+        : kind === "gallery"
+          ? imageCount > 1 ? `${imageCount} 张图集` : "图集作品"
+          : kind === "image" ? "图片" : "分享内容",
     coverUrl,
-    skey: kind === "image" ? imageSkey : undefined,
+    skey: imageSkey || deepStringField(parsed, ["skey"]) || undefined,
     avatarUrl,
     authorName,
     itemId,
+    mediaCount: kind === "gallery" ? Math.max(imageCount, 1) : undefined,
   };
 }
 
@@ -764,14 +899,17 @@ export function messagePreviewText(message: LocalChatMessage | undefined) {
     return notice;
   }
   if (message.imagePreviewUrl) return "[图片]";
+  if (message.videoPreviewUrl) return "[视频]";
   const shared = parseSharedMessage(message);
   if (shared?.kind === "image") return "[图片]";
+  if (shared?.kind === "video") return "[视频分享]";
+  if (shared?.kind === "gallery") return `[图集${shared.mediaCount && shared.mediaCount > 1 ? ` × ${shared.mediaCount}` : ""}]`;
   if (shared) return `[${shared.subtitle}] ${shared.title}`;
   return message.text;
 }
 
 export function hasFramedMessageBody(message: LocalChatMessage) {
-  return Boolean(message.imagePreviewUrl || parseSharedMessage(message));
+  return Boolean(message.imagePreviewUrl || message.videoPreviewUrl || parseSharedMessage(message));
 }
 
 export function fallbackMessageText(rawContent: string | undefined) {
@@ -784,7 +922,10 @@ export function fallbackMessageText(rawContent: string | undefined) {
     status: "sent",
     direction: "out",
   });
-  return shared?.kind === "image" ? "[图片]" : "[分享内容]";
+  if (shared?.kind === "image") return "[图片]";
+  if (shared?.kind === "video") return "[视频分享]";
+  if (shared?.kind === "gallery") return "[图集分享]";
+  return "[分享内容]";
 }
 
 // ==================== 通用 JSON 工具 ====================

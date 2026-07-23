@@ -34,6 +34,7 @@ interface LikedVideoItemRaw {
   raw_media_type?: string | number | null;
   status?: VideoStatus | null;
   media_urls?: LikedVideoMediaUrl[];
+  return_media_urls?: LikedVideoMediaUrl[];
   bgm_url?: string | null;
   is_liked?: boolean;
   is_collected?: boolean;
@@ -106,6 +107,7 @@ function hasPlayableMedia(video: VideoInfo): boolean {
   if (isUnavailableStatus(video.status)) return false;
   if (video.video.play_addr || video.video.preview_addr || video.video.download_addr) return true;
   if (video.media_urls?.some((item) => item.url?.trim())) return true;
+  if (video.return_media_urls?.some((item) => item.url?.trim())) return true;
   if (video.image_urls?.some((url) => url.trim()) || video.images?.some((url) => url.trim())) return true;
   if (video.live_photo_urls?.some((url) => url.trim()) || video.live_photos?.some((url) => url.trim())) return true;
   return false;
@@ -291,6 +293,19 @@ function uniqueMediaUrls(urls: VideoMediaUrl[]): VideoMediaUrl[] {
   return items;
 }
 
+/**
+ * `return_media_urls` represents source gallery slots, not a set of assets.
+ * Keep its order and repeated URLs intact: two distinct slots can legally
+ * point at the same CDN URL and still must be sent back twice.
+ */
+function normalizeReturnMediaUrls(value: unknown): VideoMediaUrl[] {
+  return normalizeMediaUrls(value).map((item) => ({
+    type: normalizeMediaType(item.type),
+    url: item.url.trim(),
+    ...(item.fallback_urls?.length ? { fallback_urls: item.fallback_urls } : {}),
+  }));
+}
+
 function normalizeMediaUrlsFromVideo(
   explicitMediaUrls: VideoMediaUrl[],
   livePhotoUrls: string[],
@@ -333,6 +348,8 @@ export function normalizeLikedVideo(item: unknown): VideoInfo | null {
   }
 
   const mediaUrls = uniqueMediaUrls(normalizeMediaUrls(candidate.media_urls));
+  const hasReturnMediaUrls = Array.isArray(candidate.return_media_urls);
+  const returnMediaUrls = hasReturnMediaUrls ? normalizeReturnMediaUrls(candidate.return_media_urls) : null;
   const imageUrls = mediaUrls.filter((media) => media.type === "image").map((media) => media.url);
   const livePhotoUrls = mediaUrls.filter((media) => media.type === "live_photo").map((media) => media.url);
   const primaryVideoUrl = mediaUrls.find((media) => media.type === "video")?.url || "";
@@ -393,6 +410,7 @@ export function normalizeLikedVideo(item: unknown): VideoInfo | null {
     media_type: mediaType,
     status,
     media_urls: mediaUrls.length > 0 ? mediaUrls : null,
+    return_media_urls: returnMediaUrls,
     bgm_url: candidate.bgm_url || null,
     cover_url: cover || null,
     music: candidate.bgm_url
@@ -458,6 +476,8 @@ export function normalizeVideo(video: unknown): VideoInfo | null {
   const topLevelMediaUrls = normalizeMediaUrls(source.media_urls);
   const nestedMediaUrls = normalizeMediaUrls(videoRecord.media_urls);
   const mediaUrls = uniqueMediaUrls(topLevelMediaUrls.length > 0 ? topLevelMediaUrls : nestedMediaUrls);
+  const hasReturnMediaUrls = Array.isArray(source.return_media_urls);
+  const returnMediaUrls = hasReturnMediaUrls ? normalizeReturnMediaUrls(source.return_media_urls) : null;
   const imageUrls = uniqueMediaUrls([
     ...(
       Array.isArray(source.image_urls)
@@ -577,6 +597,7 @@ export function normalizeVideo(video: unknown): VideoInfo | null {
     raw_media_type: rawMediaType,
     status,
     media_urls: normalizedMediaUrls.length > 0 ? normalizedMediaUrls : null,
+    return_media_urls: returnMediaUrls,
     bgm_url: musicPlayUrl || null,
     cover_url: cover || null,
     music: musicPlayUrl

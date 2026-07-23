@@ -9,7 +9,7 @@ import {
   type ElementType,
   type KeyboardEvent,
 } from "react";
-import { Archive, ImagePlus, Loader2, MapPin, MessageCircle, Play, RotateCcw, Send, ShoppingBag, Sparkles, UserRound, X } from "lucide-react";
+import { Archive, Film, ImagePlus, Images, Loader2, MapPin, MessageCircle, Play, RotateCcw, Send, ShoppingBag, Sparkles, UserRound, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ThemeLogo } from "@/components/common/theme-logo";
@@ -194,11 +194,13 @@ export function ChatWorkspace({
   onDraftChange,
   onSendMessage,
   onSendImage,
+  onSendVideo,
   onStartNewSession,
   onCompressSession,
   onLoadOlder,
   onOpenProfile,
   onOpenSharedVideo,
+  onOpenLocalVideo,
   sharedPlayerLoadingId,
 }: {
   friend: FriendStatusItem | null;
@@ -212,11 +214,13 @@ export function ChatWorkspace({
   onDraftChange: (secUid: string, value: string) => void;
   onSendMessage: (friend: FriendStatusItem, value: string) => Promise<void>;
   onSendImage: (friend: FriendStatusItem, file: File) => Promise<void>;
+  onSendVideo: (friend: FriendStatusItem, file: File) => Promise<void>;
   onStartNewSession: (friend: FriendStatusItem) => void;
   onCompressSession: (friend: FriendStatusItem) => void;
   onLoadOlder: () => Promise<void>;
   onOpenProfile: (friend: FriendStatusItem) => Promise<void>;
   onOpenSharedVideo: (card: SharedMessageCard) => Promise<void>;
+  onOpenLocalVideo: (message: LocalChatMessage) => void;
   sharedPlayerLoadingId: string;
 }) {
   const displayName = friendDisplayName(friend);
@@ -232,6 +236,7 @@ export function ChatWorkspace({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const bottomAnchorRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
   const preserveScrollOffsetRef = useRef<number | null>(null);
   const preserveScrollUntilRef = useRef(0);
   const olderLoadArmedRef = useRef(false);
@@ -368,6 +373,15 @@ export function ChatWorkspace({
   const handlePickImage = () => {
     if (!friend) return;
     imageInputRef.current?.click();
+  };
+  const handlePickVideo = () => {
+    if (!friend) return;
+    videoInputRef.current?.click();
+  };
+  const handleVideoInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (friend && file) void onSendVideo(friend, file);
   };
   const addPendingImageFiles = useCallback((files: File[]) => {
     if (!friend || files.length === 0) return;
@@ -647,6 +661,7 @@ export function ChatWorkspace({
                           <MessageBody
                             message={message}
                             onOpenSharedVideo={onOpenSharedVideo}
+                            onOpenLocalVideo={onOpenLocalVideo}
                             sharedPlayerLoadingId={sharedPlayerLoadingId}
                             onMediaSettled={handleMediaSettled}
                           />
@@ -700,6 +715,13 @@ export function ChatWorkspace({
               className="hidden"
               onChange={handleImageInputChange}
             />
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/*"
+              className="hidden"
+              onChange={handleVideoInputChange}
+            />
             {pendingImages.length > 0 && (
               <div className="col-span-3 mb-1 flex max-h-28 gap-2 overflow-x-auto rounded-[14px] border border-border bg-surface-solid p-2">
                 {pendingImages.map((image) => (
@@ -730,6 +752,16 @@ export function ChatWorkspace({
                 title="发送图片"
               >
                 <ImagePlus className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!friend}
+                onClick={handlePickVideo}
+                className="h-10 w-10 px-0"
+                title="发送视频（最大 20MB）"
+              >
+                <Film className="h-3.5 w-3.5" />
               </Button>
               <Button
                 type="button"
@@ -795,16 +827,21 @@ export function ChatWorkspace({
 function MessageBody({
   message,
   onOpenSharedVideo,
+  onOpenLocalVideo,
   sharedPlayerLoadingId,
   onMediaSettled,
 }: {
   message: LocalChatMessage;
   onOpenSharedVideo: (card: SharedMessageCard) => Promise<void>;
+  onOpenLocalVideo: (message: LocalChatMessage) => void;
   sharedPlayerLoadingId: string;
   onMediaSettled: () => void;
 }) {
   if (message.imagePreviewUrl) {
     return <ImageMessageView src={message.imagePreviewUrl} onSettled={onMediaSettled} />;
+  }
+  if (message.videoPreviewUrl) {
+    return <LocalVideoMessageView message={message} onOpen={onOpenLocalVideo} onSettled={onMediaSettled} />;
   }
   const shared = parseSharedMessage(message);
   if (shared) {
@@ -824,6 +861,91 @@ function MessageBody({
     <p className="whitespace-pre-wrap break-words px-3 py-2 text-[0.76rem] leading-relaxed">
       {message.text}
     </p>
+  );
+}
+
+function LocalVideoMessageView({
+  message,
+  onOpen,
+  onSettled,
+}: {
+  message: LocalChatMessage;
+  onOpen: (message: LocalChatMessage) => void;
+  onSettled?: () => void;
+}) {
+  const poster = message.videoPosterUrl?.trim() || "";
+  const pending = message.status === "pending";
+  const sent = message.status === "sent";
+  const rawProgress = Number(message.videoUploadProgress);
+  const progress = Number.isFinite(rawProgress) ? Math.max(0, Math.min(100, Math.round(rawProgress))) : 0;
+  const stage = message.videoUploadStage?.trim() || (pending ? "正在上传视频" : sent ? "点击播放" : "视频发送失败");
+
+  useEffect(() => {
+    if (!poster) onSettled?.();
+  }, [onSettled, poster]);
+
+  return (
+    <button
+      type="button"
+      disabled={!sent}
+      onClick={() => {
+        if (sent) onOpen(message);
+      }}
+      className={cn(
+        "group relative block w-[min(10.6rem,42vw)] overflow-hidden rounded-[14px] bg-black text-left shadow-[0_10px_24px_rgba(0,0,0,0.22)] outline-none ring-accent/35 transition sm:w-[11.6rem]",
+        sent ? "cursor-pointer hover:ring-2 focus-visible:ring-2" : "cursor-default",
+      )}
+      title={sent ? "打开播放器" : pending ? `${stage} ${progress}%` : stage}
+      aria-label={sent ? "打开本机视频播放器" : stage}
+    >
+      <div className="relative aspect-[9/16] min-h-[12rem] max-h-[16.6rem] w-full overflow-hidden">
+        {poster ? (
+          <img
+            src={poster}
+            alt=""
+            onLoad={onSettled}
+            onError={onSettled}
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_32%,rgba(255,255,255,0.2),transparent_36%),linear-gradient(155deg,#3b3b47,#15151a_66%,#08080b)]" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/16 to-black/5" />
+
+        {sent && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/48 text-white shadow-[0_8px_18px_rgba(0,0,0,0.3)] backdrop-blur transition-transform duration-300 group-hover:scale-110">
+              <Play className="ml-0.5 h-4 w-4 fill-current" />
+            </span>
+          </div>
+        )}
+
+        {pending && (
+          <div className="absolute inset-0 flex flex-col justify-end bg-black/28 p-3 text-white backdrop-blur-[1px]">
+            <div className="mb-2 flex items-center gap-1.5 text-[0.68rem] font-medium">
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+              <span className="min-w-0 flex-1 truncate">{stage}</span>
+              <span className="shrink-0 tabular-nums text-white/88">{progress}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/24">
+              <div className="h-full rounded-full bg-white transition-[width] duration-200 ease-out" style={{ width: `${progress}%` }} />
+            </div>
+          </div>
+        )}
+
+        {!pending && !sent && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/38 px-3 text-center text-[0.7rem] font-medium text-white">
+            {stage}
+          </div>
+        )}
+
+        {!pending && (
+          <div className="absolute inset-x-0 bottom-0 px-3 pb-2.5 text-[0.64rem] font-medium text-white/88">
+            {sent ? "视频已发送 · 点击播放" : "视频发送失败"}
+          </div>
+        )}
+      </div>
+    </button>
   );
 }
 
@@ -860,10 +982,12 @@ function SharedMessageCardView({
   onOpenSharedVideo: (card: SharedMessageCard) => Promise<void>;
 }) {
   const compact = !card.coverUrl;
-  const clickable = card.kind === "video" ? Boolean(card.itemId) : false;
+  const clickable = (card.kind === "video" || card.kind === "gallery") && Boolean(card.itemId);
   const unsignedCoverUrl = unsignedMediaUrl(card.coverUrl);
   const [useUnsignedCover, setUseUnsignedCover] = useState(false);
-  const coverSrc = card.coverUrl ? mediaProxyUrl(useUnsignedCover && unsignedCoverUrl ? unsignedCoverUrl : card.coverUrl, "image") : "";
+  const coverSrc = card.coverUrl
+    ? mediaProxyUrl(useUnsignedCover && unsignedCoverUrl ? unsignedCoverUrl : card.coverUrl, "image", { skey: card.skey })
+    : "";
   const avatarSrc = card.avatarUrl ? mediaProxyUrl(card.avatarUrl, "image") : "";
   const [coverFailed, setCoverFailed] = useState(false);
   useEffect(() => {
@@ -882,6 +1006,8 @@ function SharedMessageCardView({
     ? <MapPin className="h-4 w-4 text-text-muted" />
     : card.kind === "product"
       ? <ShoppingBag className="h-4 w-4 text-text-muted" />
+      : card.kind === "gallery"
+        ? <Images className="h-4 w-4 text-text-muted" />
       : <MessageCircle className="h-4 w-4 text-text-muted" />;
   const fallbackCover = (
     <div className={cn(
@@ -896,12 +1022,12 @@ function SharedMessageCardView({
         {fallbackIcon}
       </div>
       <div className="line-clamp-2 max-w-full text-[0.62rem] font-semibold leading-snug text-text-muted">
-        {card.kind === "product" ? "商品" : card.kind === "location" ? "地点" : "分享"}
+        {card.kind === "product" ? "商品" : card.kind === "location" ? "地点" : card.kind === "gallery" ? "图集" : "分享"}
       </div>
     </div>
   );
-  if (card.kind === "video" && card.coverUrl) {
-    const videoContent = (
+  if ((card.kind === "video" || card.kind === "gallery") && card.coverUrl) {
+    const mediaContent = (
       <div className="group relative w-[min(10.6rem,42vw)] overflow-hidden rounded-[12px] bg-black text-left shadow-[0_10px_24px_rgba(0,0,0,0.22)] sm:w-[11.6rem]">
         <div className="relative w-full aspect-[9/16] max-h-[16.6rem] min-h-[12rem]">
           {showCover ? (
@@ -917,8 +1043,20 @@ function SharedMessageCardView({
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/24 to-black/5" />
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black/42 text-white shadow-[0_6px_12px_rgba(0,0,0,0.22)] backdrop-blur transition-transform duration-300 group-hover:scale-110">
-              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="ml-0.5 h-3.5 w-3.5 fill-current" />}
+            <div className={cn(
+              "flex items-center justify-center rounded-full bg-black/42 text-white shadow-[0_6px_12px_rgba(0,0,0,0.22)] backdrop-blur transition-transform duration-300 group-hover:scale-110",
+              card.kind === "gallery" ? "h-8 gap-1.5 px-2.5" : "h-8 w-8",
+            )}>
+              {loading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : card.kind === "gallery" ? (
+                <>
+                  <Images className="h-3.5 w-3.5" />
+                  <span className="text-[0.62rem] font-semibold">{Math.max(card.mediaCount || 1, 1)} 张</span>
+                </>
+              ) : (
+                <Play className="ml-0.5 h-3.5 w-3.5 fill-current" />
+              )}
             </div>
           </div>
           <div className="absolute inset-x-0 bottom-0 p-2.5 text-white">
@@ -951,16 +1089,16 @@ function SharedMessageCardView({
         </div>
       </div>
     );
-    if (!clickable) return videoContent;
+    if (!clickable) return mediaContent;
     return (
       <button
         type="button"
         disabled={loading}
         onClick={() => void onOpenSharedVideo(card)}
         className="block cursor-pointer rounded-[16px] outline-none ring-accent/35 transition hover:ring-2 focus-visible:ring-2 disabled:cursor-wait"
-        title="打开播放器"
+        title={card.kind === "gallery" ? "打开图集" : "打开播放器"}
       >
-        {videoContent}
+        {mediaContent}
       </button>
     );
   }
@@ -1023,7 +1161,7 @@ function SharedMessageCardView({
       disabled={loading}
       onClick={() => void onOpenSharedVideo(card)}
       className="block cursor-pointer rounded-[14px] outline-none ring-accent/35 transition hover:ring-2 focus-visible:ring-2 disabled:cursor-wait"
-      title="打开播放器"
+      title={card.kind === "gallery" ? "打开图集" : "打开播放器"}
     >
       {content}
     </button>

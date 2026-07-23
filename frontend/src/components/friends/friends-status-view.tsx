@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FullscreenPlayer } from "@/components/player/lazy-fullscreen-player";
 import { useDownloads } from "@/hooks/use-downloads";
 import {
+  FRIEND_UID_NAME_CACHE_KEY,
   GLOBAL_FRIEND_CHAT_UPDATED_EVENT,
   UNKNOWN_FRIEND_KEY_PREFIX,
 } from "@/hooks/use-global-friends-im";
@@ -23,6 +24,7 @@ import {
   saveFriendChatState,
   sendFriendImageMessage,
   sendFriendMessage,
+  sendFriendVideoMessage,
   verifyCookie,
   type FriendOnlineStatusResponse,
 } from "@/lib/tauri";
@@ -63,6 +65,7 @@ import {
   normalizeMessageDirection,
   normalizeMessageStatus,
   numberField,
+  parseJsonContent,
   persistChatDrafts,
   persistChatMessages,
   persistChatSessions,
@@ -79,6 +82,7 @@ import {
 } from "./friends-status-utils";
 import { ChatWorkspace } from "./friends-status-components";
 import { FriendListPanel } from "./friends-list-panel";
+import { createVideoPosterDataUrl } from "@/lib/video-poster";
 
 const CONTACT_PAGE_SIZE = 20;
 
@@ -108,6 +112,108 @@ function mergeFriendStatusResponse(
     user_info: mergeSection(current.user_info, result.user_info),
     active_status: mergeSection(current.active_status, result.active_status),
   };
+}
+
+function buildLocalVideoPlayerItem(message: LocalChatMessage): VideoInfo | null {
+  const source = String(message.videoPreviewUrl || "").trim();
+  if (!source) return null;
+  const poster = String(message.videoPosterUrl || "").trim();
+  return {
+    // A blank work ID tells FullscreenPlayer this is a local blob rather than
+    // a remote work that needs a detail request.
+    aweme_id: "",
+    desc: "本机发送的视频",
+    create_time: Math.floor(message.createdAt / 1000),
+    author: {
+      uid: "",
+      sec_uid: "",
+      nickname: "本机视频",
+      avatar_thumb: "",
+      avatar_medium: "",
+      signature: "",
+      follower_count: 0,
+      following_count: 0,
+      aweme_count: 0,
+      favoriting_count: 0,
+      is_follow: false,
+      follow_status: 0,
+      verify_status: 0,
+      unique_id: "",
+    },
+    video: {
+      preview_addr: source,
+      play_addr: source,
+      play_addr_candidates: [source],
+      dash_addr: null,
+      audio_addr: null,
+      play_addr_h264: null,
+      play_addr_lowbr: null,
+      download_addr: null,
+      cover: poster,
+      dynamic_cover: poster,
+      origin_cover: poster,
+      width: 0,
+      height: 0,
+      duration: 0,
+      duration_unit: "seconds",
+      ratio: "",
+    },
+    statistics: {
+      play_count: 0,
+      digg_count: 0,
+      comment_count: 0,
+      share_count: 0,
+      collect_count: 0,
+      forward_count: 0,
+    },
+    media_urls: [{ type: "video", url: source }],
+    image_urls: [],
+    is_image: false,
+    media_type: "video",
+    music: null,
+  };
+}
+
+function isNativeVideoRawContent(rawContent: string | undefined) {
+  const parsed = parseJsonContent(rawContent || "");
+  return Boolean(parsed && isRecord(parsed.video) && isRecord(parsed.poster));
+}
+
+// The realtime IM listener stores a server message ID in a conversation
+// namespace. Rich cards can fall back to `index_in_conversation`, which is
+// only unique within that conversation. History rows must use the same ID so
+// opening a chat cannot append a second copy of a card that realtime delivery
+// already persisted.
+function buildHistoryMessageStorageId(
+  conversationNamespace: string,
+  serverMessageId: string,
+  createdAt: number,
+) {
+  const namespace = conversationNamespace.trim() || "unknown-conversation";
+  const stableId = serverMessageId.trim();
+  return stableId
+    ? `${namespace}:message:${stableId}`
+    : `${namespace}:received:${createdAt}`;
+}
+
+function historyConversationNamespace(item: JsonRecord, friend: FriendStatusItem, senderUid: string) {
+  const conversationId = stringField(item, ["conversation_id", "conversationId"]).trim();
+  if (conversationId) return `conversation:${conversationId}`;
+  const conversationShortId = stringField(item, ["conversation_short_id", "conversationShortId"]).trim();
+  if (conversationShortId) return `conversation-short:${conversationShortId}`;
+  return senderUid ? `uid:${senderUid}` : `friend:${friend.secUid}`;
+}
+
+function matchesLegacyHistoryMessageId(
+  existingId: string,
+  friend: FriendStatusItem,
+  senderUid: string,
+  messageId: string,
+  createdAt: number,
+) {
+  if (messageId && existingId === messageId) return true;
+  if (!messageId && existingId === `${friend.secUid}-${createdAt}`) return true;
+  return !messageId && Boolean(senderUid) && existingId === `uid:${senderUid}-${createdAt}`;
 }
 
 export function FriendsStatusView() {
@@ -208,6 +314,24 @@ export function FriendsStatusView() {
     if (!currentSecUid) return rawFriends;
     return rawFriends.filter((f) => f.secUid !== currentSecUid);
   }, [response, currentSecUid]);
+
+  // The global IM listener receives only numeric sender ids. Keep the latest
+  // contact mapping by account so background notifications and AI context use
+  // the same names as the friends page without leaking them across accounts.
+  useEffect(() => {
+    if (!currentSecUid || friends.length === 0) return;
+    const uidNameMap: Record<string, string> = {};
+    friends.forEach((friend) => {
+      const uid = String(friend.uid || "").trim();
+      const name = String(friend.remarkName || friend.nickname || "").trim();
+      if (uid && name) uidNameMap[uid] = name;
+    });
+    try {
+      localStorage.setItem(`${FRIEND_UID_NAME_CACHE_KEY}.${currentSecUid}`, JSON.stringify(uidNameMap));
+    } catch {
+      // Friend chat remains available when local storage is full/unavailable.
+    }
+  }, [currentSecUid, friends]);
 
   const mergeUnknownFriendConversations = useCallback(() => {
     if (friends.length === 0) return false;
@@ -372,6 +496,16 @@ export function FriendsStatusView() {
       setSharedPlayerLoadingId("");
     }
   }, [sharedPlayerLoadingId]);
+
+  const openLocalVideo = useCallback((message: LocalChatMessage) => {
+    const video = buildLocalVideoPlayerItem(message);
+    if (!video) {
+      setError("本机视频预览已失效，请重新选择并发送");
+      return;
+    }
+    setSharedPlayerVideos([video]);
+    setSharedPlayerOpen(true);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -716,6 +850,97 @@ export function FriendsStatusView() {
     }
   }, [patchMessage]);
 
+  const sendLocalVideoMessage = useCallback(async (friend: FriendStatusItem, file: File) => {
+    if (!file.type.startsWith("video/")) {
+      setError("请选择视频文件");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setError("视频不能超过 20MB");
+      return;
+    }
+    if (!friend.uid) {
+      setError("缺少好友数字 uid，无法发送视频");
+      return;
+    }
+    setError("");
+    const message: LocalChatMessage = {
+      id: `${friend.secUid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      text: "[视频]",
+      videoPreviewUrl: URL.createObjectURL(file),
+      createdAt: Date.now(),
+      status: "pending",
+      direction: "out",
+      videoUploadProgress: 0,
+      videoUploadStage: "正在准备视频",
+    };
+    setChatMessages((current) => {
+      const next = {
+        ...current,
+        [friend.secUid]: [...(current[friend.secUid] || []), message],
+      };
+      persistChatMessages(next, currentSecUidRef.current);
+      return next;
+    });
+
+    try {
+      patchMessage(friend.secUid, message.id, { videoUploadProgress: 1, videoUploadStage: "正在读取视频" });
+      const videoDataUrl = await readFileAsDataUrl(file);
+      if (!videoDataUrl) throw new Error("读取视频失败");
+      patchMessage(friend.secUid, message.id, { videoUploadProgress: 3, videoUploadStage: "正在生成视频封面" });
+      const coverDataUrl = await createVideoPosterDataUrl(file);
+      if (!coverDataUrl) throw new Error("生成视频封面失败");
+      patchMessage(friend.secUid, message.id, {
+        videoPosterUrl: coverDataUrl,
+        videoUploadProgress: 4,
+        videoUploadStage: "即将上传视频",
+      });
+
+      let unlisten: (() => void) | undefined;
+      try {
+        unlisten = await listenEvent<Record<string, unknown>>("im-video-upload-progress", (payload) => {
+          const requestId = String(payload.request_id || payload.upload_request_id || "").trim();
+          if (requestId !== message.id) return;
+          const progress = Number(payload.progress);
+          const stage = String(payload.message || payload.phase || "正在上传视频").trim();
+          patchMessage(friend.secUid, message.id, {
+            videoUploadProgress: Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : undefined,
+            videoUploadStage: stage,
+          });
+        });
+      } catch {
+        // Older runtimes may not expose progress events; the actual send is
+        // still fully supported.
+      }
+
+      try {
+        const result = await sendFriendVideoMessage({
+          toUserId: friend.uid,
+          videoDataUrl,
+          coverDataUrl,
+          fileName: file.name,
+          mimeType: file.type,
+          uploadRequestId: message.id,
+        });
+        if (!result.success) throw new Error(result.message || "发送视频失败");
+        patchMessage(friend.secUid, message.id, {
+          status: "sent",
+          error: "",
+          videoUploadProgress: 100,
+          videoUploadStage: "视频已发送，点击播放",
+        });
+      } finally {
+        unlisten?.();
+      }
+    } catch (caught) {
+      patchMessage(friend.secUid, message.id, {
+        status: "error",
+        error: caught instanceof Error ? caught.message : "发送视频失败",
+        videoUploadStage: "视频发送失败",
+      });
+    }
+  }, [patchMessage]);
+
   const selectFriend = useCallback((friend: FriendStatusItem) => {
     setSelectedFriendId(friend.secUid);
     clearUnread(friend.secUid);
@@ -731,7 +956,16 @@ export function FriendsStatusView() {
         const senderUid = stringField(item as JsonRecord, ["sender_uid", "senderUid"]);
         const rawContent = stringField(item as JsonRecord, ["raw_content", "rawContent"]) || undefined;
         const text = stringField(item as JsonRecord, ["content", "text"]) || fallbackMessageText(rawContent);
-        const messageId = stringField(item as JsonRecord, ["server_message_id", "message_id", "id"]);
+        const serverMessageId = stringField(item as JsonRecord, ["server_message_id", "serverMessageId"]);
+        const messageId = Number(serverMessageId) > 0
+          ? serverMessageId
+          : stringField(item as JsonRecord, [
+            "index_in_conversation",
+            "indexInConversation",
+            "message_id",
+            "messageId",
+            "id",
+          ]);
         if (!text) continue;
         if (text.trim().startsWith('{') && text.includes("command_type")) {
           continue;
@@ -745,8 +979,9 @@ export function FriendsStatusView() {
         const createdAt = rawCreatedAt > 0 && rawCreatedAt < 10_000_000_000
           ? rawCreatedAt * 1000
           : rawCreatedAt || Date.now();
+        const messageNamespace = historyConversationNamespace(item as JsonRecord, friend, senderUid);
         const message: LocalChatMessage = {
-          id: messageId || `${friend.secUid}-${createdAt}`,
+          id: buildHistoryMessageStorageId(messageNamespace, messageId, createdAt),
           text,
           rawContent,
           createdAt,
@@ -755,9 +990,10 @@ export function FriendsStatusView() {
           senderUid,
         };
         const currentMessages = next[friend.secUid] || [];
+        const isNativeVideo = isNativeVideoRawContent(message.rawContent);
         const localMatchIndex = currentMessages.findIndex((existing) =>
           existing.direction === "out" &&
-          existing.text === message.text &&
+          (existing.text === message.text || (isNativeVideo && Boolean(existing.videoPreviewUrl))) &&
           Math.abs(existing.createdAt - message.createdAt) < 60000 &&
           existing.id.includes(friend.secUid)
         );
@@ -766,13 +1002,18 @@ export function FriendsStatusView() {
           matchedList[localMatchIndex] = {
             ...matchedList[localMatchIndex],
             id: message.id,
-            status: "sent"
+            text: message.text || matchedList[localMatchIndex].text,
+            rawContent: message.rawContent || matchedList[localMatchIndex].rawContent,
+            status: "sent",
           };
           next[friend.secUid] = matchedList.sort((a, b) => a.createdAt - b.createdAt);
           mergedCount += 1;
           continue;
         }
-        if (currentMessages.some((existing) => existing.id === message.id)) continue;
+        if (currentMessages.some((existing) =>
+          existing.id === message.id ||
+          matchesLegacyHistoryMessageId(existing.id, friend, senderUid, messageId, createdAt),
+        )) continue;
         next[friend.secUid] = [...currentMessages, message].sort((a, b) => a.createdAt - b.createdAt);
         mergedCount += 1;
       }
@@ -1298,11 +1539,13 @@ export function FriendsStatusView() {
         onDraftChange={updateDraft}
         onSendMessage={sendLocalMessage}
         onSendImage={sendLocalImageMessage}
+        onSendVideo={sendLocalVideoMessage}
         onStartNewSession={startNewChatSession}
         onCompressSession={compressChatSession}
         onLoadOlder={() => selectedFriend && selectedHistory?.nextCursor ? loadHistoryMessages(selectedFriend, selectedHistory.nextCursor) : Promise.resolve()}
         onOpenProfile={openFriendProfile}
         onOpenSharedVideo={openSharedVideo}
+        onOpenLocalVideo={openLocalVideo}
         sharedPlayerLoadingId={sharedPlayerLoadingId}
       />
       </div>
@@ -1311,7 +1554,7 @@ export function FriendsStatusView() {
         initialIndex={0}
         open={sharedPlayerOpen}
         onClose={() => setSharedPlayerOpen(false)}
-        onDownload={(video) => downloadVideo(video)}
+        onDownload={sharedPlayerVideos[0]?.aweme_id ? (video) => downloadVideo(video) : undefined}
       />
     </div>
   );
